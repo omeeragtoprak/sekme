@@ -1,0 +1,99 @@
+"""Command line: analyse a video, serve the review room, run the simulation benchmark."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+import time
+from pathlib import Path
+
+
+def _analyze(args: argparse.Namespace) -> int:
+    from courtvision.pipeline import PipelineConfig, analyze
+
+    out = Path(args.out or Path("runs") / Path(args.video).stem)
+    t0 = time.time()
+
+    def progress(stage: str, frac: float) -> None:
+        print(f"\r[{time.time() - t0:6.1f}s] {stage:<10s} {100 * frac:5.1f}%", end="", file=sys.stderr, flush=True)
+
+    cfg = PipelineConfig(device=args.device, render=not args.no_render, reuse_perception=args.reuse_perception,
+                         broadcast=not args.no_broadcast)
+    report = analyze(args.video, out, cfg, progress)
+    print(file=sys.stderr)
+    cal = report["calibration"]
+    print(f"calibrated frames {cal['valid_frames']}/{cal['total_frames']}, line rmse {cal['line_rmse_px_median']} px")
+    for f in report["flights"]:
+        call = f["call"]
+        verdict = f"{call['verdict']:6s} P(in)={call['p_in']:.3f} margin {100 * call['margin_m']:+.0f}±" \
+                  f"{100 * call['sigma_m']:.0f} cm ({call['line']})" if call else "no call: " + "; ".join(f["notes"])
+        print(f"  flight {f['id']}: {f['hitter']:>4s} -> {f['receiver']:<4s} {verdict}")
+    print(f"report: {out / 'report.json'}")
+    return 0
+
+
+def _serve(args: argparse.Namespace) -> int:
+    import uvicorn
+
+    from courtvision.api.app import create_app
+    from courtvision.pipeline import PipelineConfig, analyze
+
+    def run_analysis(video: Path, out: Path, progress) -> None:
+        analyze(video, out, PipelineConfig(device=args.device), progress)
+
+    app = create_app(Path(args.runs), analyze_fn=run_analysis)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    return 0
+
+
+def _benchmark(args: argparse.Namespace) -> int:
+    import numpy as np
+
+    from courtvision.calib.camera import Camera
+    from courtvision.eval.sim_benchmark import run_benchmark
+
+    fwd = np.array([0.0, 1.5, 0.0]) - np.array([0.0, -args.distance, args.height])
+    fwd /= np.linalg.norm(fwd)
+    right = np.cross(fwd, [0.0, 0.0, 1.0])
+    right /= np.linalg.norm(right)
+    R = np.stack([right, np.cross(fwd, right), fwd])
+    center = np.array([0.0, -args.distance, args.height])
+    w, h = args.width, int(args.width * 9 / 16)
+    K = np.array([[args.focal, 0, w / 2], [0, args.focal, h / 2], [0, 0, 1.0]])
+    rep = run_benchmark(Camera(K, R, -R @ center), args.shots, args.fps, args.noise)
+    print(rep.to_json())
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="courtvision")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    a = sub.add_parser("analyze", help="analyse a tennis video")
+    a.add_argument("video")
+    a.add_argument("--out")
+    a.add_argument("--device", default="auto")
+    a.add_argument("--no-render", action="store_true")
+    a.add_argument("--no-broadcast", action="store_true", help="skip reading the score graphic and speed board")
+    a.add_argument("--reuse-perception", action="store_true", help="reuse cached detections from a previous run")
+    a.set_defaults(fn=_analyze)
+    s = sub.add_parser("serve", help="start the review room web app")
+    s.add_argument("--runs", default="runs")
+    s.add_argument("--host", default="127.0.0.1")
+    s.add_argument("--port", type=int, default=8765)
+    s.add_argument("--device", default="auto")
+    s.set_defaults(fn=_serve)
+    b = sub.add_parser("benchmark", help="simulated accuracy for a camera setup")
+    b.add_argument("--fps", type=float, default=30.0)
+    b.add_argument("--noise", type=float, default=1.5, help="ball detection noise (px)")
+    b.add_argument("--distance", type=float, default=28.0, help="camera distance behind the net (m)")
+    b.add_argument("--height", type=float, default=11.0, help="camera height (m)")
+    b.add_argument("--focal", type=float, default=1750.0, help="focal length (px)")
+    b.add_argument("--width", type=int, default=1920)
+    b.add_argument("--shots", type=int, default=40)
+    b.set_defaults(fn=_benchmark)
+    args = p.parse_args(argv)
+    return int(args.fn(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

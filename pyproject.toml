@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "courtvision"
+version = "3.0.0a1"
+description = "Honest tennis video analytics: calibrated court, ball/player tracking, 3D flight fitting and probabilistic line calls with human review."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later (see LICENSE; third-party model terms in docs/LICENSES.md)" }
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.14",
+    "opencv-python>=4.10",
+    "torch>=2.4",
+    "ultralytics>=8.4",
+    "pydantic>=2.8",
+    "pyyaml>=6.0",
+    "pyarrow>=17",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "httpx>=0.27"]
+
+[project.scripts]
+courtvision = "courtvision.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q -p no:cacheprovider"
+markers = ["slow: needs model weights and the sample video (skipped when absent)"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+src = ["src", "tests"]
+
+extend-exclude = ["src/courtvision/models/wasb_hrnet.py"]  # vendored upstream code, kept verbatim
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "NPY"]
+ignore = ["N803", "N806", "E741"]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = true

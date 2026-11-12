@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160" width="640" height="160">
+  <title>SEKME</title>
+  <!-- Mark: a flight arc landing on a court line, the touch point and its uncertainty ellipse. -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M18 34 C 58 30, 92 70, 108 118" stroke="#1d1d1f" stroke-width="7" stroke-opacity="0.35" />
+    <path d="M108 118 C 116 96, 128 86, 146 84" stroke="#1d1d1f" stroke-width="7" stroke-opacity="0.35" />
+    <line x1="22" y1="132" x2="150" y2="132" stroke="#1d1d1f" stroke-width="6" />
+    <ellipse cx="108" cy="124" rx="24" ry="8" stroke="#5a7d00" stroke-width="3.5" />
+  </g>
+  <circle cx="108" cy="117" r="9" fill="#5a7d00" />
+  <text x="182" y="116" fill="#1d1d1f" font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif"
+        font-size="92" font-weight="800" letter-spacing="10">SEKME</text>
+</svg>

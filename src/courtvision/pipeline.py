@@ -1,0 +1,450 @@
+"""End-to-end analysis: video -> calibrated court, tracks, events, calls, report and overlays.
+
+Pass 1 decodes the video once and feeds the court calibrator, the ball
+model and the person tracker. Analysis (calibration smoothing, player
+selection, hits/bounces, 3D fits, line calls) runs on the collected
+tracks. Pass 2 re-decodes the video to render the overlay videos.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import pickle
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+from courtvision import __version__
+from courtvision.analytics.kinematics import player_kinematics
+from courtvision.api.app import link_source
+from courtvision.broadcast import ocr
+from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
+from courtvision.eval.broadcast_check import Serve, check, side_names
+from courtvision.events.rally import (
+    Flight,
+    build_flights,
+    detect_hits_in_segments,
+    detect_serves,
+    measurable_segments,
+    merge_serves,
+)
+from courtvision.events.strokes import classify, serve_hand, vote_hand
+from courtvision.geometry.court import CourtModel
+from courtvision.io.video import VideoWriter, iter_frames, probe
+from courtvision.perception.ball import WasbBallDetector, drop_court_fixed, track_ball
+from courtvision.perception.court import (
+    CourtCalibrator,
+    CourtKeypointDetector,
+    calibrate_sequence,
+    frame_hist,
+    pick_device,
+)
+from courtvision.perception.players import YoloPersonTracker, select_players
+from courtvision.perception.pose import PoseEstimator, poses_at
+from courtvision.physics.flight import flight_states
+from courtvision.render.hud import OverlayState, Renderer
+
+ROOT = Path(__file__).resolve().parents[2]
+
+MODEL_CARDS = {
+    "court": {"file": "models/court_kps_yastrebksv.pt", "source": "github.com/yastrebksv/TennisCourtDetector",
+              "license": "none published (research use only)"},
+    "ball": {"file": "models/wasb_tennis_best.pth.tar", "source": "github.com/nttcom/WASB-SBDT (BMVC 2023)",
+             "license": "MIT"},
+    "players": {"file": "models/yolo26s.pt", "source": "Ultralytics YOLO26-s", "license": "AGPL-3.0"},
+    "pose": {"file": "models/yolo26s-pose.pt", "source": "Ultralytics YOLO26-s-pose (COCO 17 keypoints)",
+             "license": "AGPL-3.0"},
+}
+
+LIMITATIONS = [
+    "Tek yayın kamerası: sekme konumlarında santimetre ile desimetre arası belirsizlik var; her karar içeride olma "
+    "olasılığını ve 1σ payını gösterir, %95'te kesinleşmeyen her karar insan incelemesine gider.",
+    "Topun yere temas izi sabit 2 cm yarı uzunlukla modelleniyor; hızlı kortlarda gerçek iz daha uzun olabilir.",
+    "Lens bozulması henüz modellenmiyor (örnek klipte görüntü kenarlarında ~1 piksel kalıntı).",
+    "Kort anahtar nokta ağırlıklarının yayımlanmış bir lisansı yok; yalnızca araştırma amaçlı kullanılıyor.",
+    "Servisler top atışından bulunuyor (ölü toptan sonra dip çizgideki oyuncunun üstünde yavaş, dikeye yakın top) ve "
+    "kamera ışınında ölçülen temas yüksekliğiyle doğrulanıyor; US Open özet klibinde görünen 3 servisin üçü de "
+    "yanlış alarm olmadan bulundu, ama bu bir tespit oranı söylemek için çok az. Kamera geçişinden önce atılan "
+    "servisler kurtarılamıyor.",
+    "File üstü yükseklik 3B uydurmadan geliyor ve tek kamerayla yaklaşık 0,1–0,25 m 1σ belirsizlik taşıyor; "
+    "değer bu belirsizlikle birlikte gösterilir.",
+    "Gerçek görüntüler için etiketli doğruluk verisi henüz yok: gerçek kliplerde doğruluk yalnızca oyunun akışı ve "
+    "gözle kontrol ediliyor; sayısal referans simülasyon testidir. İnceleme Odası'ndaki etiketleme aracıyla (gerçek "
+    "sekme noktasına tıklama) hata, %95 elips tutarlılığı ve karar uyumu ölçülebilir; uzak kortta 1 piksel ~6 cm "
+    "olduğundan tek bir etiketin kendi belirsizliği de raporlanır.",
+    "Skor ve sayı sonucu henüz çıkarılmıyor; klip başlamadan önce vurulmuş topların vuruş hızı verilmiyor.",
+    "Yayın tabelası ve stadyum radar panosu Apple Vision ile (yalnızca macOS) okunur ve yalnızca doğrulama için "
+    "kullanılır, kararları etkilemez. US Open klibinde 3 servis radarla eşleşti: ölçülen servis hızları ortalama "
+    "%7 yüksek; bu sistematik farkın nedeni (radarın ölçüm tanımı ya da kamera ölçeği) henüz ayrıştırılamadı.",
+    "Ralli vuruşlarında 3B uydurmanın temas yüksekliği zayıf belirleniyor (iki forehand 2,4–2,6 m çıktı); bu yüzden "
+    "yalnızca kamera ışınında ölçülen servis temas yüksekliği gösterilir. Vuruş türü (forehand/backhand/vole/smaç) "
+    "poz ve top konumundan çıkarılır; US Open klibinde 16 forehand/backhand gözle kontrol edildi, 16'sı doğru.",
+]
+
+
+def _sha256(path: str | Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+@dataclass
+class PipelineConfig:
+    device: str = "auto"
+    keyframe_interval: int = 15
+    cut_threshold: float = 0.55
+    render: bool = True
+    reuse_perception: bool = False  # reuse runs/<id>/perception.pkl when the video hash matches
+    broadcast: bool = True  # read the score graphic and the serve-speed board (macOS Vision) as a check
+    player_imgsz: int = 1280
+    models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v["file"]) for k, v in MODEL_CARDS.items()})
+
+
+def _f(x: float | None, nd: int = 3) -> float | None:
+    return None if x is None or not np.isfinite(x) else round(float(x), nd)
+
+
+def _flight_json(i: int, fl: Flight, fps: float) -> dict:
+    d: dict = {
+        "id": i, "start_frame": fl.start_frame, "end_frame": fl.end_frame, "hitter": fl.hitter,
+        "receiver": str(fl.receiver), "kind": fl.kind, "bounce_frame": fl.bounce_frame,
+        "hit_speed_kmh": _f(fl.hit_speed_kmh, 1), "bounce_speed_kmh": _f(fl.bounce_speed_kmh, 1),
+        "net_clearance_m": _f(fl.net_clearance_m),
+        "net_clearance_sd_m": _f(fl.net_clearance_sd_m), "hit_height_m": _f(fl.hit_height_m),
+        "contact_frame": _f(fl.contact_time * fps, 2) if fl.contact_time is not None else None,
+        "play_continued": fl.play_continued, "rejected": fl.rejected, "notes": fl.notes,
+        "bounce": None, "call": None, "trajectory": None, "fit": None,
+    }
+    fit = fl.fit
+    if fit is not None and fit.success and np.isfinite(fit.rms_px):
+        d["fit"] = {"rms_px": _f(fit.rms_px, 2), "n_obs": fit.n_obs, "spin_in": _f(fit.params[9]),
+                    "spin_out": _f(fit.params[10])}
+    if fit is not None and fit.success and fl.rejected is None and np.all(np.isfinite(fit.bounce_cov)):
+        cov = fit.bounce_cov
+        d["bounce"] = {"t": _f(fit.bounce_time, 4), "frame": _f(fit.bounce_time * fps, 2),
+                       "x": _f(fit.bounce_xy[0], 4), "y": _f(fit.bounce_xy[1], 4),
+                       "cov": [[float(v) for v in row] for row in cov],
+                       "sd_x_cm": _f(100 * np.sqrt(cov[0, 0]), 1), "sd_y_cm": _f(100 * np.sqrt(cov[1, 1]), 1)}
+        # Sample between the fitted contacts (not the image-based hit frames) so the replay's
+        # speed readout matches the reported contact speed.
+        t0 = fl.contact_time if fl.contact_time is not None else fl.start_frame / fps
+        t1 = float(fit.anchor_times[-1]) if len(fit.anchor_times) and fit.anchor_times[-1] > fit.bounce_time \
+            else fl.end_frame / fps
+        ts = np.linspace(t0, t1, 60)
+        pos, _ = flight_states(fit.params, ts)
+        d["trajectory"] = [[_f(t, 4), _f(p[0]), _f(p[1]), _f(p[2])] for t, p in zip(ts, pos, strict=True)]
+    elif fl.bounce_2d is not None:
+        f, g, cov = fl.bounce_2d
+        d["bounce"] = {"t": _f(f / fps, 4), "frame": _f(f, 2), "x": _f(g[0], 4), "y": _f(g[1], 4),
+                       "cov": [[float(v) for v in row] for row in cov], "method": "2d",
+                       "sd_x_cm": _f(100 * np.sqrt(cov[0, 0]), 1), "sd_y_cm": _f(100 * np.sqrt(cov[1, 1]), 1)}
+    if d["bounce"] is not None:
+        d["bounce"].setdefault("method", "3d")
+    if fl.call is not None:
+        d["call"] = fl.call.to_dict()
+    return d
+
+
+def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog):
+    """Single decode pass feeding the court calibrator, the ball model and the person tracker."""
+    calibrator = CourtCalibrator(CourtKeypointDetector(cfg.models["court"], device), court, cfg.keyframe_interval)
+    ball_det = WasbBallDetector(cfg.models["ball"], device, half=True)
+    ball_det.start((info.width, info.height))
+    people = YoloPersonTracker(cfg.models["players"], device.type, imgsz=cfg.player_imgsz)
+    meas, dets, cuts = [], [], [0]
+    prev_hist = None
+    n = 0
+    for i, frame in iter_frames(video):
+        hist = frame_hist(frame)
+        is_cut = prev_hist is not None and cv2.compareHist(prev_hist, hist, cv2.HISTCMP_CORREL) < cfg.cut_threshold
+        if is_cut:
+            cuts.append(i)
+        prev_hist = hist
+        meas.append(calibrator(i, frame, is_cut or i == 0))
+        ball_det.push(i, frame)
+        dets.append(people(frame))
+        n = i + 1
+        if i % 10 == 0:
+            prog("perception", i / max(info.n_frames, 1))
+    return meas, dets, cuts, ball_det.finish(n), n
+
+
+def _broadcast_scan(video, fps: float, out: Path, video_sha: str, cfg: PipelineConfig) -> BroadcastScan:
+    """OCR the broadcast graphics, cached next to the perception cache (same reuse rule)."""
+    cache = out / "broadcast.pkl"
+    if cfg.reuse_perception and cache.is_file():
+        with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
+            cached = pickle.load(f)
+        if cached.get("video_sha256") == video_sha:
+            return cached["scan"]
+    scan = scan_video(video, fps)
+    with open(cache, "wb") as f:
+        pickle.dump({"video_sha256": video_sha, "scan": scan}, f)
+    return scan
+
+
+def _annotate_from_broadcast(flights: list[dict], broadcast: dict, scan: BroadcastScan | None, fps: float) -> None:
+    """Board speed and server name on serves; player names on every shot where the graphic allows it."""
+    if scan is None:
+        return
+    pairs = {p["flight_id"]: p for p in broadcast["serve_speed"]["pairs"]}
+    servers = {x["flight_id"]: x["server"] for x in broadcast["server_sides"]["serves"]}
+    start_end = broadcast["server_sides"]["start_end"]
+    for f in flights:
+        f["board_speed_kmh"] = pairs[f["id"]]["board_kmh"] if f["id"] in pairs else None
+        f["server_name"] = servers.get(f["id"])
+        names = side_names(scan, start_end, f["start_frame"] / fps)
+        f["hitter_name"] = names.get(f["hitter"]) if names else None
+        f["receiver_name"] = names.get(f["receiver"]) if names else None
+
+
+def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, players, kin, out: Path, video_sha: str,
+                      cfg: PipelineConfig, device) -> dict:
+    """Pose at each contact -> hitting hand (from serves) and stroke type on every shot that starts with a hit."""
+    idx = [i for i, fl in enumerate(flights) if fl.contact_time is not None or fl.kind == "serve"]
+    reqs = [(flights[i].start_frame, players[flights[i].hitter].boxes[flights[i].start_frame]) for i in idx]
+    cache = out / "pose.pkl"
+    key = [r[0] for r in reqs]
+    poses = None
+    if cfg.reuse_perception and cache.is_file():
+        with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
+            c = pickle.load(f)
+        if c.get("video_sha256") == video_sha and c.get("frames") == key:
+            poses = c["poses"]
+    if poses is None:
+        est = PoseEstimator(cfg.models["pose"], device.type)
+        poses = poses_at(video, reqs, est)
+        with open(cache, "wb") as f:
+            pickle.dump({"video_sha256": video_sha, "frames": key, "poses": poses}, f)
+    pose_of = dict(zip(idx, poses, strict=True))
+
+    def who(f: dict) -> str:
+        return f.get("hitter_name") or f"side:{f['hitter']}"
+
+    votes: dict[str, list[str]] = {}
+    for i in idx:
+        if flights[i].kind == "serve" and (h := serve_hand(pose_of[i])) is not None:
+            votes.setdefault(who(fjson[i]), []).append(h)
+    hands = {k: v for k, v in ((k, vote_hand(v)) for k, v in votes.items()) if v is not None}
+    for i, (fl, f) in enumerate(zip(flights, fjson, strict=True)):
+        if i not in pose_of:
+            f.update(stroke=None, stroke_wing=None, stroke_confident=False, stroke_cue="vuruş anı klipte görülmüyor",
+                     hand=None, hand_source=None)
+            continue
+        s = fl.start_frame
+        hand = hands.get(who(f))
+        source = "servis" if hand else "varsayılan"
+        prev = next((p for p in flights if p.end_frame == s and p.hitter != fl.hitter), None)
+        bounced = None if prev is None else prev.bounce_frame is not None
+        bxy = next((ball.xy[j] for j in (s, s - 1, s + 1, s - 2) if 0 <= j < len(ball.xy)
+                    and np.isfinite(ball.xy[j, 0])), None)
+        pos = kin[fl.hitter].position[s]
+        st = classify(fl.kind == "serve", pose_of[i], bxy, players[fl.hitter].boxes[s], fl.hitter, hand or "right",
+                      bounced, float(pos[1]) if np.isfinite(pos[1]) else None)
+        f.update(stroke=st.kind, stroke_wing=st.wing, stroke_confident=st.confident, stroke_cue=st.cue,
+                 hand=hand or "right", hand_source=source)
+    return {"model": "yolo26s-pose", "poses": sum(p is not None for p in poses), "requested": len(poses),
+            "hands": {k.removeprefix("side:"): v for k, v in hands.items()}}
+
+
+def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None = None,
+            progress: Callable[[str, float], None] | None = None) -> dict:
+    cfg = cfg or PipelineConfig()
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    prog = progress or (lambda stage, frac: None)
+    timings: dict[str, float] = {}
+    info = probe(video)
+    court = CourtModel()
+    device = pick_device(cfg.device)
+
+    t0 = time.time()
+    video_sha = _sha256(video)
+    cache = out / "perception.pkl"
+    cached = None
+    if cfg.reuse_perception and cache.is_file():
+        with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
+            cached = pickle.load(f)
+        if cached.get("video_sha256") != video_sha:
+            cached = None
+    if cached is not None:
+        meas, dets, cuts, cands, n = cached["meas"], cached["dets"], cached["cuts"], cached["cands"], cached["n"]
+    else:
+        meas, dets, cuts, cands, n = _perceive(video, info, cfg, court, device, prog)
+        with open(cache, "wb") as f:
+            pickle.dump({"video_sha256": video_sha, "meas": meas, "dets": dets, "cuts": cuts, "cands": cands,
+                         "n": n}, f)
+    timings["perception_s"] = time.time() - t0
+
+    t1 = time.time()
+    prog("analysis", 0.0)
+    calib = calibrate_sequence(meas, cuts, (info.width, info.height), court)
+    ball = track_ball(drop_court_fixed(cands, [c.H_inv if c.valid else None for c in calib]), info.width)
+    players = select_players(dets, calib, info.fps)
+    kin = {side: player_kinematics(tr.world, info.fps) for side, tr in players.items()}
+    segments = measurable_segments(calib, cuts, min_len=int(info.fps))
+    hits = detect_hits_in_segments(ball, players, info.fps, info.height, segments)
+    hits = merge_serves(hits, detect_serves(ball, players, info.fps, segments), info.fps)
+    flights = build_flights(ball, hits, calib, info.fps, players, segments, frame_w=info.width)
+    timings["analysis_s"] = time.time() - t1
+
+    t3 = time.time()
+    prog("broadcast", 0.0)
+    scan = _broadcast_scan(video, info.fps, out, video_sha, cfg) if cfg.broadcast and ocr.available() else None
+    serves = [Serve(i, fl.contact_time if fl.contact_time is not None else fl.start_frame / info.fps, fl.hitter,
+                    None if fl.rejected else fl.hit_speed_kmh)  # a rejected fit's speed is not a measurement
+              for i, fl in enumerate(flights) if fl.kind == "serve"]
+    measurable_t = [(a / info.fps, b / info.fps) for a, b in segments]
+    broadcast = check(scan, serves, measurable=measurable_t) if scan is not None else {
+        "ocr": None, "reason": "disabled" if not cfg.broadcast else "Apple Vision OCR is not available"}
+    if scan is not None:
+        timings["broadcast_s"] = time.time() - t3
+
+    valid = [c for c in calib if c.valid]
+    cams = [c.camera for c in valid if c.camera is not None]
+    report = {
+        "schema": "courtvision.report/1",
+        "version": __version__,
+        "created": datetime.now(UTC).isoformat(timespec="seconds"),
+        "video": {"file": Path(video).name, "width": info.width, "height": info.height, "fps": info.fps,
+                  "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": video_sha},
+        "models": {k: {**MODEL_CARDS[k], "sha256": _sha256(v)} for k, v in cfg.models.items()},
+        "calibration": {
+            "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts,
+            "line_support_median": _f(np.median([c.support for c in valid]) if valid else None),
+            "line_rmse_px_median": _f(np.nanmedian([c.line_rmse_px for c in valid]) if valid else None, 2),
+            "focal_px_median": _f(np.median([c.focal for c in cams]) if cams else None, 1),
+            "camera_center_m": [_f(v, 2) for v in np.median([c.center for c in cams], axis=0)] if cams else None,
+            "keyframes": int(sum(m.from_keyframe for m in meas)),
+            "measurable_segments": [[a, b] for a, b in segments],
+        },
+        "ball": {"detected_frames": int((ball.source == 1).sum()), "interpolated_frames": int((ball.source == 2).sum()),
+                 "missing_frames": int((ball.source == 0).sum())},
+        "players": {
+            side: {"label": "P1" if side == "near" else "P2", "track_ids": players[side].track_ids,
+                   "coverage": _f(np.isfinite(players[side].world[:, 0]).mean()),
+                   "distance_m": _f(kin[side].distance_m[-1], 1), "peak_kmh": _f(kin[side].peak_kmh, 1),
+                   "mean_kmh": _f(kin[side].mean_kmh, 1)}
+            for side in players
+        },
+        "hits": [{"frame": h.frame, "t": _f(h.frame / info.fps), "side": h.side, "next_to_player": h.near_player,
+                  "serve": h.serve}
+                 for h in hits],
+        "flights": [_flight_json(i, fl, info.fps) for i, fl in enumerate(flights)],
+        "broadcast": broadcast,
+        "timings_s": {k: round(v, 2) for k, v in timings.items()},
+        "limitations": LIMITATIONS,
+    }
+    _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps)
+    t4 = time.time()
+    report["strokes"] = _annotate_strokes(video, report["flights"], flights, ball, players, kin, out, video_sha, cfg,
+                                          device)
+    timings["pose_s"] = time.time() - t4
+    report["timings_s"] = {k: round(v, 2) for k, v in timings.items()}
+    frames = {
+        "fps": info.fps, "n": n,
+        "calib_valid": [bool(c.valid) for c in calib],
+        "H": [None if c.H is None or not c.valid else [round(float(v), 8) for v in c.H.ravel()] for c in calib],
+        "ball": [None if not np.isfinite(ball.xy[i, 0]) else [round(float(ball.xy[i, 0]), 1),
+                 round(float(ball.xy[i, 1]), 1), int(ball.source[i])] for i in range(n)],
+        "players": {
+            side: {
+                "box": [None if not np.isfinite(b[0]) else [round(float(v), 1) for v in b]
+                        for b in players[side].boxes],
+                "world": [None if not np.isfinite(p[0]) else [round(float(p[0]), 3), round(float(p[1]), 3)]
+                          for p in kin[side].position],
+                "speed_kmh": [None if not np.isfinite(s) else round(float(s), 2) for s in kin[side].speed_kmh],
+                "dist_m": [round(float(d), 2) for d in kin[side].distance_m],
+            } for side in players
+        },
+    }
+    (out / "report.json").write_text(json.dumps(report, indent=1))
+    (out / "frames.json").write_text(json.dumps(frames, separators=(",", ":")))
+    link_source(Path(video), out)
+
+    if cfg.render:
+        t2 = time.time()
+        start_end = broadcast["server_sides"]["start_end"] if scan is not None else None
+        render_overlays(video, out, report, frames, ball, players, kin, calib, info, court, prog, scan, start_end)
+        timings["render_s"] = time.time() - t2
+        report["timings_s"] = {k: round(v, 2) for k, v in timings.items()}
+        report["outputs"] = {"classic": "classic.mp4", "pro": "pro.mp4"}
+        (out / "report.json").write_text(json.dumps(report, indent=1))
+    prog("done", 1.0)
+    return report
+
+
+def _score_rows(scan: BroadcastScan | None, t: float, max_age: float = 20.0) -> list[dict] | None:
+    """The last score graphic read at or before ``t`` (stale after ``max_age`` seconds)."""
+    if scan is None:
+        return None
+    seen = [s for s in scan.scores if s.t <= t and t - s.t <= max_age]
+    if not seen:
+        return None
+    r = seen[-1]
+    # Graphics often show the 0 in an empty box that OCR does not read: one side has points, so does the other.
+    shown = any(row.points for row in r.rows)
+    return [{"name": row.name, "games": list(row.games), "points": row.points or ("0" if shown else None),
+             "serving": row.serving} for row in r.rows]
+
+
+def render_overlays(video, out: Path, report: dict, frames: dict, ball, players, kin, calib, info, court,
+                    prog: Callable[[str, float], None], scan: BroadcastScan | None = None,
+                    start_end: dict[str, str] | None = None) -> None:
+    rnd = Renderer(info.width, info.height, court)
+    fps = info.fps
+    flights = report["flights"]
+    bounce_frames = [(f["bounce"]["frame"], f) for f in flights if f["bounce"] is not None and f["call"]]
+    w_classic = VideoWriter(out / "classic.mp4", info.width, info.height, fps, audio_from=str(video))
+    w_pro = VideoWriter(out / "pro.mp4", info.width, info.height, fps, audio_from=str(video))
+    last_speed: float | None = None
+    try:
+        for i, frame in iter_frames(video):
+            c = calib[i]
+            for f in flights:
+                if f["start_frame"] <= i and f["hit_speed_kmh"] is not None and not f["rejected"]:
+                    last_speed = f["hit_speed_kmh"]
+            ps = {}
+            for side in ("near", "far"):
+                b = players[side].boxes[i]
+                pos = kin[side].position[i]
+                spd = kin[side].speed_kmh[i]
+                so_far = kin[side].speed_kmh[:i + 1]
+                ps[side] = {"box": b if np.isfinite(b[0]) else None,
+                            "world": pos if np.isfinite(pos[0]) else None,
+                            "speed_kmh": float(spd) if np.isfinite(spd) else None,
+                            "dist_m": float(kin[side].distance_m[i]),
+                            "peak_kmh": float(np.nanmax(so_far)) if np.isfinite(so_far).any() else 0.0,
+                            "track_id": players[side].track_ids[0] if players[side].track_ids else None}
+            bounces, latest = [], None
+            for bf, f in bounce_frames:
+                if bf <= i:
+                    call = f["call"]
+                    bounces.append({"xy": [call["x"], call["y"]], "cov": call["cov"], "verdict": call["verdict"],
+                                    "p_in": call["p_in"], "age": i - bf, "play_continued": f["play_continued"]})
+                    latest = {**call, "speed_kmh": None if f["rejected"] else f["hit_speed_kmh"],
+                              "net_clearance_m": f["net_clearance_m"],
+                              "play_continued": f["play_continued"],
+                              "net_clearance_sd_m": f["net_clearance_sd_m"]}
+            trail = [ball.xy[j] for j in range(max(0, i - 10), i + 1) if np.isfinite(ball.xy[j, 0])]
+            note = "" if c.valid else c.reason
+            st = OverlayState(i, i / fps, c.valid, c.H if c.valid else None, note,
+                              ball.xy[i] if np.isfinite(ball.xy[i, 0]) else None, trail, ps, last_speed,
+                              bounces[-3:], latest, _score_rows(scan, i / fps),
+                              side_names(scan, start_end, i / fps) if scan is not None else None)
+            w_classic.write(rnd.classic(frame, st))
+            w_pro.write(rnd.pro(frame, st))
+            if i % 10 == 0:
+                prog("render", i / max(info.n_frames, 1))
+    finally:
+        w_classic.close()
+        w_pro.close()
+

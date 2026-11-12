@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="tr" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.15.0/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --ground: #08080a;
+        --ink: #f5f5f7;
+        --ink-2: rgba(235, 235, 245, 0.62);
+        --ink-3: rgba(235, 235, 245, 0.32);
+        --accent: #d9f24a;
+        --green: #30d158;
+        --red: #ff453a;
+        --orange: #ff9f0a;
+        --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--ground); }
+      #root { position: relative; width: 100%; height: 100%; font-family: var(--font); color: var(--ink);
+        font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+      .clip { position: absolute; inset: 0; }
+      .full { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover; }
+      /* Chapter frame: footage steps back to the right, the left column explains. */
+      .frame { position: absolute; left: 520px; top: 162px; width: 1344px; height: 756px; border-radius: 20px;
+        overflow: hidden; background: #000; box-shadow: 0 0 0 1px rgba(255,255,255,0.07), 0 40px 120px rgba(0,0,0,0.7); }
+      .frame > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+      .fv { position: absolute; left: 520px; top: 162px; width: 1344px; height: 756px; border-radius: 20px; object-fit: cover; }
+      .col { position: absolute; left: 72px; top: 196px; width: 412px; }
+      .num { font-size: 22px; font-weight: 600; letter-spacing: 0.24em; color: var(--accent); }
+      .title { margin-top: 18px; font-size: 58px; line-height: 1.02; font-weight: 750; letter-spacing: -0.025em; }
+      .items { margin-top: 44px; display: flex; flex-direction: column; gap: 26px; }
+      .item { font-size: 27px; line-height: 1.25; font-weight: 500; color: var(--ink-2); letter-spacing: -0.005em; }
+      .item b { display: block; font-size: 44px; line-height: 1.05; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
+      .item .g { color: var(--green); } .item .r { color: var(--red); } .item .o { color: var(--orange); }
+      .rail { position: absolute; left: 72px; top: 952px; display: flex; gap: 8px; }
+      .rail i { display: block; width: 46px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.14); }
+      .rail i.on { background: var(--accent); }
+      .scrim { position: absolute; inset: 0; background:
+        radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(0,0,0,0.55) 100%); }
+      .q { position: absolute; left: 0; right: 0; top: 760px; text-align: center; font-size: 104px; font-weight: 800;
+        letter-spacing: -0.035em; text-shadow: 0 6px 40px rgba(0,0,0,0.6); }
+      .q span { display: inline-block; }
+      .ring { position: absolute; left: 1224px; top: 262px; width: 96px; height: 96px; margin: -48px 0 0 -48px;
+        border: 3px solid var(--accent); border-radius: 50%; }
+      .scan { position: absolute; top: 0; bottom: 0; width: 3px; left: 0; background: var(--accent);
+        box-shadow: 0 0 24px 6px rgba(217,242,74,0.55); }
+      .verdict { position: absolute; left: 96px; top: 640px; }
+      .verdict .w { font-size: 150px; font-weight: 850; letter-spacing: -0.04em; color: var(--red); line-height: 1; }
+      .verdict .d { margin-top: 14px; font-size: 34px; font-weight: 550; color: var(--ink); }
+      .verdict .d span { color: var(--ink-2); }
+      .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 620px;
+        background: linear-gradient(to top, rgba(0,0,0,0.88) 18%, rgba(0,0,0,0)); opacity: 0; }
+      .logo-wrap { display: flex; align-items: center; justify-content: center; }
+      .logo { width: 1000px; height: 250px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="43" data-width="1920" data-height="1080">
+
+      <!-- Cold open: a real rally, slowing into the bounce, frozen before anyone says a word. -->
+      <video id="cold" class="full clip" data-start="0" data-duration="5.2" data-track-index="0" src="assets/f_cold.mp4" muted playsinline></video>
+      <img id="answer" class="full clip" data-start="4.5" data-duration="2.8" data-track-index="1" src="assets/f_answer.jpg" alt="" />
+      <div id="vig" class="scrim clip" data-start="0" data-duration="7.3" data-track-index="2"></div>
+      <div id="ring" class="ring clip" data-start="2.8" data-duration="1.75" data-track-index="3"></div>
+      <div id="q" class="q clip" data-start="2.9" data-duration="1.6" data-track-index="4"><span>İçeride</span> <span>mi?</span></div>
+      <div id="scan" class="scan clip" data-start="4.5" data-duration="0.7" data-track-index="3"></div>
+      <div id="shade" class="shade clip" data-start="5.2" data-duration="2.1" data-track-index="4"></div>
+      <div id="verdict" class="verdict clip" data-start="5.25" data-duration="2.05" data-track-index="5">
+        <div class="w">DIŞARIDA</div>
+        <div class="d">uzak dip çizginin 129 cm gerisinde <span>· ± 17 cm · tek yayın kamerası</span></div>
+      </div>
+
+      <div id="logo1" class="clip logo-wrap" data-start="7.3" data-duration="2.7" data-track-index="0">
+        <svg class="logo" viewBox="0 0 640 160" aria-label="SEKME">
+          <g fill="none" stroke-linecap="round">
+            <path class="arc" d="M18 34 C 58 30, 92 70, 108 118" stroke="#f5f5f7" stroke-width="7" stroke-opacity="0.35" />
+            <path class="arc" d="M108 118 C 116 96, 128 86, 146 84" stroke="#f5f5f7" stroke-width="7" stroke-opacity="0.35" />
+            <line class="base" x1="22" y1="132" x2="150" y2="132" stroke="#f5f5f7" stroke-width="6" />
+            <ellipse class="ell" cx="108" cy="124" rx="24" ry="8" stroke="#d9f24a" stroke-width="3.5" />
+          </g>
+          <circle class="ball" cx="108" cy="117" r="9" fill="#d9f24a" />
+          <text class="word" x="182" y="116" fill="#f5f5f7" font-family="-apple-system, 'SF Pro Display', sans-serif"
+                font-size="92" font-weight="800" letter-spacing="10">SEKME</text>
+        </svg>
+      </div>
+
+      <!-- Chapters: one frame that changes footage, one column that explains. -->
+      <div id="fr" class="frame clip" data-start="10" data-duration="29.95" data-track-index="0">
+        <img id="v5" src="assets/f_score.jpg" alt="" />
+        <img id="v7" src="assets/s_3d.jpg" alt="" />
+        <img id="v8" src="assets/s_analysis.jpg" alt="" />
+      </div>
+      <video id="v1" class="fv clip" data-start="10" data-duration="4.5" data-track-index="1" src="assets/f_court.mp4" muted playsinline></video>
+      <video id="v2" class="fv clip" data-start="14.5" data-duration="3.8" data-track-index="1" src="assets/f_track.mp4" muted playsinline></video>
+      <video id="v3" class="fv clip" data-start="18.3" data-duration="3.65" data-track-index="1" src="assets/f_call.mp4" muted playsinline></video>
+      <video id="v4" class="fv clip" data-start="21.95" data-duration="4.1" data-track-index="1" src="assets/f_doubt.mp4" muted playsinline></video>
+      <video id="v6" class="fv clip" data-start="30.05" data-duration="3.9" data-track-index="1" src="assets/f_other.mp4" muted playsinline></video>
+
+      <div id="c1" class="col clip" data-start="10" data-duration="4.5" data-track-index="2">
+        <div class="num">01 / 07</div><div class="title">Kortu tanır</div>
+        <div class="items">
+          <div class="item"><b>14</b>anahtar nokta, her karede</div>
+          <div class="item">çizgilere piksel altı oturtma</div>
+          <div class="item">kameranın konumu ve odağı çıkarılır</div>
+        </div>
+      </div>
+      <div id="c2" class="col clip" data-start="14.5" data-duration="3.8" data-track-index="2">
+        <div class="num">02 / 07</div><div class="title">Topu izler, sekmeyi ölçer</div>
+        <div class="items">
+          <div class="item">top her karede bulunur</div>
+          <div class="item"><b>3B uçuş</b>yerçekimi, hava direnci ve spinle kurulur</div>
+          <div class="item">sekme anı ve yeri uçuştan çıkar</div>
+        </div>
+      </div>
+      <div id="c3" class="col clip" data-start="18.3" data-duration="3.65" data-track-index="2">
+        <div class="num">03 / 07</div><div class="title">Kararı kendi verir</div>
+        <div class="items">
+          <div class="item"><b class="g">İçeride</b>olasılık &gt;%99,9</div>
+          <div class="item"><b><span id="n3">+0</span> cm</b>yan çizgiye mesafe · ± 4 cm</div>
+          <div class="item"><b><span id="n3s">0</span> km/sa</b>servis · stadyum radarı 151</div>
+        </div>
+      </div>
+      <div id="c4" class="col clip" data-start="21.95" data-duration="4.1" data-track-index="2">
+        <div class="num">04 / 07</div><div class="title">Emin değilse gerekçesini söyler</div>
+        <div class="items">
+          <div class="item"><b>%17</b>geometriye göre içeride · çizgiden 13 cm, ± 14 cm</div>
+          <div class="item">ama karşı oyuncu topa vurdu, oyun sürdü</div>
+          <div class="item"><b class="o">İçeride</b>düşük güven olarak işaretlenir</div>
+        </div>
+      </div>
+      <div id="c5" class="col clip" data-start="26.05" data-duration="4.0" data-track-index="2">
+        <div class="num">05 / 07</div><div class="title">Maçı yayından okur</div>
+        <div class="items">
+          <div class="item"><b>Medvedev – Djokovic</b>oyuncu adları</div>
+          <div class="item"><b>6–3 · 5–5 · 40–30</b>set, oyun ve sayı</div>
+          <div class="item">servis sırası ve stadyum radarı, cihaz üstü metin okumayla</div>
+        </div>
+      </div>
+      <div id="c6" class="col clip" data-start="30.05" data-duration="3.9" data-track-index="2">
+        <div class="num">06 / 07</div><div class="title">Başka maç, aynı sistem</div>
+        <div class="items">
+          <div class="item"><b>Sinner – Alcaraz</b>2025 US Open finali</div>
+          <div class="item"><b class="g">İçeride</b>servis çizgisine +93 cm · ± 7 cm</div>
+          <div class="item">maça özel ayar yok</div>
+        </div>
+      </div>
+      <div id="c7" class="col clip" data-start="33.95" data-duration="6.0" data-track-index="2">
+        <div class="num">07 / 07</div><div class="title">Tekrar ve analiz</div>
+        <div class="items">
+          <div class="item"><b>3B tekrar</b>uçuş yeniden kurulur, renk hızı gösterir</div>
+          <div class="item"><b>66 vuruş · 53 karar</b>tek maç kesitinden</div>
+          <div class="item">forehand · backhand · servis yönü ve derinlik</div>
+        </div>
+      </div>
+      <div id="rail" class="rail clip" data-start="10" data-duration="29.95" data-track-index="3">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+
+      <div id="logo2" class="clip logo-wrap" data-start="39.95" data-duration="3.05" data-track-index="0">
+        <svg class="logo" viewBox="0 0 640 160" aria-label="SEKME">
+          <g fill="none" stroke-linecap="round">
+            <path class="arc" d="M18 34 C 58 30, 92 70, 108 118" stroke="#f5f5f7" stroke-width="7" stroke-opacity="0.35" />
+            <path class="arc" d="M108 118 C 116 96, 128 86, 146 84" stroke="#f5f5f7" stroke-width="7" stroke-opacity="0.35" />
+            <line class="base" x1="22" y1="132" x2="150" y2="132" stroke="#f5f5f7" stroke-width="6" />
+            <ellipse class="ell" cx="108" cy="124" rx="24" ry="8" stroke="#d9f24a" stroke-width="3.5" />
+          </g>
+          <circle class="ball" cx="108" cy="117" r="9" fill="#d9f24a" />
+          <text class="word" x="182" y="116" fill="#f5f5f7" font-family="-apple-system, 'SF Pro Display', sans-serif"
+                font-size="92" font-weight="800" letter-spacing="10">SEKME</text>
+        </svg>
+      </div>
+
+      <audio id="score" data-start="0" data-duration="43" data-track-index="9" src="assets/score.wav"></audio>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const E = "power3.out";
+
+      // --- Cold open: freeze, push into the bounce, ask.
+      const origin = "63.75% 24.3%";
+      tl.fromTo("#cold", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0);
+      tl.fromTo(["#cold", "#answer"], { scale: 1, transformOrigin: origin }, { scale: 2.1, duration: 1.6, ease: "power2.inOut" }, 2.82);
+      tl.fromTo("#ring", { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45, ease: E }, 3.25);
+      tl.fromTo("#q span", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: E, stagger: 0.32 }, 2.95);
+      tl.to(["#q", "#ring"], { opacity: 0, duration: 0.15 }, 4.4);
+      // --- The system's view sweeps in over the same frozen frame, then steps back.
+      tl.fromTo("#answer", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.6, ease: "power2.inOut" }, 4.5);
+      tl.fromTo("#scan", { x: 0 }, { x: 1920, duration: 0.6, ease: "power2.inOut" }, 4.5);
+      tl.to("#answer", { scale: 1, duration: 1.1, ease: "power3.inOut" }, 5.0);
+      tl.fromTo("#shade", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 5.2);
+      tl.fromTo("#verdict .w", { opacity: 0, y: 40, scale: 1.06, transformOrigin: "0% 100%" }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: E }, 5.3);
+      tl.fromTo("#verdict .d", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 5.75);
+      tl.to(["#answer", "#verdict", "#shade", "#vig"], { opacity: 0, duration: 0.35 }, 6.95);
+
+      // --- Logo: the arcs draw, the ball lands, the uncertainty ellipse opens.
+      function logo(sel, t) {
+        tl.fromTo(sel + " .arc", { strokeDasharray: 200, strokeDashoffset: 200 }, { strokeDashoffset: 0, duration: 0.6, ease: "power2.inOut", stagger: 0.22 }, t);
+        tl.fromTo(sel + " .base", { scaleX: 0, transformOrigin: "86px 132px" }, { scaleX: 1, duration: 0.5, ease: E }, t);
+        tl.fromTo(sel + " .ball", { scale: 0, transformOrigin: "108px 117px" }, { scale: 1, duration: 0.3, ease: "back.out(2.4)" }, t + 0.5);
+        tl.fromTo(sel + " .ell", { scale: 0.2, opacity: 0, transformOrigin: "108px 124px" }, { scale: 1, opacity: 1, duration: 0.5, ease: E }, t + 0.62);
+        tl.fromTo(sel + " .word", { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.7, ease: E }, t + 0.55);
+      }
+      logo("#logo1", 7.3);
+      tl.to("#logo1", { opacity: 0, scale: 0.96, duration: 0.35 }, 9.65);
+      logo("#logo2", 39.95);
+
+      // --- Chapter frame enters, footage cross-cuts inside it.
+      tl.fromTo("#fr", { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: 0.6, ease: E }, 10);
+      for (const [v, t] of [["#v2", 14.5], ["#v3", 18.3], ["#v4", 21.95], ["#v6", 30.05]])
+        tl.fromTo(v, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, t);
+      tl.fromTo("#v1", { opacity: 0, scale: 1.04 }, { opacity: 1, scale: 1, duration: 0.6, ease: E }, 10);
+      // Stills live inside the frame and are shown only in their own slots.
+      for (const [v, a, b] of [["#v5", 26.05, 30.05], ["#v7", 33.95, 36.95], ["#v8", 36.95, 39.95]]) {
+        tl.fromTo(v, { opacity: 0 }, { opacity: 1, duration: 0.35, immediateRender: false }, a);
+        tl.to(v, { opacity: 0, duration: 0.01 }, b);
+      }
+      tl.fromTo("#v5", { scale: 1, transformOrigin: "12% 88%" }, { scale: 1.75, duration: 1.4, ease: "power2.inOut", immediateRender: false }, 26.6);
+      tl.to("#v5", { scale: 1, duration: 0.9, ease: "power2.inOut" }, 28.3);
+      tl.fromTo("#v7", { scale: 1.3, transformOrigin: "44% 62%" }, { scale: 1.42, duration: 3.0, ease: "none", immediateRender: false }, 33.95);
+      tl.fromTo("#v8", { scale: 1.0 }, { scale: 1.06, duration: 3.0, ease: "none", immediateRender: false }, 36.95);
+      tl.to("#fr", { opacity: 0, scale: 0.97, duration: 0.4, ease: "power2.in" }, 39.55);
+
+      // --- Columns: number, title, then each line on its beat.
+      const cols = [["#c1", 10, [11.2, 12.2, 13.2]], ["#c2", 14.5, [15.0, 16.4, 17.3]], ["#c3", 18.3, [19.0, 19.4, 20.0]],
+                    ["#c4", 21.95, [23.8, 24.45, 25.2]], ["#c5", 26.05, [27.0, 27.6, 28.2]], ["#c6", 30.05, [30.4, 31.0, 31.6]],
+                    ["#c7", 33.95, [34.6, 37.0, 37.6]]];
+      cols.forEach(([c, t, beats], k) => {
+        tl.fromTo(c + " .num", { opacity: 0, x: -14 }, { opacity: 1, x: 0, duration: 0.4, ease: E }, t + 0.1);
+        tl.fromTo(c + " .title", { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.55, ease: E }, t + 0.15);
+        document.querySelectorAll(c + " .item").forEach((el, i) => {
+          tl.fromTo(el, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.45, ease: E }, beats[i]);
+        });
+        tl.set("#rail i:nth-child(" + (k + 1) + ")", { className: "on" }, t);
+      });
+      tl.fromTo("#rail", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 10.2);
+
+      // --- Counters land with the serve's numbers.
+      const n3 = { v: 0 }, n3s = { v: 0 };
+      tl.fromTo(n3, { v: 0 }, { v: 199, duration: 0.8, ease: "power2.out", onUpdate: () => {
+        document.getElementById("n3").textContent = "+" + Math.round(n3.v); } }, 19.4);
+      tl.fromTo(n3s, { v: 0 }, { v: 162, duration: 0.8, ease: "power2.out", onUpdate: () => {
+        document.getElementById("n3s").textContent = Math.round(n3s.v); } }, 20.0);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

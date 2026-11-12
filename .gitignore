@@ -1,0 +1,37 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+build/
+dist/
+
+# Node
+node_modules/
+web/dist/
+
+# Data, model weights and run outputs (large / licensed separately)
+/data/
+/runs/
+/models/
+*.onnx
+web/sample/
+web/SPEC.md
+perception.pkl
+*.tsbuildinfo
+
+# promo video renders and HyperFrames work files
+promo/renders/
+promo/.hyperframes/
+promo/node_modules/
+promo/assets/clip_*.mp4
+promo/assets/f_*
+promo/assets/score.wav
