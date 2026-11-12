@@ -12,6 +12,8 @@ from courtvision.calib.camera import Camera, apply_h, camera_from_homography, fi
 from courtvision.calib.line_refine import refine_homography
 from courtvision.geometry.court import CourtModel
 from courtvision.models.court_net import CourtKeypointNet
+from courtvision.models.court_unet import ARCH as COURT_UNET_ARCH
+from courtvision.models.court_unet import CourtUNet
 
 
 def pick_device(preferred: str = "auto") -> torch.device:
@@ -42,11 +44,22 @@ def heatmap_peak(hm: np.ndarray, min_peak: float) -> tuple[float, float, float] 
     return float((xs * w).sum() / w.sum()), float((ys * w).sum() / w.sum()), peak
 
 
+def load_court_net(weights: str) -> tuple[torch.nn.Module, str]:
+    """Our court U-Net (checkpoint with ``arch``) or the TennisCourtDetector network (bare state dict)."""
+    ckpt = torch.load(weights, map_location="cpu", weights_only=True)
+    if ckpt.get("arch") == COURT_UNET_ARCH:
+        net: torch.nn.Module = CourtUNet()
+        net.load_state_dict(ckpt["model"], strict=True)
+        return net, COURT_UNET_ARCH
+    net = CourtKeypointNet(out_channels=15)
+    net.load_state_dict(ckpt)
+    return net, "tennis-court-detector"
+
+
 class CourtKeypointDetector:
     def __init__(self, weights: str, device: torch.device, min_peak: float = 0.5) -> None:
         self.device = device
-        self.net = CourtKeypointNet(out_channels=15)
-        self.net.load_state_dict(torch.load(weights, map_location="cpu", weights_only=True))
+        self.net, self.arch = load_court_net(weights)
         self.net.eval().to(device)
         self.min_peak = min_peak
 
@@ -61,11 +74,12 @@ class CourtKeypointDetector:
         kps = np.full((len(frames), 14, 2), np.nan)
         scores = np.zeros((len(frames), 14))
         sx, sy = w0 / W, h0 / H
+        off = 0.0 if self.arch == COURT_UNET_ARCH else 0.5  # our network was trained on labels / scale
         for b in range(len(frames)):
             for k in range(14):
                 pk = heatmap_peak(hms[b, k], self.min_peak)
                 if pk is not None:
-                    kps[b, k] = (pk[0] + 0.5) * sx - 0.5, (pk[1] + 0.5) * sy - 0.5
+                    kps[b, k] = (pk[0] + off) * sx - off, (pk[1] + off) * sy - off
                     scores[b, k] = pk[2]
         return kps, scores
 

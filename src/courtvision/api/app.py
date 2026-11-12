@@ -99,7 +99,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
     uploads = (uploads_dir or runs_root.parent / "data" / "uploads").resolve()
     jobs: dict[str, Job] = {}
     review_lock = threading.Lock()
-    app = FastAPI(title="CourtVision Review Room", version=__version__)
+    app = FastAPI(title="SEKME Review Room", version=__version__)
 
     def run_dir(run_id: str) -> Path:
         if not RUN_ID.match(run_id):

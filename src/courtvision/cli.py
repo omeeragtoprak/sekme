@@ -18,7 +18,14 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"\r[{time.time() - t0:6.1f}s] {stage:<10s} {100 * frac:5.1f}%", end="", file=sys.stderr, flush=True)
 
     cfg = PipelineConfig(device=args.device, render=not args.no_render, reuse_perception=args.reuse_perception,
-                         broadcast=not args.no_broadcast)
+                         broadcast=not args.no_broadcast, ball_stride=args.ball_stride)
+    if args.ball_model:
+        cfg.models["ball"] = str(Path(args.ball_model).resolve())
+    for item in args.model:
+        key, _, path = item.partition("=")
+        if key not in cfg.models or not path:
+            raise SystemExit(f"--model expects KEY=PATH with KEY in {sorted(cfg.models)}, got {item!r}")
+        cfg.models[key] = str(Path(path).resolve())
     report = analyze(args.video, out, cfg, progress)
     print(file=sys.stderr)
     cal = report["calibration"]
@@ -66,7 +73,7 @@ def _benchmark(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="courtvision")
+    p = argparse.ArgumentParser(prog="sekme", description="SEKME: tennis line calls from a single broadcast camera")
     sub = p.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("analyze", help="analyse a tennis video")
     a.add_argument("video")
@@ -75,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--no-render", action="store_true")
     a.add_argument("--no-broadcast", action="store_true", help="skip reading the score graphic and speed board")
     a.add_argument("--reuse-perception", action="store_true", help="reuse cached detections from a previous run")
+    a.add_argument("--ball-model", help="ball network checkpoint (SEKME U-Net or WASB); default from the model cards")
+    a.add_argument("--ball-stride", type=int, default=0, help="frames between the ball network's inputs (0: auto)")
+    a.add_argument("--model", action="append", default=[], metavar="KEY=PATH",
+                   help="override a network checkpoint: court, ball, players or pose (repeatable)")
     a.set_defaults(fn=_analyze)
     s = sub.add_parser("serve", help="start the review room web app")
     s.add_argument("--runs", default="runs")

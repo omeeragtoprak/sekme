@@ -1,8 +1,9 @@
-"""Ball detection with the WASB heatmap model plus track cleaning.
+"""Ball detection with a three-frame heatmap network plus track cleaning.
 
-WASB (Tarashima et al., BMVC 2023) takes three consecutive frames and
-predicts a heatmap for each. We slide the window one frame at a time and
-average the (up to three) heatmaps every frame receives.
+Two networks share one contract (three consecutive 512x288 frames in, one heatmap per frame out):
+our own SEKME U-Net (models/ball_unet.py, trained by scripts/train_ball.py) and WASB (Tarashima et
+al., BMVC 2023, MIT). The checkpoint says which one it is. We slide the window one frame at a time
+and average the (up to three) heatmaps every frame receives.
 
 The model also fires on small white court marks (the baseline centre marks);
 with a calibrated frame these are recognised because they stay on one spot of
@@ -19,6 +20,8 @@ import numpy as np
 import torch
 
 from courtvision.calib.camera import apply_h
+from courtvision.models.ball_unet import ARCH as UNET_ARCH
+from courtvision.models.ball_unet import BallUNet
 from courtvision.models.wasb_hrnet import WASB_CONFIG, HRNet
 
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -32,16 +35,31 @@ class BallCandidate:
     score: float
 
 
-class WasbBallDetector:
+def ball_arch(weights: str) -> str:
+    """Which network a ball checkpoint holds: ``sekme-ball-unet`` (ours) or ``wasb-hrnet``."""
+    return torch.load(weights, map_location="cpu", weights_only=False).get("arch", "wasb-hrnet")
+
+
+def load_ball_net(weights: str) -> tuple[torch.nn.Module, str]:
+    """The network in a ball checkpoint and its name: our U-Net (has ``arch``) or WASB's HRNet."""
+    ckpt = torch.load(weights, map_location="cpu", weights_only=False)
+    if ckpt.get("arch") == UNET_ARCH:
+        net: torch.nn.Module = BallUNet()
+        net.load_state_dict(ckpt["model"], strict=True)
+        return net, UNET_ARCH
+    net = HRNet(WASB_CONFIG)
+    net.load_state_dict(ckpt["model_state_dict"], strict=True)
+    return net, "wasb-hrnet"
+
+
+class BallDetector:
     IN_W, IN_H = WASB_CONFIG["inp_width"], WASB_CONFIG["inp_height"]
 
     def __init__(self, weights: str, device: torch.device, threshold: float = 0.5, half: bool = False) -> None:
-        # fp16 on GPU/MPS: 72 -> 46 ms/frame on the US Open clip, same detections, top-1 shift <= 0.72 px.
+        # fp16 on GPU/MPS: 72 -> 46 ms/frame for WASB on the US Open clip, same detections, top-1 shift <= 0.72 px.
         self.device = device
         self.half = half and device.type != "cpu"
-        self.net = HRNet(WASB_CONFIG)
-        sd = torch.load(weights, map_location="cpu", weights_only=False)["model_state_dict"]
-        self.net.load_state_dict(sd, strict=True)
+        self.net, self.arch = load_ball_net(weights)
         self.net.eval().to(device)
         if self.half:
             self.net.half()
@@ -58,7 +76,9 @@ class WasbBallDetector:
         x = torch.from_numpy(np.concatenate(prepped, axis=0)[None]).to(self.device)
         if self.half:
             x = x.half()
-        return torch.sigmoid(self.net(x)[0].float()).cpu().numpy()[0]
+        out = self.net(x)
+        logits = out[0] if isinstance(out, (dict, list, tuple)) else out  # WASB returns {0: logits}
+        return torch.sigmoid(logits.float()).cpu().numpy()[0]
 
     def candidates(self, hm: np.ndarray, scale: tuple[float, float]) -> list[BallCandidate]:
         """Connected blobs above threshold -> heatmap-weighted centroids (WASB 'concomp')."""
@@ -66,31 +86,42 @@ class WasbBallDetector:
             return []
         mask = (hm > self.threshold).astype(np.uint8)
         n, labels = cv2.connectedComponents(mask)
+        # Pixel-centre decoding for both networks. For our U-Net (trained on labels x * scale) it was chosen on
+        # the selection games 6-7 against decoding x * scale: F1 at 4 px 0.827 vs 0.780 (the resize's own
+        # half-pixel shift makes the ball appear where the centre convention puts it).
+        off = 0.5
         out = []
         for m in range(1, n):
             ys, xs = np.nonzero(labels == m)
             w = hm[ys, xs]
             cx, cy = float((xs * w).sum() / w.sum()), float((ys * w).sum() / w.sum())
-            out.append(BallCandidate((cx + 0.5) * scale[0] - 0.5, (cy + 0.5) * scale[1] - 0.5, float(w.sum())))
+            out.append(BallCandidate((cx + off) * scale[0] - off, (cy + off) * scale[1] - off, float(w.sum())))
         return sorted(out, key=lambda c: -c.score)
 
-    def start(self, frame_size: tuple[int, int]) -> None:
-        """Begin a streaming pass; feed frames in order with :meth:`push`, then :meth:`finish`."""
+    def start(self, frame_size: tuple[int, int], stride: int = 1) -> None:
+        """Begin a streaming pass; feed frames in order with :meth:`push`, then :meth:`finish`.
+
+        ``stride`` spaces the three frames of a window (t, t+s, t+2s). Both networks were trained on 30 fps
+        video, so 60 fps footage uses s = 2 to show them the motion they learned; every frame still gets
+        one inference and up to three averaged heatmaps.
+        """
         self._scale = (frame_size[0] / self.IN_W, frame_size[1] / self.IN_H)
-        self._buf: deque[tuple[int, np.ndarray]] = deque(maxlen=3)
+        self._stride = max(1, int(stride))
+        self._buf: deque[tuple[int, np.ndarray]] = deque(maxlen=2 * self._stride + 1)
         self._acc: dict[int, np.ndarray] = {}
         self._cnt: dict[int, int] = {}
         self._out: dict[int, list[BallCandidate]] = {}
 
     def push(self, idx: int, frame: np.ndarray) -> None:
         self._buf.append((idx, self._prep(frame)))
-        if len(self._buf) == 3:
-            hms = self.heatmaps([p for _, p in self._buf])
-            for (j, _), hm in zip(self._buf, hms, strict=True):
+        if len(self._buf) == self._buf.maxlen:
+            window = [self._buf[k] for k in range(0, len(self._buf), self._stride)]
+            hms = self.heatmaps([p for _, p in window])
+            for (j, _), hm in zip(window, hms, strict=True):
                 self._acc[j] = self._acc.get(j, 0.0) + hm
                 self._cnt[j] = self._cnt.get(j, 0) + 1
         # A frame is final once it can no longer appear in a window (keeps memory bounded).
-        done = [j for j in self._acc if j <= idx - 2]
+        done = [j for j in self._acc if j <= idx - 2 * self._stride]
         for j in done:
             self._out[j] = self.candidates(self._acc.pop(j) / self._cnt.pop(j), self._scale)
 
@@ -99,9 +130,10 @@ class WasbBallDetector:
             self._out[j] = self.candidates(self._acc.pop(j) / self._cnt.pop(j), self._scale)
         return [self._out.get(j, []) for j in range(n_frames)]
 
-    def run(self, frames_iter, n_frames: int, frame_size: tuple[int, int]) -> list[list[BallCandidate]]:
+    def run(self, frames_iter, n_frames: int, frame_size: tuple[int, int],
+            stride: int = 1) -> list[list[BallCandidate]]:
         """Sliding-window inference over an iterator of (index, frame); candidates per frame."""
-        self.start(frame_size)
+        self.start(frame_size, stride)
         for idx, frame in frames_iter:
             self.push(idx, frame)
         return self.finish(n_frames)

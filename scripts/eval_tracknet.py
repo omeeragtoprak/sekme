@@ -38,13 +38,16 @@ def clip_video(clip: Path, cid: str) -> Path:
     return out
 
 
-def analyse(video: Path, cid: str, rerun: bool = False) -> Path | None:
-    run = DATA / "runs" / cid
+def analyse(video: Path, cid: str, rerun: bool = False, runs_dir: str = "runs", ball_model: str | None = None,
+            models: list[str] | None = None) -> Path | None:
+    run = DATA / runs_dir / cid
     cached = (run / "perception.pkl").exists()
     if rerun and cached or not (run / "report.json").exists():
         extra = ["--reuse-perception"] if rerun and cached else []
         r = subprocess.run([str(ROOT / ".venv" / "bin" / "python"), "-m", "courtvision.cli", "analyze", str(video),
-                            "--out", str(run), "--no-render", "--no-broadcast", *extra],
+                            "--out", str(run), "--no-render", "--no-broadcast", *extra,
+                            *(["--ball-model", ball_model] if ball_model else []),
+                            *[a for m in models or [] for a in ("--model", m)]],
                            env={"PYTHONPATH": str(ROOT / "src"), "PATH": "/usr/local/bin:/usr/bin:/bin"},
                            capture_output=True, text=True)
         if r.returncode != 0:
@@ -118,6 +121,9 @@ def main() -> None:
     ap.add_argument("--games", nargs="*", default=None)
     ap.add_argument("--rerun", action="store_true", help="re-run events and fits on cached detections")
     ap.add_argument("--results", default="results.json", help="results file name under data/tracknet")
+    ap.add_argument("--runs-dir", default="runs", help="run folder under data/tracknet (keeps model variants apart)")
+    ap.add_argument("--ball-model", help="ball network checkpoint passed to the analysis")
+    ap.add_argument("--model", action="append", default=[], help="KEY=PATH passed to the analysis (repeatable)")
     args = ap.parse_args()
     games = sorted((DATA / "Dataset").glob("game*"), key=lambda p: int(p.name[4:]))
     if args.games:
@@ -127,7 +133,7 @@ def main() -> None:
     for g in games:
         for clip in sorted(g.glob("Clip*"), key=lambda p: int(p.name[4:])):
             cid = f"{g.name}_{clip.name}"
-            run = analyse(clip_video(clip, cid), cid, args.rerun)
+            run = analyse(clip_video(clip, cid), cid, args.rerun, args.runs_dir, args.ball_model, args.model)
             if run is None:
                 continue
             res[cid] = score_clip(clip, run)

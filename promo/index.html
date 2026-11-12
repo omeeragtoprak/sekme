@@ -69,7 +69,7 @@
       <div id="shade" class="shade clip" data-start="5.2" data-duration="2.1" data-track-index="4"></div>
       <div id="verdict" class="verdict clip" data-start="5.25" data-duration="2.05" data-track-index="5">
         <div class="w">DIŞARIDA</div>
-        <div class="d">uzak dip çizginin 129 cm gerisinde <span>· ± 17 cm · tek yayın kamerası</span></div>
+        <div class="d">sağ tekler yan çizgisinin 106 cm dışında <span>· ± 6 cm · tek yayın kamerası</span></div>
       </div>
 
       <div id="logo1" class="clip logo-wrap" data-start="7.3" data-duration="2.7" data-track-index="0">
@@ -109,7 +109,7 @@
       <div id="c2" class="col clip" data-start="14.5" data-duration="3.8" data-track-index="2">
         <div class="num">02 / 07</div><div class="title">Topu izler, sekmeyi ölçer</div>
         <div class="items">
-          <div class="item">top her karede bulunur</div>
+          <div class="item"><b>Kendi top ağımız</b>her karede topu bulur</div>
           <div class="item"><b>3B uçuş</b>yerçekimi, hava direnci ve spinle kurulur</div>
           <div class="item">sekme anı ve yeri uçuştan çıkar</div>
         </div>
@@ -125,9 +125,9 @@
       <div id="c4" class="col clip" data-start="21.95" data-duration="4.1" data-track-index="2">
         <div class="num">04 / 07</div><div class="title">Emin değilse gerekçesini söyler</div>
         <div class="items">
-          <div class="item"><b>%17</b>geometriye göre içeride · çizgiden 13 cm, ± 14 cm</div>
-          <div class="item">ama karşı oyuncu topa vurdu, oyun sürdü</div>
-          <div class="item"><b class="o">İçeride</b>düşük güven olarak işaretlenir</div>
+          <div class="item"><b>%76</b>geometriye göre içeride · çizgiye +10 cm, ± 15 cm</div>
+          <div class="item">karşı oyuncu topa vurdu, oyun sürdü</div>
+          <div class="item"><b class="o">İçeride</b>düşük güven: %95 eşiğinin altında</div>
         </div>
       </div>
       <div id="c5" class="col clip" data-start="26.05" data-duration="4.0" data-track-index="2">
@@ -142,7 +142,7 @@
         <div class="num">06 / 07</div><div class="title">Başka maç, aynı sistem</div>
         <div class="items">
           <div class="item"><b>Sinner – Alcaraz</b>2025 US Open finali</div>
-          <div class="item"><b class="g">İçeride</b>servis çizgisine +93 cm · ± 7 cm</div>
+          <div class="item"><b class="g">İçeride</b>servis çizgisine +81 cm · ± 8 cm</div>
           <div class="item">maça özel ayar yok</div>
         </div>
       </div>
@@ -150,7 +150,7 @@
         <div class="num">07 / 07</div><div class="title">Tekrar ve analiz</div>
         <div class="items">
           <div class="item"><b>3B tekrar</b>uçuş yeniden kurulur, renk hızı gösterir</div>
-          <div class="item"><b>66 vuruş · 53 karar</b>tek maç kesitinden</div>
+          <div class="item"><b>66 vuruş · 52 karar</b>tek maç kesitinden</div>
           <div class="item">forehand · backhand · servis yönü ve derinlik</div>
         </div>
       </div>
@@ -219,13 +219,13 @@
       }
       tl.fromTo("#v5", { scale: 1, transformOrigin: "12% 88%" }, { scale: 1.75, duration: 1.4, ease: "power2.inOut", immediateRender: false }, 26.6);
       tl.to("#v5", { scale: 1, duration: 0.9, ease: "power2.inOut" }, 28.3);
-      tl.fromTo("#v7", { scale: 1.3, transformOrigin: "44% 62%" }, { scale: 1.42, duration: 3.0, ease: "none", immediateRender: false }, 33.95);
+      tl.fromTo("#v7", { scale: 1.3, transformOrigin: "47% 52%" }, { scale: 1.42, duration: 3.0, ease: "none", immediateRender: false }, 33.95);
       tl.fromTo("#v8", { scale: 1.0 }, { scale: 1.06, duration: 3.0, ease: "none", immediateRender: false }, 36.95);
       tl.to("#fr", { opacity: 0, scale: 0.97, duration: 0.4, ease: "power2.in" }, 39.55);
 
       // --- Columns: number, title, then each line on its beat.
       const cols = [["#c1", 10, [11.2, 12.2, 13.2]], ["#c2", 14.5, [15.0, 16.4, 17.3]], ["#c3", 18.3, [19.0, 19.4, 20.0]],
-                    ["#c4", 21.95, [23.8, 24.45, 25.2]], ["#c5", 26.05, [27.0, 27.6, 28.2]], ["#c6", 30.05, [30.4, 31.0, 31.6]],
+                    ["#c4", 21.95, [23.8, 24.6, 25.2]], ["#c5", 26.05, [27.0, 27.6, 28.2]], ["#c6", 30.05, [30.4, 31.0, 31.6]],
                     ["#c7", 33.95, [34.6, 37.0, 37.6]]];
       cols.forEach(([c, t, beats], k) => {
         tl.fromTo(c + " .num", { opacity: 0, x: -14 }, { opacity: 1, x: 0, duration: 0.4, ease: E }, t + 0.1);
@@ -239,9 +239,9 @@
 
       // --- Counters land with the serve's numbers.
       const n3 = { v: 0 }, n3s = { v: 0 };
-      tl.fromTo(n3, { v: 0 }, { v: 199, duration: 0.8, ease: "power2.out", onUpdate: () => {
+      tl.fromTo(n3, { v: 0 }, { v: 202, duration: 0.8, ease: "power2.out", onUpdate: () => {
         document.getElementById("n3").textContent = "+" + Math.round(n3.v); } }, 19.4);
-      tl.fromTo(n3s, { v: 0 }, { v: 162, duration: 0.8, ease: "power2.out", onUpdate: () => {
+      tl.fromTo(n3s, { v: 0 }, { v: 160, duration: 0.8, ease: "power2.out", onUpdate: () => {
         document.getElementById("n3s").textContent = Math.round(n3s.v); } }, 20.0);
 
       window.__timelines["main"] = tl;

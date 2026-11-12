@@ -5,18 +5,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from courtvision.events.rally import (
+from courtvision.events.flights import (
     Flight,
-    Hit,
     _plausibility,
     build_flights,
-    detect_hits_in_segments,
-    detect_serves,
     measurable_segments,
-    merge_serves,
     net_clearance,
     net_clearance_sd,
 )
+from courtvision.events.hits import Hit, detect_hits_in_segments
+from courtvision.events.serves import detect_serves, merge_serves
 from courtvision.geometry.court import Half
 from courtvision.perception.ball import BallCandidate, BallTrack, drop_court_fixed, track_ball
 from courtvision.perception.court import FrameCalibration
@@ -176,7 +174,7 @@ def test_net_clearance_sigma_matches_monte_carlo() -> None:
 def test_calibration_cov_scales_pixel_error_to_ground():
     import numpy as np
 
-    from courtvision.events.rally import CAL_PX_FLOOR, calibration_cov
+    from courtvision.events.flights import CAL_PX_FLOOR, calibration_cov
     from courtvision.perception.court import FrameCalibration
 
     H = np.diag([100.0, 100.0, 1.0])  # 1 m on the ground = 100 px
@@ -190,7 +188,7 @@ def test_calibration_cov_scales_pixel_error_to_ground():
 def test_refine_contact_finds_the_kink_across_a_missing_frame():
     import numpy as np
 
-    from courtvision.events.rally import refine_contact
+    from courtvision.events.image_track import refine_contact
 
     # US Open 2023 serve 28 (HD run): slow toss descent, contact frame 1309 missed, fast struck flight.
     frames = np.array([1305, 1306, 1308, 1310, 1311, 1314, 1315])
@@ -204,7 +202,7 @@ def test_refine_contact_finds_the_kink_across_a_missing_frame():
 
 
 def test_kink_point_is_where_two_image_lines_meet():
-    from courtvision.events.rally import kink_point
+    from courtvision.events.image_track import kink_point
 
     f, p = kink_point(np.array([1.0, 2.0]), np.array([[10.0, 100.0], [20.0, 110.0]]),
                       np.array([4.0, 5.0]), np.array([[40.0, 114.0], [50.0, 108.0]]))
@@ -213,7 +211,7 @@ def test_kink_point_is_where_two_image_lines_meet():
 
 
 def test_image_bounce_gives_a_ground_point_with_uncertainty():
-    from courtvision.events.rally import image_bounce
+    from courtvision.events.flights import image_bounce
     from courtvision.perception.court import FrameCalibration
 
     H = np.diag([100.0, 100.0, 1.0])  # 1 m = 100 px, camera straight above (no radius lift)

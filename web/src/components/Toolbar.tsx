@@ -93,7 +93,7 @@ function ToolbarImpl(p: Props) {
   const overlayOn = p.view === "source";
   const job = describeJob(p.job);
 
-  let titleMain = "CourtVision";
+  let titleMain = "SEKME";
   let titleSub = "İnceleme Odası";
   if (run) {
     titleMain = stem(run.video);

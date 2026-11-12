@@ -1,16 +1,8 @@
-"""Hit and bounce events, flight segmentation and per-flight 3D fits.
+"""Flights between strokes and their line calls.
 
-Hits are where the ball's travel direction (towards / away from the camera)
-reverses; the reversal must persist, which rejects the short image-space
-wobble a bounce produces on the near side. Each flight between hits is
-searched for one bounce by a two-piece changepoint fit, restricted to the
-receiving half, and then fitted in 3D (physics/flight.py).
-
-Serves are found separately: a far server's contact does not reverse the
-ball's image direction (toss descent and serve both travel down the image),
-and the toss apex looks like a reversal. A serve is a slow, near-vertical
-toss above a player standing on the baseline, with a dead ball before it,
-followed by a contact that sends the ball towards the opponent.
+Each flight is searched for one bounce by a two-piece changepoint fit restricted to the receiving half,
+fitted in 3D (physics/flight.py) and checked by physical plausibility gates. A rejected fit falls back to
+the gated image-kink bounce. The call adds the calibration uncertainty to the fit covariance.
 """
 
 from __future__ import annotations
@@ -20,6 +12,8 @@ from dataclasses import dataclass, field, replace
 import numpy as np
 
 from courtvision.calib.camera import Camera, apply_h
+from courtvision.events.hits import Hit
+from courtvision.events.image_track import changepoint, kink_point
 from courtvision.geometry.court import (
     BALL_RADIUS,
     NET_HEIGHT_CENTER,
@@ -36,16 +30,6 @@ from courtvision.perception.ball import BallTrack
 from courtvision.perception.court import FrameCalibration
 from courtvision.perception.players import PlayerTrack
 from courtvision.physics.flight import Anchor, FlightFit, fit_flight, flight_states, flight_states_batch
-
-
-@dataclass
-class Hit:
-    frame: int
-    side: str  # "near" | "far": who hit it
-    px: np.ndarray
-    near_player: bool  # ball was next to that player's box
-    serve: bool = False  # a toss above this player preceded the contact
-    toss_start: int | None = None  # first toss frame (serves only); the point starts here
 
 
 @dataclass
@@ -69,206 +53,6 @@ class Flight:
     rejected: str | None = None  # why a fitted flight was not trusted (no 3D call is made)
     bounce_2d: tuple[float, np.ndarray, np.ndarray] | None = None  # (frame, ground xy, cov) from the image kink
     notes: list[str] = field(default_factory=list)
-
-
-def _smooth(y: np.ndarray, win: int = 3) -> np.ndarray:
-    out = np.full_like(y, np.nan)
-    half = win // 2
-    for i in range(len(y)):
-        seg = y[max(0, i - half):i + half + 1]
-        seg = seg[np.isfinite(seg)]
-        if len(seg):
-            out[i] = seg.mean()
-    return out
-
-
-def _near_box(px: np.ndarray, box: np.ndarray, grow: float = 0.7) -> bool:
-    if not np.all(np.isfinite(box)) or not np.all(np.isfinite(px)):
-        return False
-    h = box[3] - box[1]
-    return bool(box[0] - grow * h <= px[0] <= box[2] + grow * h and box[1] - grow * h <= px[1] <= box[3] + 0.3 * h)
-
-
-def detect_hits(ball: BallTrack, players: dict[str, PlayerTrack], fps: float, frame_h: int) -> list[Hit]:
-    """Persistent reversals of the ball's image-y direction (towards/away from the camera)."""
-    y = _smooth(ball.xy[:, 1])
-    n = len(y)
-    k = max(2, int(round(0.12 * fps)))  # ~4 frames at 30 fps
-    thr = 0.012 * frame_h
-    dy = np.full(n, np.nan)
-    dy[k:n - k] = y[2 * k:] - y[:n - 2 * k]
-    state = 0
-    state_since = 0
-    hits: list[Hit] = []
-    min_gap = int(0.4 * fps)
-    for i in range(n):
-        if not np.isfinite(dy[i]) or abs(dy[i]) < thr:
-            continue
-        s = 1 if dy[i] > 0 else -1  # +1: travelling towards the camera (near side)
-        if state == 0:
-            state, state_since = s, i
-            continue
-        if s == state:
-            continue
-        ahead = dy[i:i + int(0.2 * fps)]
-        ahead = ahead[np.isfinite(ahead)]
-        if len(ahead) < 3 or np.mean(np.sign(ahead) == s) < 0.8:
-            continue  # not persistent: a bounce wobble, not a hit
-        lo, hi = max(state_since, i - 2 * k), min(n, i + k + 1)
-        seg = y[lo:hi]
-        if not np.isfinite(seg).any():
-            continue
-        j = lo + int(np.nanargmax(seg) if state == 1 else np.nanargmin(seg))
-        side = "near" if state == 1 else "far"
-        if hits and j - hits[-1].frame < min_gap:
-            state, state_since = s, i
-            continue
-        box = players[side].boxes[j] if side in players else np.full(4, np.nan)
-        hits.append(Hit(j, side, ball.xy[j].copy(), _near_box(ball.xy[j], box)))
-        state, state_since = s, i
-    return hits
-
-
-def _changepoint(t: np.ndarray, xy: np.ndarray, allowed: np.ndarray) -> tuple[int | None, float]:
-    """Index splitting the track into two quadratic pieces best; returns (index, SSE gain ratio)."""
-    def sse(a: int, b: int) -> float:
-        if b - a < 3:
-            return np.inf
-        tt = t[a:b]
-        return float(sum(np.sum((xy[a:b, d] - np.polyval(np.polyfit(tt, xy[a:b, d], 2), tt)) ** 2)
-                         for d in (0, 1)))
-
-    n = len(t)
-    whole = sse(0, n)
-    best, best_cost = None, np.inf
-    for b in range(3, n - 2):
-        if not allowed[b]:
-            continue
-        c = sse(0, b + 1) + sse(b, n)
-        if c < best_cost:
-            best, best_cost = b, c
-    gain = whole / max(best_cost, 1e-6) if best is not None else 1.0
-    return best, gain
-
-
-TOSS_REACH = 0.35  # ball within this many box heights beside the server's box
-TOSS_ABOVE = 0.25  # ball above the shoulders: higher than this many box heights below the box top
-TOSS_APEX = 0.3  # the toss (or the part we see) reaches this many box heights above the head
-TOSS_MAX_SPEED = 0.15  # box heights per frame; a struck ball is faster
-SERVER_ABS_Y = (10.9, 13.5)  # server's feet on, or up to ~1.6 m behind, the baseline (m)
-
-
-def _box_near(track: PlayerTrack, i: int, win: int = 5) -> np.ndarray | None:
-    b = track.boxes[max(0, i - win):i + win + 1]
-    b = b[np.isfinite(b).all(axis=1)]
-    return np.median(b, axis=0) if len(b) else None
-
-
-def _toss_runs(ball: BallTrack, track: PlayerTrack, s: int, e: int) -> list[tuple[int, int]]:
-    """Runs of >= 3 detections that are slow and above the player's shoulders (gaps up to 2 frames)."""
-    runs: list[tuple[int, int]] = []
-    run: list[int] = []
-    for i in range(s, e):
-        if ball.source[i] != 1:
-            if run and i - run[-1] > 2:
-                runs.append((run[0], run[-1]))
-                run = []
-            continue
-        box = _box_near(track, i)
-        ok = False
-        if box is not None:
-            h = box[3] - box[1]
-            x, y = ball.xy[i]
-            prev = ball.xy[i - 1] if i > 0 else np.full(2, np.nan)
-            speed = float(np.linalg.norm(ball.xy[i] - prev)) if np.all(np.isfinite(prev)) else 0.0
-            ok = (box[0] - TOSS_REACH * h <= x <= box[2] + TOSS_REACH * h and y < box[1] + TOSS_ABOVE * h
-                  and speed < TOSS_MAX_SPEED * h)
-        if ok:
-            run.append(i)
-        elif run:
-            runs.append((run[0], run[-1]))
-            run = []
-    if run:
-        runs.append((run[0], run[-1]))
-    return [(a, b) for a, b in runs if np.sum(ball.source[a:b + 1] == 1) >= 3]
-
-
-def refine_contact(frames: np.ndarray, xy: np.ndarray, contact: int, max_back: int = 3, jump: float = 2.0) -> int:
-    """Serve contact as the meeting point of the toss and the struck flight (image lines through two detections each).
-
-    The changepoint can only land on detected frames, so a missed contact frame pushes it later; a late
-    contact shortens the flight and inflates the serve speed (US Open 2023 serve 28: +23 % vs the radar).
-    """
-    frames = np.asarray(frames)
-    if len(frames) < 4:
-        return contact
-    speed = np.linalg.norm(np.diff(xy, axis=0), axis=1) / np.diff(frames)
-    for i in range(1, len(frames) - 2):
-        if not contact - max_back <= frames[i + 1] <= contact or speed[i] < jump * max(speed[i - 1], 1e-6):
-            continue
-        a1, b1 = xy[i], (xy[i] - xy[i - 1]) / (frames[i] - frames[i - 1])  # toss line through i-1, i
-        a2, b2 = xy[i + 1], (xy[i + 2] - xy[i + 1]) / (frames[i + 2] - frames[i + 1])  # struck line through i+1, i+2
-        # Closest approach of P1(f) = a1 + b1 (f - f_i) and P2(f) = a2 + b2 (f - f_{i+1}).
-        da = (a1 - b1 * frames[i]) - (a2 - b2 * frames[i + 1])
-        db = b1 - b2
-        f = -float(da @ db) / max(float(db @ db), 1e-9)
-        return int(round(min(max(f, frames[i]), frames[i + 1])))
-    return contact
-
-
-def detect_serves(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
-                  segments: list[tuple[int, int]], dead_ball_s: float = 1.0) -> list[Hit]:
-    """Serve contacts: a toss above a baseline player after a dead ball, then a strike towards the opponent."""
-    serves: list[Hit] = []
-    for S, E in segments:
-        for side, track in players.items():
-            for a, b in _toss_runs(ball, track, S, E):
-                box = _box_near(track, a)
-                if box is None:
-                    continue
-                h = box[3] - box[1]
-                det = np.flatnonzero(ball.source[a:b + 1] == 1) + a
-                tx, ty = ball.xy[det, 0], ball.xy[det, 1]
-                if ty.min() > box[1] - TOSS_APEX * h or np.ptp(tx) > max(0.5 * np.ptp(ty), 0.1 * h):
-                    continue  # not high enough above the head, or not a near-vertical toss
-                feet = track.world[a:b + 1]
-                feet = feet[np.isfinite(feet).all(axis=1)]
-                if not len(feet):
-                    continue
-                fy = float(np.median(feet[:, 1]))
-                if not SERVER_ABS_Y[0] <= abs(fy) <= SERVER_ABS_Y[1] or (fy > 0) != (side == "far"):
-                    continue
-                # Dead ball before: nothing seen, or only the ball held / bounced by the server.
-                pre = np.arange(max(S, a - int(dead_ball_s * fps)), a)
-                pre = pre[ball.source[pre] == 1]
-                reach = np.array([box[0] - TOSS_REACH * h, box[1] - h, box[2] + TOSS_REACH * h, box[3] + 0.3 * h])
-                if len(pre) and not np.all((ball.xy[pre, 0] >= reach[0]) & (ball.xy[pre, 0] <= reach[2])
-                                           & (ball.xy[pre, 1] >= reach[1]) & (ball.xy[pre, 1] <= reach[3])):
-                    continue
-                # Contact: changepoint between the toss parabola and the struck flight.
-                win = np.arange(a, min(E, b + int(0.3 * fps) + 1))
-                win = win[ball.source[win] == 1]
-                after = win[win > b]
-                if len(after) < 3:
-                    continue
-                allowed = (win >= b - 2) & (win <= b + 3)
-                k, _ = _changepoint(win / fps, ball.xy[win], allowed)
-                contact = int(win[k]) if k is not None else b
-                contact = refine_contact(win, ball.xy[win], contact)
-                # Struck towards the opponent: far server sends it down the image, near server up.
-                dy = ball.xy[after[-1], 1] - ball.xy[after[0], 1]
-                if (dy > 0) != (side == "far"):
-                    continue
-                serves.append(Hit(contact, side, ball.xy[contact].copy(), True, serve=True, toss_start=a))
-    return sorted(serves, key=lambda h: h.frame)
-
-
-def merge_serves(hits: list[Hit], serves: list[Hit], fps: float) -> list[Hit]:
-    """Replace reversal hits inside a toss (the apex) or at its contact by the serve hit."""
-    min_gap = int(0.4 * fps)
-    kept = [h for h in hits
-            if not any(sv.toss_start is not None and sv.toss_start <= h.frame < sv.frame + min_gap for sv in serves)]
-    return sorted(kept + serves, key=lambda h: h.frame)
 
 
 def net_height(x: float) -> float:
@@ -332,23 +116,23 @@ def measurable_segments(calib: list[FrameCalibration], cuts: list[int], min_len:
     return [(a, b) for a, b in segs if b - a >= min_len]
 
 
-def _masked(ball: BallTrack, s: int, e: int) -> BallTrack:
-    xy = np.full_like(ball.xy, np.nan)
-    xy[s:e] = ball.xy[s:e]
-    src = np.zeros_like(ball.source)
-    src[s:e] = ball.source[s:e]
-    return BallTrack(xy, np.where(src > 0, ball.score, 0.0), src)
-
-
 # A serve contact ~0.5 m in front of the feet moves along the camera ray by ~0.1-0.2 m in height.
 SERVE_CONTACT_TOL_M = 0.3
+
+
 # The serve contact is seen (end of the toss): it lies within +-1 frame of the detected frame, a uniform
 # spread with sd 2/sqrt(12) ~ 0.58 frame; and it is within about half a metre of the server's body.
 # With the looser rally priors (2 frames, 1.0/1.3 m) the fit traded contact depth for time and the
 # serve speeds came out 12 % above the stadium radar board on the US Open clip (+7 % with these).
 SERVE_T_SIGMA_FRAMES = 0.5
+
+
 SERVE_XY_SIGMA_M = 0.5
+
+
 RALLY_MAX_CONTACT_M = 3.25
+
+
 # ATP serve impact height 3.03 +- 0.12 m (n=630, Baiget et al., Biol Sport 2023, PMC9806764); this
 # leaves ~4.7 sigma for tall players and fit error.
 SERVE_MAX_CONTACT_M = 3.6
@@ -377,25 +161,16 @@ def _plausibility(fl: Flight, fit: FlightFit, frame_w: int) -> list[str]:
     return why
 
 
-def kink_point(f_pre: np.ndarray, p_pre: np.ndarray, f_post: np.ndarray,
-               p_post: np.ndarray) -> tuple[float, np.ndarray]:
-    """Where the image line through two samples before an event meets the line through two after it.
-
-    Returns the (sub-frame) time of closest approach, clipped between the samples, and the image point.
-    """
-    b1 = (p_pre[1] - p_pre[0]) / (f_pre[1] - f_pre[0])
-    b2 = (p_post[1] - p_post[0]) / (f_post[1] - f_post[0])
-    da = (p_pre[1] - b1 * f_pre[1]) - (p_post[0] - b2 * f_post[0])
-    db = b1 - b2
-    f = -float(da @ db) / max(float(db @ db), 1e-9)
-    f = min(max(f, float(f_pre[1])), float(f_post[0]))
-    return f, 0.5 * ((p_pre[1] + b1 * (f - f_pre[1])) + (p_post[0] + b2 * (f - f_post[0])))
-
-
 IMAGE_BOUNCE_PX = 2.5  # detection noise used to propagate the 2D bounce's uncertainty
+
+
 # Gates for the 2D fallback, chosen on TrackNet games 1-7 (games 8-10 held out): +18 true / +3 false bounces.
 IMAGE_BOUNCE_MAX_SD_M = 0.5  # depth 1-sigma; wider says nothing about a line (false kinks: median 1.1 m)
+
+
 IMAGE_BOUNCE_MIN_NET_M = 3.0  # kinks near the net were mostly the ball crossing it, not bouncing
+
+
 IMAGE_BOUNCE_MAX_X_M, IMAGE_BOUNCE_MAX_Y_M = 5.5, 12.9  # court plus ~1 m
 
 
@@ -513,7 +288,7 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
     t = idx / fps
     xy = ball.xy[idx]
     allowed = np.array([(apply_h(calib[i].H_inv, ball.xy[i])[1] > 0) == (receiver == Half.FAR) for i in idx])
-    b, gain = _changepoint(t, xy, allowed)
+    b, gain = changepoint(t, xy, allowed)
     if b is None or gain < 1.5:
         fl.notes.append(f"belirgin sekme yok (kırılma kazancı {num(gain, 2)}): vole ya da top kadrajdan çıktı")
         return fl
@@ -617,11 +392,3 @@ def _image_call(fl: Flight, idx: np.ndarray, xy: np.ndarray, b: int, calib: list
     fl.call = with_play_evidence(call, fl.play_continued)
     fl.notes.append("sekme 3B uçuştan değil, görüntüdeki iz kırılmasından ölçüldü (daha geniş belirsizlik)")
     return fl
-
-
-def detect_hits_in_segments(ball: BallTrack, players: dict[str, PlayerTrack], fps: float, frame_h: int,
-                            segments: list[tuple[int, int]]) -> list[Hit]:
-    hits: list[Hit] = []
-    for s, e in segments:
-        hits += detect_hits(_masked(ball, s, e), players, fps, frame_h)
-    return hits

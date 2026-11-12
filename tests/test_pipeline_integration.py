@@ -11,7 +11,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = ROOT / "data" / "videos" / "vienna_djokovic_sonego.mp4"
-WEIGHTS = [ROOT / "models" / n for n in ("court_kps_yastrebksv.pt", "wasb_tennis_best.pth.tar", "yolo26s.pt")]
+WEIGHTS = [ROOT / "models" / n for n in ("sekme_court.pt", "sekme_ball.pt", "yolo26s.pt")]
 
 pytestmark = pytest.mark.slow
 

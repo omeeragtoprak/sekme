@@ -50,6 +50,98 @@ class YoloPersonTracker:
         return out
 
 
+def _iou(a: np.ndarray, b: np.ndarray) -> float:
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.0
+
+
+class IouTracker:
+    """Greedy frame-to-frame association by box overlap; a track survives ``max_age`` frames unseen."""
+
+    def __init__(self, min_iou: float = 0.3, max_age: int = 15) -> None:
+        self.min_iou, self.max_age = min_iou, max_age
+        self.tracks: dict[int, tuple[np.ndarray, int]] = {}  # id -> (last box, frames since seen)
+        self.next_id = 1
+
+    def update(self, boxes: list[np.ndarray]) -> list[int]:
+        pairs = sorted(((_iou(tb, b), tid, k) for tid, (tb, _) in self.tracks.items() for k, b in enumerate(boxes)),
+                       reverse=True)
+        ids: list[int | None] = [None] * len(boxes)
+        used: set[int] = set()
+        for iou, tid, k in pairs:
+            if iou < self.min_iou:
+                break
+            if tid in used or ids[k] is not None:
+                continue
+            ids[k] = tid
+            used.add(tid)
+        for k in range(len(boxes)):
+            if ids[k] is None:
+                ids[k] = self.next_id
+                self.next_id += 1
+        seen = dict(zip(ids, boxes, strict=True))
+        kept = {tid: (box, age + 1) for tid, (box, age) in self.tracks.items()
+                if tid not in seen and age + 1 <= self.max_age}
+        self.tracks = {**kept, **{tid: (box, 0) for tid, box in seen.items()}}
+        return [int(i) for i in ids]
+
+
+class SekmePersonTracker:
+    """Our person network (models/person_unet.py) plus the IoU tracker; same output as YoloPersonTracker."""
+
+    def __init__(self, weights: str, device: str, threshold: float = 0.3) -> None:
+        import torch
+
+        from courtvision.models.person_unet import PersonUNet
+
+        ckpt = torch.load(weights, map_location="cpu", weights_only=True)
+        self.net = PersonUNet()
+        self.net.load_state_dict(ckpt["model"], strict=True)
+        self.device = torch.device(device)
+        self.net.eval().to(self.device)
+        self.threshold = threshold
+        self.tracker = IouTracker()
+
+    def reset(self) -> None:
+        """Forget all tracks (a camera cut: nobody on screen is the person who was there before)."""
+        self.tracker = IouTracker()
+
+    def __call__(self, frame: np.ndarray) -> list[PersonDet]:
+        import cv2
+        import torch
+
+        from courtvision.models.person_unet import IN_H, IN_W, decode
+
+        h0, w0 = frame.shape[:2]
+        x = cv2.resize(frame, (IN_W, IN_H), interpolation=cv2.INTER_AREA)
+        with torch.inference_mode():
+            t = torch.from_numpy(x).to(self.device).permute(2, 0, 1)[None].float().div_(255.0)
+            out = self.net(t)[0].float().cpu().numpy()
+        dets = decode(out, self.threshold)
+        scale = np.array([w0 / IN_W, h0 / IN_H, w0 / IN_W, h0 / IN_H])
+        boxes = [b * scale for b, _ in dets]
+        ids = self.tracker.update(boxes)
+        return [PersonDet(i, b, s) for i, b, (_, s) in zip(ids, boxes, dets, strict=True)]
+
+
+def person_tracker(weights: str, device: str, imgsz: int = 1280):
+    """Our person network when the checkpoint holds it, Ultralytics YOLO otherwise."""
+    import torch
+
+    from courtvision.models.person_unet import ARCH
+
+    try:
+        ckpt = torch.load(weights, map_location="cpu", weights_only=True)
+    except Exception:  # noqa: BLE001  an Ultralytics .pt needs its own classes to unpickle
+        ckpt = None
+    if isinstance(ckpt, dict) and ckpt.get("arch") == ARCH:
+        return SekmePersonTracker(weights, device)
+    return YoloPersonTracker(weights, device, imgsz=imgsz)
+
+
 # Area where a player can plausibly stand during a point (metres, world frame).
 PLAY_X = 7.5
 PLAY_Y_MIN, PLAY_Y_MAX = 0.8, 17.5

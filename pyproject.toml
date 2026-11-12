@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "courtvision"
 version = "3.0.0a1"
-description = "Honest tennis video analytics: calibrated court, ball/player tracking, 3D flight fitting and probabilistic line calls with human review."
+description = "SEKME: tennis line calls from a single broadcast camera: court calibration, ball and player tracking, 3D flight fitting and probabilistic calls."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later (see LICENSE; third-party model terms in docs/LICENSES.md)" }
@@ -27,6 +27,7 @@ dependencies = [
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "httpx>=0.27"]
 
 [project.scripts]
+sekme = "courtvision.cli:main"
 courtvision = "courtvision.cli:main"
 
 [tool.setuptools.packages.find]

@@ -1,4 +1,4 @@
-// Typed fetch helpers for the CourtVision FastAPI backend (same origin, under /api).
+// Typed fetch helpers for the SEKME FastAPI backend (same origin, under /api).
 import type { Frames, Health, Job, LabelRecord, LabelSummary, MediaName, Report, Review, ReviewIn, RunSummary } from "./types";
 
 export class ApiError extends Error {
@@ -52,7 +52,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     res = await fetch(path, { ...init, headers: { Accept: "application/json", ...(init?.headers ?? {}) } });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
-    throw new ApiError(`Ağ hatası — CourtVision sunucusuna ulaşılamıyor (${path})`, 0);
+    throw new ApiError(`Ağ hatası — SEKME sunucusuna ulaşılamıyor (${path})`, 0);
   }
   const body = await readBody(res);
   if (!res.ok) {

@@ -20,6 +20,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import torch
 
 from courtvision import __version__
 from courtvision.analytics.kinematics import player_kinematics
@@ -27,18 +28,13 @@ from courtvision.api.app import link_source
 from courtvision.broadcast import ocr
 from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
 from courtvision.eval.broadcast_check import Serve, check, side_names
-from courtvision.events.rally import (
-    Flight,
-    build_flights,
-    detect_hits_in_segments,
-    detect_serves,
-    measurable_segments,
-    merge_serves,
-)
+from courtvision.events.flights import Flight, build_flights, measurable_segments
+from courtvision.events.hits import detect_hits_in_segments
+from courtvision.events.serves import detect_serves, merge_serves
 from courtvision.events.strokes import classify, serve_hand, vote_hand
 from courtvision.geometry.court import CourtModel
 from courtvision.io.video import VideoWriter, iter_frames, probe
-from courtvision.perception.ball import WasbBallDetector, drop_court_fixed, track_ball
+from courtvision.perception.ball import BallDetector, ball_arch, drop_court_fixed, track_ball
 from courtvision.perception.court import (
     CourtCalibrator,
     CourtKeypointDetector,
@@ -46,22 +42,61 @@ from courtvision.perception.court import (
     frame_hist,
     pick_device,
 )
-from courtvision.perception.players import YoloPersonTracker, select_players
-from courtvision.perception.pose import PoseEstimator, poses_at
+from courtvision.perception.players import person_tracker, select_players
+from courtvision.perception.pose import pose_estimator, poses_at
 from courtvision.physics.flight import flight_states
 from courtvision.render.hud import OverlayState, Renderer
 
 ROOT = Path(__file__).resolve().parents[2]
 
-MODEL_CARDS = {
-    "court": {"file": "models/court_kps_yastrebksv.pt", "source": "github.com/yastrebksv/TennisCourtDetector",
-              "license": "none published (research use only)"},
-    "ball": {"file": "models/wasb_tennis_best.pth.tar", "source": "github.com/nttcom/WASB-SBDT (BMVC 2023)",
-             "license": "MIT"},
-    "players": {"file": "models/yolo26s.pt", "source": "Ultralytics YOLO26-s", "license": "AGPL-3.0"},
-    "pose": {"file": "models/yolo26s-pose.pt", "source": "Ultralytics YOLO26-s-pose (COCO 17 keypoints)",
-             "license": "AGPL-3.0"},
+# Networks this project designed and trained (docs/MODELS.md), by the ``arch`` their checkpoint carries.
+OWN_CARDS = {
+    "sekme-court-unet": {"source": "this project: SEKME court U-Net, scripts/train_court.py on the "
+                                   "TennisCourtDetector labels (8 841 broadcast frames)",
+                         "license": "AGPL-3.0 (own weights; the dataset has no stated licence)"},
+    "sekme-ball-unet": {"source": "this project: SEKME ball U-Net, scripts/train_ball.py on TrackNet tennis "
+                                  "games 1-5",
+                        "license": "AGPL-3.0 (own weights; the TrackNet data has no stated licence)"},
+    "sekme-person-unet": {"source": "this project: SEKME person U-Net, scripts/train_players.py, distilled from "
+                                    "YOLO26-s boxes on broadcast frames",
+                          "license": "AGPL-3.0 (own weights)"},
+    "sekme-pose-unet": {"source": "this project: SEKME pose U-Net, scripts/train_pose.py, distilled from "
+                                  "YOLO26-s-pose keypoints on player crops",
+                        "license": "AGPL-3.0 (own weights)"},
 }
+
+# Published networks, used when a checkpoint is not one of ours (default or selected with --model).
+THIRD_PARTY_CARDS = {
+    "court": {"source": "github.com/yastrebksv/TennisCourtDetector", "license": "none published (research use only)"},
+    "ball": {"source": "github.com/nttcom/WASB-SBDT (BMVC 2023)", "license": "MIT"},
+    "players": {"source": "Ultralytics YOLO26-s", "license": "AGPL-3.0"},
+    "pose": {"source": "Ultralytics YOLO26-s-pose (COCO 17 keypoints)", "license": "AGPL-3.0"},
+}
+
+# Default checkpoint per role (override with sekme analyze --model KEY=PATH).
+MODEL_FILES = {
+    "court": "models/sekme_court.pt",
+    "ball": "models/sekme_ball.pt",
+    "players": "models/yolo26s.pt",
+    "pose": "models/yolo26s-pose.pt",
+}
+
+BALL_TRAIN_FPS = 30.0  # both ball networks were trained on 30 fps TrackNet video
+
+
+def _own_arch(path: str) -> str | None:
+    try:
+        ckpt = torch.load(path, map_location="cpu", weights_only=True)
+    except Exception:  # noqa: BLE001  third-party checkpoints need their own classes to unpickle
+        return None
+    return ckpt.get("arch") if isinstance(ckpt, dict) else None
+
+
+def _model_card(key: str, path: str) -> dict:
+    arch = ball_arch(path) if key == "ball" else _own_arch(path)
+    card = OWN_CARDS.get(arch or "", THIRD_PARTY_CARDS[key])
+    return {**card, "file": f"models/{Path(path).name}", "sha256": _sha256(path)}
+
 
 LIMITATIONS = [
     "Tek yayın kamerası: sekme konumlarında santimetre ile desimetre arası belirsizlik var; her karar içeride olma "
@@ -106,7 +141,8 @@ class PipelineConfig:
     reuse_perception: bool = False  # reuse runs/<id>/perception.pkl when the video hash matches
     broadcast: bool = True  # read the score graphic and the serve-speed board (macOS Vision) as a check
     player_imgsz: int = 1280
-    models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v["file"]) for k, v in MODEL_CARDS.items()})
+    ball_stride: int = 0  # frames between the ball network's three inputs; 0: match its 30 fps training video
+    models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
 def _f(x: float | None, nd: int = 3) -> float | None:
@@ -157,9 +193,10 @@ def _flight_json(i: int, fl: Flight, fps: float) -> dict:
 def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog):
     """Single decode pass feeding the court calibrator, the ball model and the person tracker."""
     calibrator = CourtCalibrator(CourtKeypointDetector(cfg.models["court"], device), court, cfg.keyframe_interval)
-    ball_det = WasbBallDetector(cfg.models["ball"], device, half=True)
-    ball_det.start((info.width, info.height))
-    people = YoloPersonTracker(cfg.models["players"], device.type, imgsz=cfg.player_imgsz)
+    ball_det = BallDetector(cfg.models["ball"], device, half=True)
+    stride = cfg.ball_stride or max(1, round(info.fps / BALL_TRAIN_FPS))
+    ball_det.start((info.width, info.height), stride)
+    people = person_tracker(cfg.models["players"], device.type, imgsz=cfg.player_imgsz)
     pending, dets, cuts = [], [], [0]
     prev_hist = None
     n = 0
@@ -174,6 +211,8 @@ def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog)
             prev_hist = hist
             pending.append(pool.submit(calibrator, i, frame, is_cut or i == 0))
             ball_det.push(i, frame)
+            if is_cut and hasattr(people, "reset"):
+                people.reset()
             dets.append(people(frame))
             n = i + 1
             if i % 10 == 0:
@@ -225,7 +264,7 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
         if c.get("video_sha256") == video_sha and c.get("frames") == key:
             poses = c["poses"]
     if poses is None:
-        est = PoseEstimator(cfg.models["pose"], device.type)
+        est = pose_estimator(cfg.models["pose"], device.type)
         poses = poses_at(video, reqs, est)
         with open(cache, "wb") as f:
             pickle.dump({"video_sha256": video_sha, "frames": key, "poses": poses}, f)
@@ -321,7 +360,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
         "video": {"file": Path(video).name, "width": info.width, "height": info.height, "fps": info.fps,
                   "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": video_sha},
-        "models": {k: {**MODEL_CARDS[k], "sha256": _sha256(v)} for k, v in cfg.models.items()},
+        "models": {k: _model_card(k, v) for k, v in cfg.models.items()},
         "calibration": {
             "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts,
             "line_support_median": _f(np.median([c.support for c in valid]) if valid else None),
