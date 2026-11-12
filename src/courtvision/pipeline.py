@@ -13,6 +13,7 @@ import json
 import pickle
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -159,21 +160,25 @@ def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog)
     ball_det = WasbBallDetector(cfg.models["ball"], device, half=True)
     ball_det.start((info.width, info.height))
     people = YoloPersonTracker(cfg.models["players"], device.type, imgsz=cfg.player_imgsz)
-    meas, dets, cuts = [], [], [0]
+    pending, dets, cuts = [], [], [0]
     prev_hist = None
     n = 0
-    for i, frame in iter_frames(video):
-        hist = frame_hist(frame)
-        is_cut = prev_hist is not None and cv2.compareHist(prev_hist, hist, cv2.HISTCMP_CORREL) < cfg.cut_threshold
-        if is_cut:
-            cuts.append(i)
-        prev_hist = hist
-        meas.append(calibrator(i, frame, is_cut or i == 0))
-        ball_det.push(i, frame)
-        dets.append(people(frame))
-        n = i + 1
-        if i % 10 == 0:
-            prog("perception", i / max(info.n_frames, 1))
+    # The court calibrator (mostly CPU line fitting, ~21 ms/frame) runs in one worker thread, in frame order,
+    # while the ball and person networks run here.
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        for i, frame in iter_frames(video):
+            hist = frame_hist(frame)
+            is_cut = prev_hist is not None and cv2.compareHist(prev_hist, hist, cv2.HISTCMP_CORREL) < cfg.cut_threshold
+            if is_cut:
+                cuts.append(i)
+            prev_hist = hist
+            pending.append(pool.submit(calibrator, i, frame, is_cut or i == 0))
+            ball_det.push(i, frame)
+            dets.append(people(frame))
+            n = i + 1
+            if i % 10 == 0:
+                prog("perception", i / max(info.n_frames, 1))
+        meas = [f.result() for f in pending]
     return meas, dets, cuts, ball_det.finish(n), n
 
 

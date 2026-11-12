@@ -85,7 +85,7 @@ was followed by the receiver playing the ball, which suggests a ~20 cm far-basel
 - Net clearance carries ~0.1–0.25 m 1-sigma (median 14 cm on the US Open clip) and is reported with it; a slightly negative value within 2 sigma is not evidence of a net cord.
 - Lens distortion is not modelled (~±0.7 px pattern at the image edges, 3–10 cm on the ground at bounce points). It is carried as uncertainty instead: every call adds a systematic calibration term (max(court-line RMSE, 0.5 px), propagated through the homography) to the fit covariance. On both US Open clips this changed no verdict; median 1σ across the line went 2.6 → 2.9 cm (2023) and 1.6 → 1.7 cm (2025).
 - Ball footprint is a fixed 2 cm half-length; scoring/point outcome inference is not implemented.
-- Perception runs ~4× slower than real time on an M4 (90 s of 720p: 351 s end to end with fp16 ball inference, was 438 s; no CoreML/ONNX export yet).
+- Analysis runs ~3.6× slower than real time on an M4 (90 s of 720p30: 323 s end to end, was 438 s): fp16 ball and person networks, court calibration in a worker thread, identical calls. fp16 breaks the court network (14 → ~1 keypoints found), so it stays fp32; no CoreML/ONNX export yet.
 - Court-keypoint weights have no published licence (research only); YOLO26 is AGPL-3.0 — see `docs/LICENSES.md`.
 
 ## Language
