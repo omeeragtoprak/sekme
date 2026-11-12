@@ -92,6 +92,12 @@ def _own_arch(path: str) -> str | None:
     return ckpt.get("arch") if isinstance(ckpt, dict) else None
 
 
+def perception_key(video_sha: str, cfg: PipelineConfig) -> dict:
+    """What cached detections depend on: the video, the court/ball/person networks and the ball stride."""
+    return {"video_sha256": video_sha, "ball_stride": cfg.ball_stride,
+            "models": {k: _sha256(cfg.models[k]) for k in ("court", "ball", "players")}}
+
+
 def _model_card(key: str, path: str) -> dict:
     arch = ball_arch(path) if key == "ball" else _own_arch(path)
     card = OWN_CARDS.get(arch or "", THIRD_PARTY_CARDS[key])
@@ -100,24 +106,22 @@ def _model_card(key: str, path: str) -> dict:
 
 LIMITATIONS = [
     "Tek yayın kamerası: sekme konumlarında santimetre ile desimetre arası belirsizlik var; her karar içeride olma "
-    "olasılığını ve 1σ payını gösterir, %95'te kesinleşmeyen her karar insan incelemesine gider.",
+    "olasılığını ve 1σ payını gösterir; %95'te kesinleşmeyen kararlar düşük güvenli olarak işaretlenir.",
     "Topun yere temas izi sabit 2 cm yarı uzunlukla modelleniyor; hızlı kortlarda gerçek iz daha uzun olabilir.",
-    "Lens bozulması henüz modellenmiyor (örnek klipte görüntü kenarlarında ~1 piksel kalıntı).",
-    "Kort anahtar nokta ağırlıklarının yayımlanmış bir lisansı yok; yalnızca araştırma amaçlı kullanılıyor.",
+    "Lens bozulması modellenmiyor; bunun yerine her karara kalibrasyon belirsizliği (en az 0,5 piksel) eklenir.",
     "Servisler top atışından bulunuyor (ölü toptan sonra dip çizgideki oyuncunun üstünde yavaş, dikeye yakın top) ve "
-    "kamera ışınında ölçülen temas yüksekliğiyle doğrulanıyor; US Open özet klibinde görünen 3 servisin üçü de "
-    "yanlış alarm olmadan bulundu, ama bu bir tespit oranı söylemek için çok az. Kamera geçişinden önce atılan "
-    "servisler kurtarılamıyor.",
+    "kamera ışınında ölçülen temas yüksekliğiyle doğrulanıyor; çok az gerçek serviste denendi. Temastan hemen sonraki "
+    "kareler çok bulanıksa top ağı onları kaçırabilir ve servis tanınmaz. Kamera geçişinden önce atılan servisler "
+    "kurtarılamıyor.",
     "File üstü yükseklik 3B uydurmadan geliyor ve tek kamerayla yaklaşık 0,1–0,25 m 1σ belirsizlik taşıyor; "
     "değer bu belirsizlikle birlikte gösterilir.",
-    "Gerçek görüntüler için etiketli doğruluk verisi henüz yok: gerçek kliplerde doğruluk yalnızca oyunun akışı ve "
-    "gözle kontrol ediliyor; sayısal referans simülasyon testidir. İnceleme Odası'ndaki etiketleme aracıyla (gerçek "
-    "sekme noktasına tıklama) hata, %95 elips tutarlılığı ve karar uyumu ölçülebilir; uzak kortta 1 piksel ~6 cm "
-    "olduğundan tek bir etiketin kendi belirsizliği de raporlanır.",
+    "Bağımsız ölçüm: elle etiketlenmiş TrackNet maçlarında sekme konumu ortanca ~15 cm (etiketin kendi belirsizliği "
+    "~10 cm'nin altını ayırt edemez); çizgiye santimetre yakın kararların doğruluğu henüz ölçülmedi. İnceleme "
+    "Odası'ndaki etiketleme aracıyla (gerçek sekme noktasına tıklama) kendi görüntünüzde ölçülebilir.",
     "Skor ve sayı sonucu henüz çıkarılmıyor; klip başlamadan önce vurulmuş topların vuruş hızı verilmiyor.",
     "Yayın tabelası ve stadyum radar panosu Apple Vision ile (yalnızca macOS) okunur ve yalnızca doğrulama için "
-    "kullanılır, kararları etkilemez. US Open klibinde 3 servis radarla eşleşti: ölçülen servis hızları ortalama "
-    "%7 yüksek; bu sistematik farkın nedeni (radarın ölçüm tanımı ya da kamera ölçeği) henüz ayrıştırılamadı.",
+    "kullanılır, kararları etkilemez. Radar karşılaştırması yalnızca pano değişiminin zamanı servisten sonra "
+    "≤ 4 s içinde bilinen servislerde yapılır; örnek az olduğu için tek servis farkı ±%6 civarındadır.",
     "Ralli vuruşlarında 3B uydurmanın temas yüksekliği zayıf belirleniyor (iki forehand 2,4–2,6 m çıktı); bu yüzden "
     "yalnızca kamera ışınında ölçülen servis temas yüksekliği gösterilir. Vuruş türü (forehand/backhand/vole/smaç) "
     "poz ve top konumundan çıkarılır; US Open klibinde 16 forehand/backhand gözle kontrol edildi, 16'sı doğru.",
@@ -256,18 +260,18 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
     idx = [i for i, fl in enumerate(flights) if fl.contact_time is not None or fl.kind == "serve"]
     reqs = [(flights[i].start_frame, players[flights[i].hitter].boxes[flights[i].start_frame]) for i in idx]
     cache = out / "pose.pkl"
-    key = [r[0] for r in reqs]
+    key = {"video_sha256": video_sha, "model_sha256": _sha256(cfg.models["pose"]), "frames": [r[0] for r in reqs]}
     poses = None
     if cfg.reuse_perception and cache.is_file():
         with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
             c = pickle.load(f)
-        if c.get("video_sha256") == video_sha and c.get("frames") == key:
+        if c.get("key") == key:
             poses = c["poses"]
     if poses is None:
         est = pose_estimator(cfg.models["pose"], device.type)
         poses = poses_at(video, reqs, est)
         with open(cache, "wb") as f:
-            pickle.dump({"video_sha256": video_sha, "frames": key, "poses": poses}, f)
+            pickle.dump({"key": key, "poses": poses}, f)
     pose_of = dict(zip(idx, poses, strict=True))
 
     def who(f: dict) -> str:
@@ -313,19 +317,19 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     t0 = time.time()
     video_sha = _sha256(video)
     cache = out / "perception.pkl"
+    perc_key = perception_key(video_sha, cfg)
     cached = None
     if cfg.reuse_perception and cache.is_file():
         with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
             cached = pickle.load(f)
-        if cached.get("video_sha256") != video_sha:
+        if cached.get("key") != perc_key:  # other video, other networks or other ball stride: recompute
             cached = None
     if cached is not None:
         meas, dets, cuts, cands, n = cached["meas"], cached["dets"], cached["cuts"], cached["cands"], cached["n"]
     else:
         meas, dets, cuts, cands, n = _perceive(video, info, cfg, court, device, prog)
         with open(cache, "wb") as f:
-            pickle.dump({"video_sha256": video_sha, "meas": meas, "dets": dets, "cuts": cuts, "cands": cands,
-                         "n": n}, f)
+            pickle.dump({"key": perc_key, "meas": meas, "dets": dets, "cuts": cuts, "cands": cands, "n": n}, f)
     timings["perception_s"] = time.time() - t0
 
     t1 = time.time()

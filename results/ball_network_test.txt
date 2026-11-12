@@ -1,0 +1,6 @@
+# Ball networks, TrackNet games 8-10, production detector (scripts/eval_ball.py)
+## final (pixel-centre decoding)
+sekme_ball.pt {"arch": "sekme-ball-unet", "frames": 5675, "ms_per_frame": 23.3, "4px": {"precision": 0.9446, "recall": 0.8806, "f1": 0.9115}, "10px": {"precision": 0.9928, "recall": 0.9255, "f1": 0.958}}
+wasb_tennis_best.pth.tar {"arch": "wasb-hrnet", "frames": 5675, "ms_per_frame": 44.2, "4px": {"precision": 0.967, "recall": 0.8927, "f1": 0.9283}, "10px": {"precision": 0.9949, "recall": 0.9184, "f1": 0.9551}}
+## second run with x*scale decoding for our network (reverted, chosen on games 6-7)
+sekme_ball.pt {"arch": "sekme-ball-unet", "frames": 5675, "ms_per_frame": 22.8, "4px": {"precision": 0.9385, "recall": 0.875, "f1": 0.9056}, "10px": {"precision": 0.9931, "recall": 0.9259, "f1": 0.9583}}

@@ -33,3 +33,11 @@ def test_iou_tracker_keeps_ids_across_a_short_gap_and_starts_new_ones():
     assert t.update([]) == []
     assert t.update([a + 2]) == [first[0]]  # one frame unseen: same player
     assert t.update([np.array([500.0, 0, 510, 20])]) != [first[0]]
+
+
+def test_decode_suppresses_a_duplicate_blob_of_the_same_person():
+    centre, size, _ = person_targets(np.array([[100.0, 50.0, 140.0, 150.0]]))
+    logits = np.where(centre > 0, 6.0, -6.0)
+    logits[100, 125] = 3.0  # a second, weaker blob inside the same person
+    dets = decode(np.stack([logits, np.full_like(size[0], np.log(40.0)), np.full_like(size[1], np.log(100.0))]))
+    assert len(dets) == 1

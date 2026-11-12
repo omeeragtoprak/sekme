@@ -18,7 +18,7 @@ not the court calibration (bounded separately by the court-line residual, README
 
 ## Results (commit with this file; `data/tracknet/results.json`)
 
-| | games 8–10 (unseen) | all 95 clips |
+| WASB ball network, TennisCourtDetector court (current defaults: see the ball-network table below and docs/MODELS.md) | games 8–10 (unseen) | all 95 clips |
 |---|---|---|
 | labelled bounces (on calibrated frames) | 154 | 516 |
 | found within ±3 frames (recall) | **112 (73 %)** | 348 (67 %) |

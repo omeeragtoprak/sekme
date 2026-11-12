@@ -1,0 +1,7 @@
+# Serve speed vs stadium radar board, current default networks (sekme analyze; report broadcast.serve_speed)
+usopen2023_final_hd | models: models/sekme_ball.pt models/sekme_court.pt models/yolo26s.pt | pairs: [(0, 160.5, 149.7, 7.2), (37, 160.1, 151.3, 5.8)] | unmatched: {'cut': 3, 'timing': 1}
+usopen2023_final_hd_90-179s | models: models/sekme_ball.pt models/sekme_court.pt models/yolo26s.pt | pairs: [(11, 169.9, 175.4, -3.1), (44, 141.2, 148.1, -4.6)] | unmatched: {'cut': 4, 'timing': 1}
+usopen2025_final_hd | models: models/sekme_ball.pt models/sekme_court.pt models/yolo26s.pt | pairs: [(38, 178.2, 191.5, -6.9)] | unmatched: {'timing': 4}
+usopen2024_final_hl | models: models/sekme_ball.pt models/sekme_court.pt models/yolo26s.pt | pairs: [] | unmatched: {'cut': 3, 'timing': 5}
+usopen2025_qf_djokovic_fritz_hl | models: models/sekme_ball.pt models/sekme_court.pt models/yolo26s.pt | pairs: [(96, 142.6, 175.4, -18.7)] | unmatched: {'timing': 6, 'cut': 1}
+ALL n=6 mean -3.4 % (SE 3.9), mean |error| 7.7 %, SD 9.4 %

@@ -1,0 +1,3 @@
+# Player recall on the human-labelled Tennis Player Actions frames (scripts/eval_mendeley.py --players)
+players yolo26s.pt {"players_found": 0.8545, "frames": 2000}
+players sekme_person.pt {"players_found": 0.6335, "frames": 2000}

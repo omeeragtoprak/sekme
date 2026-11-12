@@ -1,16 +1,25 @@
 # Models
 
-SEKME uses four networks. One of them, the ball network, was designed and trained in this project;
-the other three are published models used as they are. Everything after the networks (court refit
-and camera, ball tracking, events, the 3D physics fit, calls and their uncertainty, self-checks) is
-this project's code; see [ARCHITECTURE.md](ARCHITECTURE.md).
+SEKME uses four networks. The ball and court networks were designed and trained in this project and are
+the defaults. Person and pose networks of our own were distilled from YOLO26 and tested on hand-labelled
+frames; both fell short of their teacher, so YOLO26 stays the default for those two roles.
+Everything after the networks (court refit and camera, ball tracking, events, the 3D physics fit, calls
+and their uncertainty, self-checks) is this project's code; see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-| Role | Network | Trained by | Training data | Weights in this repo |
+| Role | Default network | Trained by | Training data | Alternative (`--model KEY=PATH`) |
 |---|---|---|---|---|
-| Ball | SEKME ball U-Net (`src/courtvision/models/ball_unet.py`) | this project | TrackNet tennis, games 1–5 | no (`models/sekme_ball.pt`, produced by `scripts/train_ball.py`) |
-| Ball (reference) | WASB HRNet (Tarashima et al., BMVC 2023) | its authors | TrackNet tennis, games 1–7 | no (MIT, WASB-SBDT model zoo) |
-| Court keypoints | TrackNet-style VGG encoder–decoder, 14 points + centre | yastrebksv/TennisCourtDetector | 8 841 broadcast frames | no (no published licence) |
-| Players / pose | YOLO26-s, YOLO26-s-pose + ByteTrack | Ultralytics | COCO | no (AGPL-3.0) |
+| Ball | SEKME ball U-Net (`models/ball_unet.py`) | this project | TrackNet tennis, games 1–5 | WASB HRNet (its authors, MIT) |
+| Court keypoints | SEKME court U-Net (`models/court_unet.py`) | this project | TennisCourtDetector labels: the 6 630 frames of `data_train.json` (of 8 841) | TennisCourtDetector network (its author, no published licence) |
+| Players | YOLO26-s + ByteTrack (Ultralytics, AGPL-3.0) | Ultralytics | COCO | SEKME person U-Net, distilled from YOLO26-s |
+| Pose | YOLO26-s-pose (Ultralytics, AGPL-3.0) | Ultralytics | COCO | SEKME pose U-Net, distilled from YOLO26-s-pose |
+
+No weights are in the repository (`models/` is ignored); the training scripts reproduce ours.
+
+**How the test sets were used.** The held-out sets (TrackNet games 8–10, the court validation split, the
+human-labelled pose frames) were never used to fit or tune a parameter. They were used to accept or
+reject a change against a rule written down and committed before the run; each such use is listed in
+the git history and in [EVAL_TRACKNET.md](EVAL_TRACKNET.md). Repeated use makes them less independent,
+which is why the human-labelled set below is kept for the final checks.
 
 ## SEKME ball network
 
@@ -58,7 +67,7 @@ Validation (games 6–7, epoch choice; middle frame of single windows, argmax): 
 0.58 after epoch 1 to **0.770 at epoch 8** (precision 0.82, recall 0.73; at 10 px 0.98 / 0.87); epochs
 9–10 did not improve it. Every epoch is stored in the checkpoint.
 
-Test, run once on games 8–10 (5 675 frames, unseen by both networks), through the production
+Test on games 8–10 (5 675 frames, unseen by both networks), through the production
 detector (`scripts/eval_ball.py`); the highest-scoring candidate per frame, 1280×720 pixels:
 
 | | SEKME U-Net (ours) | WASB HRNet |
@@ -91,6 +100,10 @@ motion-blurred first frames after its contact (7 frames; WASB sees them). US Ope
 60 fps): both networks were trained at 30 fps, so the detector feeds every second frame
 (t, t+2, t+4); 24 calls vs 26 with WASB, no verdict differences on shared bounces. The same stride
 removed two false OUT calls that both networks had made on dead balls thrown to ball kids.
+
+**Radar** (`results/radar.txt`): with our ball network the fitted serve speeds agree less well with the
+stadium radar than with WASB (mean |error| 7.7 % vs 4.9 % on 6 timed serves), mostly because of one fast
+60 fps serve (−18.7 % vs −8.9 %): the same weakness on motion-blurred balls right after contact.
 
 The validation and test numbers are not comparable: validation scores single windows by argmax,
 the test uses the production detector (heatmaps averaged over three windows, blob centroids).
@@ -139,12 +152,63 @@ End to end (everything else unchanged):
 keypoints (`calib/line_refine.py`) makes the final calibration nearly independent of which network
 found the keypoints; the better network shows up as more frames calibrated on the harder 2025 clip.
 
+## SEKME person network (distilled)
+
+A centre-heatmap detector on the shared U-Net (`src/courtvision/models/person_unet.py`; 512×288 input,
+one centre map plus log box width and height), our own IoU tracker (tracks reset at camera cuts). No
+human box labels exist here for broadcast tennis, so it was **distilled**: the targets are the persons
+YOLO26-s finds (imgsz 1280, conf 0.3) in 28 676 frames (TrackNet games 1–10 and the TennisCourtDetector
+frames). Training: TrackNet games 1–5 (every second frame) plus the TennisCourtDetector frames; epoch
+choice on games 6–7; six epochs, about 1.6 h. Agreement with the teacher on games 6–7 for persons taller
+than 60 px (IoU ≥ 0.5): F1 0.74 (precision 0.68, recall 0.81) at the 0.3 threshold
+(`data/players/train_players.log`). The low threshold is kept on purpose: the pipeline discards extra
+persons on the court plane, a missed player cannot be recovered.
+
+**Selection rule, written before the tests.** It becomes the default if, against the teacher (YOLO26-s):
+on the human-labelled Tennis Player Actions frames (below) its player recall is at most 2 points lower;
+on TrackNet games 8–10 the first-bounce recall is at most 2 points lower and every decisive call still
+agrees with the label.
+
+The human-labelled test set is the Tennis Player Actions dataset (Wang, Lai, Huang & Lin, 2024,
+doi:10.17632/nv3rpsxhhk.1, CC BY 4.0): 2 000 frames from a camera high behind the baseline, one
+hand-labelled player per frame (box + 17 COCO keypoints). It is used only for testing.
+
+**Result: rejected as the default.** Share of the hand-labelled players found (IoU ≥ 0.5,
+`results/players_human_labelled.txt`): YOLO26-s 85.5 %, SEKME person U-Net 63.4 % — 22 points lower,
+far outside the rule. The distilled network learned broadcast frames only and does not carry over to a
+club court and a different camera the way the COCO-trained teacher does. The end-to-end run was stopped
+once the first condition failed. YOLO26-s stays the default; the network remains selectable with
+`--model players=models/sekme_person.pt`. Training on human-labelled boxes from many courts would be
+the way forward; none with a usable licence was found without an account.
+
+## SEKME pose network (distilled)
+
+A U-Net on the player crop (`src/courtvision/models/pose_unet.py`; 128×192 input cut exactly as at run
+time, 17 COCO keypoint heatmaps, left/right swapped under flips). Distilled from YOLO26-s-pose run on the
+same crops (imgsz 320, keypoints it is less than 0.5 sure of left out), for persons taller than 60 px in
+TrackNet frames (every fourth) and the TennisCourtDetector frames. Split by match as for the other
+networks: TrackNet games 1–5 + TennisCourtDetector frames train, 6–7 choose the epoch, 8–10 test.
+
+**Selection rule, written before the tests.** It becomes the default if on the human-labelled Tennis
+Player Actions frames its PCK@0.1 (share of hand-labelled keypoints within 10 % of the box height) is at
+most 2 points below YOLO26-s-pose's, and on the US Open 2023 clip at least 90 % of the stroke types
+(forehand / backhand / volley / overhead / serve) agree with those from YOLO26-s-pose.
+
+**Result: rejected as the default** (`results/pose_human_labelled.txt`). Five epochs (about 80 min);
+selection PCK@0.1 against the teacher 0.80. On the hand-labelled frames PCK@0.1 is 0.711 vs 0.806 for
+YOLO26-s-pose (−9.4 points; serves 0.62 vs 0.84). On the US Open clip both classify the same 58 shots
+with identical totals (27 forehand, 28 backhand) but agree on only 38 (65.5 %): forehand and backhand
+swap in both directions, which points at left/right wrist confusion. YOLO26-s-pose stays the default;
+the network remains selectable with `--model pose=models/sekme_pose.pt`.
+
 ## Third-party networks
 
-- **WASB** (`src/courtvision/models/wasb_hrnet.py`, HRNet code by Bin Xiao, MIT): kept as the reference
-  ball network.
-- **Court keypoints**: our re-implementation of the TennisCourtDetector network loads its public
-  checkpoint; refined in every frame by fitting the painted line ridges (`calib/line_refine.py`).
-- **YOLO26 / YOLO26-pose**: person boxes and 17 keypoints, used through the `ultralytics` package.
+- **WASB** (`src/courtvision/models/wasb_hrnet.py`, HRNet code by Bin Xiao, MIT): the reference ball
+  network, selectable with `--ball-model`.
+- **TennisCourtDetector**: our re-implementation of its network (`models/court_net.py`) loads its public
+  checkpoint; the reference court network. Whichever network finds the keypoints, every frame is refined
+  by fitting the painted line ridges (`calib/line_refine.py`).
+- **YOLO26 / YOLO26-pose** (Ultralytics): person boxes and 17 keypoints through the `ultralytics`
+  package; the teachers of our distilled person and pose networks.
 
 Licences: [LICENSES.md](LICENSES.md).

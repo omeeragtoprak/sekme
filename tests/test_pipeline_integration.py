@@ -42,3 +42,19 @@ def test_pipeline_end_to_end_on_real_clip(tmp_path: Path) -> None:
     assert f["call"]["verdict"] == "IN"  # play continued: the umpire did not call it out
     assert 60 < f["hit_speed_kmh"] < 180 and 0.0 < f["hit_height_m"] < 3.3 and f["net_clearance_m"] > 0
     assert json.loads((tmp_path / "run" / "frames.json").read_text())["n"] == cal["total_frames"]
+
+
+def test_perception_cache_key_changes_with_the_networks(tmp_path):
+    from courtvision.pipeline import PipelineConfig, perception_key
+
+    a, b = tmp_path / "a.pt", tmp_path / "b.pt"
+    a.write_bytes(b"one")
+    b.write_bytes(b"two")
+    cfg = PipelineConfig()
+    cfg.models = {"court": str(a), "ball": str(a), "players": str(a), "pose": str(a)}
+    k1 = perception_key("video", cfg)
+    cfg.models["ball"] = str(b)
+    assert perception_key("video", cfg) != k1  # another ball network must not reuse cached detections
+    cfg.models["ball"] = str(a)
+    cfg.ball_stride = 2
+    assert perception_key("video", cfg) != k1

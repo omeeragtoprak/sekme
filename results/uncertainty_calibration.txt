@@ -1,0 +1,10 @@
+# Uncertainty calibration, TrackNet games 8-10 (scripts/calibration_check.py)
+## SEKME ball network, TennisCourtDetector court
+runs_sekme: label noise 1.0 px  n=111  normalised error median 1.23 (calibrated: 1.18)  inside the 95% ellipse 87%
+runs_sekme: label noise 2.0 px  n=111  normalised error median 0.72 (calibrated: 1.18)  inside the 95% ellipse 98%
+## SEKME ball + SEKME court
+runs_court: label noise 1.0 px  n=111  normalised error median 1.23 (calibrated: 1.18)  inside the 95% ellipse 87%
+runs_court: label noise 2.0 px  n=111  normalised error median 0.72 (calibrated: 1.18)  inside the 95% ellipse 98%
+## WASB ball, TennisCourtDetector court
+runs: label noise 1.0 px  n=112  normalised error median 1.16 (calibrated: 1.18)  inside the 95% ellipse 91%
+runs: label noise 2.0 px  n=112  normalised error median 0.71 (calibrated: 1.18)  inside the 95% ellipse 99%

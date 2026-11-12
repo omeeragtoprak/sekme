@@ -1,0 +1,8 @@
+# Pose networks on the human-labelled Tennis Player Actions frames (scripts/eval_mendeley.py --pose)
+pose yolo26s-pose.pt {"pck@0.1": 0.8055, "keypoints": 33989, "by_action": {"backhand": 0.7843, "forehand": 0.8066, "ready_position": 0.7924, "serve": 0.8388}}
+pose sekme_pose.pt {"pck@0.1": 0.7114, "keypoints": 33989, "by_action": {"backhand": 0.7167, "forehand": 0.739, "ready_position": 0.7708, "serve": 0.619}}
+
+# Stroke types on the US Open 2023 clip, YOLO26-s-pose vs SEKME pose U-Net (same detections)
+YOLO-pose strokes {'serve': 2, 'backhand': 28, 'forehand': 27, None: 8, 'volley': 1} | ours {'serve': 2, 'backhand': 28, 'forehand': 27, None: 8, 'volley': 1}
+classified by both 58 agree 38 (65.5%) | YOLO classified 58 ours 58
+same flights: True | models.pose: this project: SEKME pose U-Net

@@ -53,8 +53,19 @@ def person_loss(out: torch.Tensor, centre: torch.Tensor, size: torch.Tensor, mas
     return heat + SIZE_WEIGHT * reg
 
 
-def decode(out: np.ndarray, threshold: float = 0.3) -> list[tuple[np.ndarray, float]]:
-    """(3, H, W) network output (centre logit, log w, log h) -> [(box x1 y1 x2 y2, score)] in network pixels."""
+def _overlap(a: np.ndarray, b: np.ndarray) -> float:
+    ix = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - ix * iy
+    return ix * iy / union if union > 0 else 0.0
+
+
+def decode(out: np.ndarray, threshold: float = 0.3, nms_iou: float = 0.5) -> list[tuple[np.ndarray, float]]:
+    """(3, H, W) network output (centre logit, log w, log h) -> [(box x1 y1 x2 y2, score)] in network pixels.
+
+    A large person can light up more than one centre blob; boxes overlapping a higher-scoring one by more
+    than ``nms_iou`` are dropped (non-maximum suppression).
+    """
     heat = 1.0 / (1.0 + np.exp(-out[0]))
     if heat.max() <= threshold:
         return []
@@ -67,4 +78,8 @@ def decode(out: np.ndarray, threshold: float = 0.3) -> list[tuple[np.ndarray, fl
         iy, ix = ys[int(np.argmax(w))], xs[int(np.argmax(w))]
         bw, bh = math.exp(float(out[1, iy, ix])), math.exp(float(out[2, iy, ix]))
         dets.append((np.array([cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2]), float(w.max())))
-    return dets
+    kept: list[tuple[np.ndarray, float]] = []
+    for box, score in sorted(dets, key=lambda d: -d[1]):
+        if all(_overlap(box, k[0]) <= nms_iou for k in kept):
+            kept.append((box, score))
+    return kept

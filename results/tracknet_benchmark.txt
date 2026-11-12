@@ -1,0 +1,7 @@
+# TrackNet end-to-end benchmark summaries (scripts/eval_tracknet.py summary())
+## WASB ball + TennisCourtDetector court (data/tracknet/results.json): games 8-10
+{"clips": 30, "ref_bounces": 154, "first_bounces": 142, "first_found": 110, "first_recall": 0.7746, "ref_on_calibrated_frames": 154, "found": 112, "recall": 0.7273, "false_alarms": 9, "precision": 0.9256, "error_cm_median": 11.4281, "error_cm_p90": 33.3931, "timing_frames_median_abs": 0.1713, "decisive": 108, "decisive_agree": 108}
+## SEKME ball + TennisCourtDetector court: games 8-10
+{"clips": 30, "ref_bounces": 154, "first_bounces": 142, "first_found": 108, "first_recall": 0.7606, "ref_on_calibrated_frames": 154, "found": 111, "recall": 0.7208, "false_alarms": 10, "precision": 0.9174, "error_cm_median": 15.044, "error_cm_p90": 37.6731, "timing_frames_median_abs": 0.1664, "decisive": 105, "decisive_agree": 105}
+## SEKME ball + SEKME court (current defaults): games 8-10
+{"clips": 30, "ref_bounces": 154, "first_bounces": 142, "first_found": 108, "first_recall": 0.7606, "ref_on_calibrated_frames": 154, "found": 111, "recall": 0.7208, "false_alarms": 10, "precision": 0.9174, "error_cm_median": 15.0525, "error_cm_p90": 37.6718, "timing_frames_median_abs": 0.1562, "decisive": 105, "decisive_agree": 105}

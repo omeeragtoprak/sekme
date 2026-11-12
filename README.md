@@ -10,8 +10,9 @@
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 
 *Sekme* is Turkish for the bounce of a ball. From one broadcast video SEKME calibrates the court in
-every frame, tracks the ball and the players, reconstructs each shot's flight in 3D with physics and
-calls every bounce **with its uncertainty**: P(in), the distance to the line and a 1σ margin. It is
+every frame where the painted lines support it, tracks the ball and the players, reconstructs each
+shot's flight in 3D with physics and calls the bounces it can measure **with their uncertainty**: P(in),
+the distance to the line and a 1σ margin (about four in five shots get a call on the clips below). It is
 decisive only at ≥ 95 %; closer calls are shown as the most likely verdict marked *low confidence*.
 It then checks itself against what the broadcast shows: the score graphic and the stadium radar board.
 
@@ -25,11 +26,13 @@ It then checks itself against what the broadcast shows: the score graphic and th
 - **Own ball network.** A compact U-Net designed and trained in this project on TrackNet. On matches it
   never saw: F1 0.958 at 10 px (WASB, the published reference: 0.955), 0.912 at 4 px (WASB 0.928), at
   half WASB's time per frame. It is the default ([how it was built and tested](docs/MODELS.md)).
-- **Independent benchmark.** On human-labelled broadcast bounces from matches never used for tuning
-  (TrackNet games 8–10): 76 % of first bounces after a stroke found, 92 % precision, median 15 cm from
-  the labelled contact, 105 / 105 decisive calls consistent ([details](docs/EVAL_TRACKNET.md)).
-- **Checks itself.** On-device OCR of the stadium radar board: fitted serve speeds vs radar on 6 timed
-  serves from 5 official US Open clips: mean −0.5 %, mean |error| 4.9 %.
+- **Independent benchmark.** On human-labelled broadcast bounces from matches never used to fit or
+  tune anything (TrackNet games 8–10; used only for accept/reject decisions, each logged): 76 % of first
+  bounces after a stroke found, 92 % precision, median 15 cm from the labelled contact, 105 / 105
+  decisive calls consistent — few of them close to a line, so this rules out gross errors, it does not
+  measure centimetre accuracy ([details](docs/EVAL_TRACKNET.md)).
+- **Checks itself.** On-device OCR of the score graphic and the stadium radar board; fitted serve
+  speeds are compared with the radar on every serve whose board change is timed to ≤ 4 s.
 - **Review Room.** Local web app (FastAPI + React/three.js, Turkish UI): frame-accurate player, mini
   court with 95 % ellipses, 3D replay, analysis, labelling tool and an append-only review log.
 
@@ -63,19 +66,22 @@ More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 |---|---|---|---|
 | Ball (default) | **SEKME ball U-Net** (`models/ball_unet.py`, ~1.95 M parameters) | this project (`scripts/train_ball.py`) | TrackNet tennis, games 1–5; selection on 6–7; test on 8–10 |
 | Ball (reference, `--ball-model`) | WASB HRNet (Tarashima et al., BMVC 2023) | its authors | TrackNet tennis, games 1–7 |
-| Court keypoints (default) | **SEKME court U-Net** (`models/court_unet.py`, 5 levels, 14 heatmaps) | this project (`scripts/train_court.py`) | TennisCourtDetector labels, 8 841 broadcast frames |
+| Court keypoints (default) | **SEKME court U-Net** (`models/court_unet.py`, 5 levels, 14 heatmaps) | this project (`scripts/train_court.py`) | TennisCourtDetector labels: 6 630 training frames (8 841 in all) |
 | Court keypoints (reference, `--model court=…`) | TrackNet-style VGG encoder–decoder (yastrebksv/TennisCourtDetector; our re-implementation loads its checkpoint) | its author | same labels |
 | Players, pose | Ultralytics YOLO26-s / YOLO26-s-pose | Ultralytics | COCO |
 
 Everything after the networks — calibration refit, tracking, events, the 3D physics fit, the call and
-its uncertainty, the self-checks — is this project's code. Person and pose networks of our own are being
-distilled from YOLO26 (`scripts/train_players.py`, `scripts/train_pose.py`); until they pass the same
-kind of test, YOLO26 stays the default for those two roles. Details and results: [docs/MODELS.md](docs/MODELS.md).
+its uncertainty, the self-checks — is this project's code. Person and pose networks of our own were
+also distilled from YOLO26 (`scripts/train_players.py`, `scripts/train_pose.py`) and tested on
+hand-labelled frames; they fell short of their teacher (players found 63 % vs 85 %, pose PCK 0.71 vs
+0.81), so YOLO26 stays the default for those two roles. Details and results: [docs/MODELS.md](docs/MODELS.md).
 
 ## Results
 
+The outputs behind these numbers are saved in [results/](results/), each with the script that produced it.
+
 **Simulation** (`sekme benchmark`; camera 28 m back, 11 m high, 1080p, 1.5 px detection noise, spin the
-fitter only approximates, half the shots within 15–20 cm of a line):
+fitter only approximates, half the shots *aimed* within 15–20 cm of a line):
 
 | | 30 fps | 60 fps |
 |---|---|---|
@@ -95,15 +101,19 @@ for tuning):
 | distance to the labelled contact, median / p90 | 15 / 38 cm | 11 / 33 cm |
 | decisive calls consistent with the label | 105 / 105 | 108 / 108 |
 
-**Real broadcast** (US Open 2023 final highlights, 720p, first 90 s): 2 530 / 2 698 frames calibrated
-(the rest are close-ups, correctly excluded), line-fit residual 0.34 px, camera recovered 33 m back and
-10 m up; 52 calls on 66 shots (50 IN, 1 OUT checked by eye, 1 low-confidence); 2 / 3 visible serves found
-(our ball network misses the motion-blurred first frames after one serve's contact; WASB finds all 3).
-On the 60 fps 2025 final the same pipeline makes 24 calls (WASB: 26) and agrees with WASB on every
-bounce both call.
+**Real broadcast** (current defaults; US Open 2023 final highlights, 720p, first 90 s): 2 530 / 2 698
+frames calibrated (the rest are close-ups, correctly excluded), line-fit residual 0.34 px, camera
+recovered 33 m back and 10 m up; 52 calls on 66 shots (50 IN, 1 OUT checked by eye, 1 low-confidence);
+2 / 3 visible serves found (our ball network misses the motion-blurred first frames after one serve's
+contact; WASB finds all 3). US Open 2025 final (1080p, 60 fps): 71.5 % of frames calibrated, 24 calls
+on 46 shots.
 
-**Radar** (5 official US Open clips, pairs kept only when the board change is timed to ≤ 4 s): 6 serves,
-mean −0.5 % (SE 2.5 %), mean |error| 4.9 %, SD 6.1 %.
+**Radar** ([results/radar.txt](results/radar.txt); 5 official US Open clips, pairs kept only when the board
+change is timed to ≤ 4 s). With the current defaults: 6 serves, +7.2, +5.8, −3.1, −4.6, −6.9, −18.7 %
+→ mean −3.4 % (SE 3.9), mean |error| 7.7 %. With the WASB ball network on the same clips it was
+mean −0.5 %, mean |error| 4.9 %; on the serves both measured the two agree within ~2 points except one
+fast 60 fps serve (−18.7 vs −8.9 %), where our ball network loses the blurred frames after contact.
+Six serves are too few for a bias claim either way.
 
 ## Quick start
 
@@ -149,7 +159,8 @@ promo/             HyperFrames promo film (footage not included)
   not hold up on the held-out games.
 - Serve detection rests on few real serves; serves struck before a camera cut cannot be recovered.
 - Lens distortion is not modelled; it is carried as uncertainty (max(court-line RMSE, 0.5 px) per call).
-- About 3× slower than real time on an M4 (90 s of 720p: 268 s without HUD rendering; was 438 s).
+- About 3× slower than real time on an M4 for 720p30 (90 s: 268 s without HUD rendering) and about 7× for
+  1080p60 (90 s: ~660 s).
 - The SEKME ball network is weaker than WASB on the most motion-blurred balls (right after a serve)
   and on 60 fps footage it was not trained on; it is fed every second frame there to match its
   30 fps training. Trained on 5 matches only — more data is the obvious next step.
