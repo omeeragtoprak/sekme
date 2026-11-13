@@ -9,7 +9,19 @@ import VideoStage, { loadLayers, saveLayers, type Layers, type VideoStageHandle 
 import { bounceFrameOf } from "./geometry";
 import { halfLabel, playerName } from "./i18n";
 import { Spinner, VideoIcon } from "./icons";
-import type { Async, Frames, Health, LabelRecord, LabelSummary, MediaName, Report, Review, RunSummary } from "./types";
+import type {
+  Async,
+  Frames,
+  Health,
+  LabelRecord,
+  LabelSummary,
+  MediaName,
+  Report,
+  Review,
+  RunSummary,
+  ServeLabelIn,
+  ServeSummary,
+} from "./types";
 import { useAnalysisJob } from "./useAnalysisJob";
 
 // three.js is large: load the 3D replay in its own chunk so the review UI paints first.
@@ -111,10 +123,13 @@ export default function App() {
   const [labelSummary, setLabelSummary] = useState<LabelSummary>({ n: 0 });
   const [labelingId, setLabelingId] = useState<number | null>(null);
   const [labelError, setLabelError] = useState<string | null>(null);
+  const [serveSummary, setServeSummary] = useState<ServeSummary | null>(null);
+  const [serveError, setServeError] = useState<string | null>(null);
   const [layers, setLayers] = useState<Layers>(loadLayers);
   const [ui, setUi] = useState(loadUi);
   const stageRef = useRef<VideoStageHandle>(null);
   const runsCtrl = useRef<AbortController | null>(null);
+  const currentRunId = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadRuns = useCallback(async (preferId?: string) => {
@@ -200,6 +215,10 @@ export default function App() {
     setLabelingId(null);
     api.labels(runId, ctrl.signal).then(setLabels, () => undefined);
     api.labelSummary(runId, ctrl.signal).then(setLabelSummary, () => undefined);
+    currentRunId.current = runId;
+    setServeSummary(null);
+    setServeError(null);
+    api.serveSummary(runId, ctrl.signal).then(setServeSummary, () => undefined);
     return () => ctrl.abort();
   }, [runId, reloadKey]);
 
@@ -291,6 +310,42 @@ export default function App() {
       );
     },
     [runId, labelingId],
+  );
+
+  const postServeLabel = useCallback(
+    (make: (labeler: string) => ServeLabelIn) => {
+      if (!runId) return;
+      let labeler = "";
+      try {
+        labeler = window.localStorage.getItem("courtvision.reviewer")?.trim() ?? "";
+      } catch {
+        /* storage unavailable */
+      }
+      setServeError(null);
+      // A reply that lands after the reviewer switched runs must not overwrite the new run's panel.
+      const still = () => currentRunId.current === runId;
+      api.postServeLabel(runId, make(labeler || "Hakem")).then(
+        () =>
+          api.serveSummary(runId).then(
+            (s) => still() && setServeSummary(s),
+            () => undefined,
+          ),
+        (err: unknown) => still() && setServeError(errorText(err)),
+      );
+    },
+    [runId],
+  );
+  const onServeMark = useCallback(
+    (frame: number) => postServeLabel((labeler) => ({ type: "serve", frame, labeler, note: "" })),
+    [postServeLabel],
+  );
+  const onServeRemove = useCallback(
+    (target: string) => postServeLabel((labeler) => ({ type: "remove", target, labeler })),
+    [postServeLabel],
+  );
+  const onServeComplete = useCallback(
+    (complete: boolean) => postServeLabel((labeler) => ({ type: "complete", complete, labeler })),
+    [postServeLabel],
   );
 
   const onJobDone = useCallback((newRunId: string) => void loadRuns(newRunId), [loadRuns]);
@@ -402,7 +457,7 @@ export default function App() {
           health={health}
         />
         <div className="content-stack">
-          {mode === "analysis" && <Analysis report={rep} onOpenShot={onOpenShot} labelSummary={labelSummary} />}
+          {mode === "analysis" && <Analysis report={rep} onOpenShot={onOpenShot} labelSummary={labelSummary} serveSummary={serveSummary} />}
           <main className="content" hidden={mode === "analysis"}>
             <div className="phone-bar">
               <ViewPicker media={media} view={view} onChange={onViewChange} />
@@ -463,6 +518,11 @@ export default function App() {
             labelError={labelError}
             onStartLabel={onStartLabel}
             onCancelLabel={onCancelLabel}
+            serveSummary={serveSummary}
+            serveError={serveError}
+            onServeMark={onServeMark}
+            onServeRemove={onServeRemove}
+            onServeComplete={onServeComplete}
           />
         </div>
       </>

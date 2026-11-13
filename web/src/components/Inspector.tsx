@@ -1,9 +1,30 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { api, errorText } from "../api";
-import { DASH, fmtDate, fmtNum, fmtProb, fmtSigmaCm, fmtSignedCm, verdictColor, verdictKind } from "../geometry";
+import {
+  DASH,
+  fmtClock,
+  fmtDate,
+  fmtNum,
+  fmtProb,
+  fmtSigmaCm,
+  fmtSignedCm,
+  verdictColor,
+  verdictKind,
+} from "../geometry";
 import { DECISIONS, decisionShort, halfLabel, hitterLabel, lineLabel, strokeLabel, verdictLabel } from "../i18n";
 import { CheckIcon, CourtIcon, StatusGlyph } from "../icons";
-import type { Async, Call, Decision, Flight, Frames, LabelRecord, Report, Review, SystemCallSnapshot } from "../types";
+import type {
+  Async,
+  Call,
+  Decision,
+  Flight,
+  Frames,
+  LabelRecord,
+  Report,
+  Review,
+  ServeSummary,
+  SystemCallSnapshot,
+} from "../types";
 import MiniCourt from "./MiniCourt";
 import SessionInfo from "./SessionInfo";
 
@@ -29,6 +50,11 @@ type Props = {
   labelError: string | null;
   onStartLabel: (id: number) => void;
   onCancelLabel: () => void;
+  serveSummary: ServeSummary | null;
+  serveError: string | null;
+  onServeMark: (frame: number) => void;
+  onServeRemove: (id: string) => void;
+  onServeComplete: (complete: boolean) => void;
 };
 
 function InspectorImpl(p: Props) {
@@ -99,6 +125,17 @@ function InspectorImpl(p: Props) {
               <p className="empty-text">Vuruş listesinden, zaman çizelgesinden ya da sahadan bir vuruş seçin.</p>
             </div>
           ))}
+        {tab === "shot" && (
+          <ServeLabelPane
+            summary={p.serveSummary}
+            error={p.serveError}
+            frame={p.currentFrame}
+            fps={p.report.video.fps}
+            onMark={p.onServeMark}
+            onRemove={p.onServeRemove}
+            onComplete={p.onServeComplete}
+          />
+        )}
         {tab === "court" && (
           <MiniCourt
             report={p.report}
@@ -581,6 +618,67 @@ function LabelPane({
         {active
           ? "Videoda topun yere değdiği noktaya tıklayın (topun alt kenarı). ← → ile kareyi ayarlayın, büyüteç hassas tıklamaya yardım eder; Esc vazgeçer."
           : "Gerçek sekme noktasını işaretlemek, sistemin doğruluğunu ölçmenin tek yolu. Nokta, sistemin kullandığı aynı kuralla değerlendirilir; her etiket ayrı ve silinemez biçimde kaydedilir. Ad, Hakem kararı bölümündeki addır."}
+      </p>
+    </section>
+  );
+}
+
+function ServeLabelPane({
+  summary,
+  error,
+  frame,
+  fps,
+  onMark,
+  onRemove,
+  onComplete,
+}: {
+  summary: ServeSummary | null;
+  error: string | null;
+  frame: number;
+  fps: number;
+  onMark: (frame: number) => void;
+  onRemove: (id: string) => void;
+  onComplete: (complete: boolean) => void;
+}) {
+  const rows = summary ? [...summary.rows].sort((a, b) => a.frame - b.frame) : [];
+  return (
+    <section className="block">
+      <h3 className="group-title">Servis etiketi</h3>
+      <button type="button" className="btn btn--wide" onClick={() => onMark(frame)}>
+        Servis Temasını İşaretle (bu kare)
+      </button>
+      {error && (
+        <p className="inline-error" role="alert" style={{ marginTop: 8 }}>
+          {error}
+        </p>
+      )}
+      {rows.length > 0 && (
+        <div className="group" style={{ marginTop: 10 }}>
+          {rows.map((r) => (
+            <div className="row" key={r.id}>
+              <span className="row-label num">
+                kare {r.frame} · {fmtClock(r.frame / fps)}
+              </span>
+              <span className="row-value">
+                <span className={r.matched_system_frame === null ? "text-review" : "text-in"}>
+                  {r.matched_system_frame === null ? "sistem bulamadı" : "sistem buldu"}
+                </span>{" "}
+                <button type="button" className="btn" onClick={() => onRemove(r.id)}>
+                  Kaldır
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+        <input type="checkbox" checked={summary?.complete ?? false} onChange={(e) => onComplete(e.target.checked)} />
+        Bu koşudaki tüm servisleri işaretledim
+      </label>
+      <p className="group-foot">
+        Servis teması, servis atışında raketin topa değdiği andır. Videoda gördüğünüz her servisi, hatalı olanlar dahil, temas
+        karesinde işaretleyin (← → ile kareyi ayarlayın). Kutuyu yalnızca hiçbir servisi atlamadığınızdan eminseniz işaretleyin;
+        fazladan servis oranı ancak o zaman hesaplanır. Her kayıt ayrı ve silinemez biçimde tutulur; Kaldır yeni bir kayıt ekler.
       </p>
     </section>
   );

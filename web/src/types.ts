@@ -83,6 +83,37 @@ export type LabelSummary =
       review_truth: { IN: number; OUT: number };
     };
 
+export type ServeLabelRecord =
+  | { id: string; created: string; type: "serve"; frame: number; labeler: string; note: string }
+  | { id: string; created: string; type: "remove"; target: string; labeler: string }
+  | { id: string; created: string; type: "complete"; complete: boolean; labeler: string };
+
+export type ServeLabelIn =
+  | { type: "serve"; frame: number; labeler: string; note: string }
+  | { type: "remove"; target: string; labeler: string }
+  | { type: "complete"; complete: boolean; labeler: string };
+
+export type ServeLabelRow = {
+  id: string;
+  frame: number;
+  matched_system_frame: number | null;
+  /** Matched system frame minus labelled frame; null when unmatched. */
+  dt_frames: number | null;
+};
+
+export type ServeSummary = {
+  labelled: number;
+  system: number;
+  matched: number;
+  recall: number | null;
+  complete: boolean;
+  /** Only when the reviewer marked the run fully labelled. */
+  precision: number | null;
+  tol_s: number;
+  rows: ServeLabelRow[];
+  unmatched_system: number[];
+};
+
 export type JobStatus = "queued" | "running" | "done" | "error";
 
 export type Job = {

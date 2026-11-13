@@ -86,3 +86,52 @@ def summarize(records: list[dict]) -> dict:
         "review_truth": {"IN": sum(e["truth"] == "IN" for e in ev if e["agrees"] is None),
                          "OUT": sum(e["truth"] == "OUT" for e in ev if e["agrees"] is None)},
     }
+
+
+def serve_state(records: list[dict]) -> tuple[list[dict], bool]:
+    """Replay the append-only serve-label log (file order): serves not removed, and the latest "complete" flag."""
+    serves: dict[str, dict] = {}
+    complete = False
+    for r in records:
+        if r["type"] == "serve":
+            serves[r["id"]] = r
+        elif r["type"] == "remove":
+            serves.pop(r["target"], None)
+        elif r["type"] == "complete":
+            complete = bool(r["complete"])
+    return list(serves.values()), complete
+
+
+def serve_summary(records: list[dict], system_serve_frames: list[float], fps: float, tol_s: float = 0.5) -> dict:
+    """Serve recall (and, once the reviewer says every serve is labelled, precision) against the system.
+
+    Labelled serves (not removed) and system serves are paired one-to-one, smallest frame gap first,
+    within ``tol_s`` seconds. Recall is the share of labelled serves the system found. Precision is
+    only meaningful when the labels are complete: otherwise an unlabelled real serve would count
+    against the system, so it is withheld (``None``).
+    """
+    labelled, complete = serve_state(records)
+    tol = tol_s * fps
+    pairs = sorted((abs(s - lab["frame"]), i, j) for i, lab in enumerate(labelled)
+                   for j, s in enumerate(system_serve_frames) if abs(s - lab["frame"]) <= tol)
+    pair_of: dict[int, int] = {}
+    used: set[int] = set()
+    for _, i, j in pairs:
+        if i not in pair_of and j not in used:
+            pair_of[i] = j
+            used.add(j)
+    matched = len(pair_of)
+    return {
+        "labelled": len(labelled),
+        "system": len(system_serve_frames),
+        "matched": matched,
+        "recall": round(matched / len(labelled), 3) if labelled else None,
+        "complete": complete,
+        "precision": round(matched / len(system_serve_frames), 3) if complete and system_serve_frames else None,
+        "tol_s": tol_s,
+        "rows": [{"id": lab["id"], "frame": lab["frame"],
+                  "matched_system_frame": system_serve_frames[pair_of[i]] if i in pair_of else None,
+                  "dt_frames": round(system_serve_frames[pair_of[i]] - lab["frame"], 2) if i in pair_of else None}
+                 for i, lab in enumerate(labelled)],
+        "unmatched_system": [s for j, s in enumerate(system_serve_frames) if j not in used],
+    }

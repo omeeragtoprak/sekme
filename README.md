@@ -38,7 +38,8 @@ It then checks itself against what the broadcast shows: the score graphic and th
 - **Checks itself.** On-device OCR of the score graphic and the stadium radar board; fitted serve
   speeds are compared with the radar on every serve whose board change is timed to ≤ 4 s.
 - **Review Room.** Local web app (FastAPI + React/three.js, Turkish UI): frame-accurate player, mini
-  court with 95 % ellipses, 3D replay, analysis, labelling tool and an append-only review log.
+  court with 95 % ellipses, 3D replay, analysis, labelling tools for bounces and serves (accuracy and
+  serve recall measured on your own footage) and an append-only review log.
 
 ## How it works
 
@@ -175,7 +176,9 @@ promo/             HyperFrames promo film (footage not included)
   frame on 60 fps footage. Trained on 7 matches only: more data is the obvious next step.
 - Serve recognition on broadcast clips is not measured against labels: with ball v3 it finds 11 serves
   on the five US Open clips where v1 found 13. The cause is not established; a change to the dead-ball
-  check was tried and rejected ([details](docs/EVAL_TRACKNET.md)).
+  check was tried and rejected ([details](docs/EVAL_TRACKNET.md)). The Review Room's *Servis etiketi*
+  section measures serve recall (and, once every serve is marked, precision) on your own footage
+  ([labelling guide, Turkish](docs/ETIKETLEME_TR.md)).
 - Ball footprint is a fixed 2 cm half-length; point/score inference from play is not implemented (the
   score is read from the broadcast).
 

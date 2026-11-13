@@ -1,5 +1,19 @@
 // Typed fetch helpers for the SEKME FastAPI backend (same origin, under /api).
-import type { Frames, Health, Job, LabelRecord, LabelSummary, MediaName, Report, Review, ReviewIn, RunSummary } from "./types";
+import type {
+  Frames,
+  Health,
+  Job,
+  LabelRecord,
+  LabelSummary,
+  MediaName,
+  Report,
+  Review,
+  ReviewIn,
+  RunSummary,
+  ServeLabelIn,
+  ServeLabelRecord,
+  ServeSummary,
+} from "./types";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -88,6 +102,16 @@ export const api = {
     body: { flight_id: number; frame: number; px: [number, number]; labeler: string; note: string },
   ) =>
     request<LabelRecord>(`/api/runs/${enc(runId)}/labels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  serveLabels: (runId: string, signal?: AbortSignal) =>
+    request<ServeLabelRecord[]>(`/api/runs/${enc(runId)}/serve-labels`, { signal }),
+  serveSummary: (runId: string, signal?: AbortSignal) =>
+    request<ServeSummary>(`/api/runs/${enc(runId)}/serve-labels/summary`, { signal }),
+  postServeLabel: (runId: string, body: ServeLabelIn) =>
+    request<ServeLabelRecord>(`/api/runs/${enc(runId)}/serve-labels`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

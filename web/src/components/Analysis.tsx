@@ -2,9 +2,14 @@ import { memo, useMemo, useState, type CSSProperties, type ReactNode } from "rea
 import { COURT, COURT_LINES, fmtNum, fmtPct, fmtProb, fmtSignedCm, verdictColor, verdictKind } from "../geometry";
 import { displayName, halfLabel, hitterLabel, servePlacement, verdictLabel } from "../i18n";
 import { StatusGlyph } from "../icons";
-import type { Flight, LabelSummary, Report } from "../types";
+import type { Flight, LabelSummary, Report, ServeSummary } from "../types";
 
-type Props = { report: Report; onOpenShot: (id: number) => void; labelSummary: LabelSummary };
+type Props = {
+  report: Report;
+  onOpenShot: (id: number) => void;
+  labelSummary: LabelSummary;
+  serveSummary: ServeSummary | null;
+};
 
 type Tip = { x: number; y: number; text: string } | null;
 
@@ -61,7 +66,7 @@ function Card({ title, sub, children, wide, tall }: { title: string; sub?: strin
 type ShowFn = (e: { clientX: number; clientY: number; currentTarget: Element }, text: string) => void;
 type ShowAtFn = (el: Element, text: string) => void;
 
-function AnalysisImpl({ report, onOpenShot, labelSummary }: Props) {
+function AnalysisImpl({ report, onOpenShot, labelSummary, serveSummary }: Props) {
   const [tip, setTip] = useState<Tip>(null);
   const players = usePlayers(report);
   const flights = report.flights;
@@ -170,6 +175,14 @@ function AnalysisImpl({ report, onOpenShot, labelSummary }: Props) {
           wide
         >
           <LabelCard s={labelSummary} />
+        </Card>
+
+        <Card
+          title="Servis yakalama (etiketli)"
+          sub="Hakemin servis temasları olarak işaretlediği anlara göre sistemin yakaladığı servisler (±0,5 sn). Etiket İnceleme'de, denetçideki Servis etiketi bölümünden eklenir."
+          wide
+        >
+          <ServeCaptureCard s={serveSummary} />
         </Card>
 
         <Card
@@ -577,6 +590,50 @@ function LabelCard({ s }: { s: LabelSummary }) {
       <p className="card-note">
         Her vuruş için son etiket sayılır. {s.n < 30 ? "Örneklem küçük; bu değerler henüz bir doğruluk oranı değildir." : ""}
       </p>
+    </div>
+  );
+}
+
+function ServeCaptureCard({ s }: { s: ServeSummary | null }) {
+  if (!s || s.labelled === 0) {
+    return (
+      <p className="card-empty">
+        Henüz servis etiketi yok. İnceleme'de videoyu bir servisin temas karesine getirip denetçideki “Servis Temasını İşaretle”
+        düğmesine basın; sistemin kaç servisi yakaladığı burada görünür.
+      </p>
+    );
+  }
+  return (
+    <div className="check-grid">
+      <div className="group">
+        <div className="row">
+          <span className="row-label">Bulunan</span>
+          <span className="row-value num">
+            <strong>
+              {s.matched} / {s.labelled}
+            </strong>{" "}
+            ({fmtPct(s.recall, 0)})
+          </span>
+        </div>
+        <div className="row">
+          <span className="row-label">Fazladan servis</span>
+          <span className="row-value num">
+            {s.complete ? (
+              <>
+                <strong>{s.unmatched_system.length}</strong> · sistem {s.system}, kesinlik {fmtPct(s.precision, 0)}
+              </>
+            ) : (
+              <span className="muted">hesaplanmadı</span>
+            )}
+          </span>
+        </div>
+      </div>
+      {!s.complete && (
+        <p className="card-note">
+          Fazladan servis ve kesinlik için denetçide “Bu koşudaki tüm servisleri işaretledim” kutusunu işaretleyin; aksi halde
+          etiketlenmemiş gerçek servisler sistem aleyhine sayılırdı.
+        </p>
+      )}
     </div>
   );
 }

@@ -22,11 +22,12 @@ from typing import Literal
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from courtvision import __version__
-from courtvision.eval.labels import evaluate, px_scale_cm, summarize, world_from_px
+from courtvision.eval.labels import evaluate, px_scale_cm, serve_state, serve_summary, summarize, world_from_px
 
+SERVE_TOL_S = 0.5  # a labelled serve and a system serve within this many seconds are the same serve
 RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 MEDIA = {"classic": "classic.mp4", "pro": "pro.mp4"}
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
@@ -50,6 +51,24 @@ class LabelIn(BaseModel):
     px: tuple[float, float]
     labeler: str = Field(min_length=1, max_length=64)
     note: str = Field(default="", max_length=500)
+
+
+class ServeLabelIn(BaseModel):
+    """One entry of the serve-label log: mark a serve contact frame, remove an earlier mark, or declare completeness."""
+
+    type: Literal["serve", "remove", "complete"]
+    frame: int | None = Field(default=None, ge=0)
+    target: str | None = Field(default=None, min_length=1, max_length=64)
+    complete: bool | None = None
+    labeler: str = Field(min_length=1, max_length=64)
+    note: str = Field(default="", max_length=500)
+
+    @model_validator(mode="after")
+    def _fields_match_type(self) -> ServeLabelIn:
+        need = {"serve": "frame", "remove": "target", "complete": "complete"}[self.type]
+        if getattr(self, need) is None:
+            raise ValueError(f"{self.type} kaydı için '{need}' gerekli")
+        return self
 
 
 class Job(BaseModel):
@@ -225,6 +244,68 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         }
         with review_lock, open(d / "labels.jsonl", "a") as f:
             f.write(json.dumps(record) + "\n")
+        return record
+
+    def read_serve_labels(d: Path) -> list[dict]:
+        """The serve-label log; a line cut short by a crash mid-append is skipped, not fatal."""
+        p = d / "serve_labels.jsonl"
+        if not p.is_file():
+            return []
+        out = []
+        for line in p.read_text().splitlines():
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return out
+
+    def clip_timing(d: Path, report: dict) -> tuple[int | None, float]:
+        """(frame count or None when unknown, fps) as the run exposes them."""
+        frames = load_json(d / "frames.json") if (d / "frames.json").is_file() else {}
+        video = report.get("video", {})
+        n = frames.get("n") or video.get("n_frames")
+        return (int(n) if n else None), float(frames.get("fps") or video.get("fps") or 30.0)
+
+    @app.get("/api/runs/{run_id}/serve-labels")
+    def get_serve_labels(run_id: str) -> list[dict]:
+        return read_serve_labels(run_dir(run_id))
+
+    @app.get("/api/runs/{run_id}/serve-labels/summary")
+    def get_serve_label_summary(run_id: str) -> dict:
+        d = run_dir(run_id)
+        report = load_json(d / "report.json")
+        system = [float(f["contact_frame"]) if f.get("contact_frame") is not None else float(f["start_frame"])
+                  for f in report.get("flights", []) if f.get("kind") == "serve"]
+        return serve_summary(read_serve_labels(d), system, clip_timing(d, report)[1], SERVE_TOL_S)
+
+    @app.post("/api/runs/{run_id}/serve-labels", status_code=201)
+    def add_serve_label(run_id: str, body: ServeLabelIn) -> dict:
+        d = run_dir(run_id)
+        record = {"id": uuid.uuid4().hex, "created": datetime.now(UTC).isoformat(timespec="seconds"),
+                  "type": body.type, "labeler": body.labeler}
+        n, fps = clip_timing(d, load_json(d / "report.json"))
+        if body.type == "serve":
+            assert body.frame is not None
+            if n is not None and body.frame >= n:
+                raise HTTPException(422, f"kare 0 ile {n - 1} arasında olmalı")
+            record |= {"frame": body.frame, "note": body.note}
+        elif body.type == "remove":
+            record["target"] = body.target
+        else:
+            record["complete"] = bool(body.complete)
+        with review_lock:
+            existing = read_serve_labels(d)
+            if body.type == "serve":
+                # One serve per contact: a second mark within the matching window would count it twice.
+                if any(abs(s["frame"] - body.frame) <= SERVE_TOL_S * fps for s in serve_state(existing)[0]):
+                    raise HTTPException(409, f"{SERVE_TOL_S:g} sn içinde zaten bir servis işaretli".replace(".", ","))
+            elif body.type == "remove":
+                if not any(r["id"] == body.target for r in existing):
+                    raise HTTPException(404, "kaldırılacak servis etiketi bulunamadı")
+                if not any(s["id"] == body.target for s in serve_state(existing)[0]):
+                    raise HTTPException(409, "bu kayıt bir servis etiketi değil ya da zaten kaldırılmış")
+            with open(d / "serve_labels.jsonl", "a") as f:
+                f.write(json.dumps(record) + "\n")
         return record
 
     @app.post("/api/jobs", status_code=202)
