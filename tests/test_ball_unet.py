@@ -79,3 +79,55 @@ def test_motion_blur_never_moves_the_ball_away_from_its_label():
         assert out.sum() == np.float32(1.0) or abs(out.sum() - 1.0) < 1e-4  # brightness kept
         cx, cy = (out * xx).sum() / out.sum(), (out * yy).sum() / out.sum()
         assert abs(cx - 20) < 0.05 and abs(cy - 20) < 0.05, (seed, cx, cy)  # centre unmoved
+
+
+def test_training_state_resumes_exactly_and_refuses_another_recipe(tmp_path):
+    import sys
+    from pathlib import Path
+
+    import pytest
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from train_ball import load_state, recipe, save_state, state_path
+
+    args = {"epochs": 2, "batch": 4, "lr": 1e-2, "train_games": 7, "blur": 0.3, "centre_labels": True,
+            "out": "x", "resume": True}
+    rec = recipe(args, steps_per_epoch=3)
+    xs = torch.randn(6, 4, 3)
+
+    def run(steps: range, net, opt, sched) -> None:
+        for i in steps:
+            loss = net(xs[i]).pow(2).mean()
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+            sched.step()
+
+    def fresh():
+        torch.manual_seed(1)
+        net = torch.nn.Linear(3, 2)
+        opt = torch.optim.AdamW(net.parameters(), lr=args["lr"])
+        return net, opt, torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args["lr"], total_steps=6)
+
+    straight = fresh()
+    run(range(6), *straight)
+
+    first = fresh()
+    run(range(3), *first)
+    path = state_path(tmp_path / "ball.pt")
+    assert path.name == "ball.state.pt"
+    save_state(path, *first, epoch=1, best=0.5, step=3, history=[{"epoch": 1}], recipe=rec)
+    second = fresh()  # a new process: same init, nothing trained
+    assert load_state(path, *second, rec) == (1, 0.5, 3, [{"epoch": 1}])
+    run(range(3, 6), *second)
+    for a, b in zip(straight[0].parameters(), second[0].parameters(), strict=True):
+        assert torch.equal(a, b)  # optimizer moments and the one-cycle position came back too
+
+    with pytest.raises(SystemExit):
+        load_state(path, *fresh(), {**rec, "epochs": 3})
+    with pytest.raises(SystemExit):  # another clip set: the one-cycle schedule would not line up
+        load_state(path, *fresh(), {**rec, "steps_per_epoch": 4})
+    old = state_path(tmp_path / "old.pt")  # written before steps_per_epoch was recorded
+    save_state(old, *fresh(), epoch=1, best=0.5, step=3, history=[],
+               recipe={k: v for k, v in rec.items() if k != "steps_per_epoch"})
+    assert load_state(old, *fresh(), rec)[0] == 1

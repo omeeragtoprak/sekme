@@ -20,6 +20,11 @@ SEKME'nin gerçek görüntüdeki iki sayısı henüz ölçülmedi: **sekme konum
 3. Videoyu ← → ile topun yere değdiği kareye getir (⇧ ile 10 kare).
 4. Topun **yere değdiği noktaya**, topun altına tıkla; topun merkezine değil.
 
+İşaretleme sırasında video yalnızca ham görüntüyü gösterir: sistemin sekme işareti, %95 elipsi, top izi
+ve saha çizgileri gizlenir; işlenmiş bir video açıksa Kaynak'a geçilir. Zaman çizelgesindeki sekme
+çentikleri, mini saha ve karar kartı ise ekranda kalır. Kareyi ve noktayı onlara bakmadan, kendi
+gözünle seç; ölçümün değeri buradan gelir.
+
 Sonuç **Analiz → Etiketli doğruluk** kartında görünür:
 
 - ortanca ve p90 hata (cm);

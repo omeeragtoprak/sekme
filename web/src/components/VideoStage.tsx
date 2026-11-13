@@ -354,10 +354,12 @@ export default function VideoStage({
       labels: { near: report.players.near.label, far: report.players.far.label },
       layers,
       selectedFlightId,
-      enabled: tab === "source",
+      // While a bounce is being marked, nothing the system measured is drawn: the label must not lean
+      // on the prediction it is meant to test.
+      enabled: tab === "source" && !labelMode,
     };
     redraw(frameRef.current);
-  }, [framesData, report, layers, selectedFlightId, tab, dims, redraw]);
+  }, [framesData, report, layers, selectedFlightId, tab, dims, redraw, labelMode]);
 
   // A new source starts loading: show the loading state until it can play.
   useEffect(() => {
@@ -547,6 +549,8 @@ export default function VideoStage({
 
   const H = framesData && currentFrame < framesData.H.length ? framesData.H[currentFrame] : null;
   const overlayActive = tab === "source";
+  // A rendered view has the system's marks burned in: clicks are taken on the raw video only.
+  const canLabel = labelMode && tab === "source";
   const ar = dims.w / dims.h;
   const t = currentFrame / fps;
 
@@ -617,7 +621,7 @@ export default function VideoStage({
           style={{ visibility: overlayActive ? "visible" : "hidden" }}
         />
 
-        {labelMode && (
+        {canLabel && (
           <div
             className="label-layer"
             onPointerMove={(e) => {
@@ -648,7 +652,9 @@ export default function VideoStage({
           {labelMode && (
             <span className="badge badge--warn glass-clear">
               <span className="badge-dot" aria-hidden="true" />
-              Topun yere değdiği noktaya tıklayın · ← → kare · Esc vazgeç
+              {canLabel
+                ? "Topun yere değdiği noktaya tıklayın · ← → kare · Esc vazgeç · sistem katmanları gizli"
+                : "Sekme yalnız Kaynak videoda işaretlenir (işlenmiş videoda sistemin işaretleri var) · Esc vazgeç"}
             </span>
           )}
           {overlayActive ? (

@@ -281,14 +281,21 @@ export default function App() {
   const onSeek = useCallback((frame: number) => stageRef.current?.seekToFrame(frame), []);
   const onSidebarSelect = useCallback((id: number) => onSelectFlight(id), [onSelectFlight]);
 
+  const onViewChange = useCallback((v: MediaName) => {
+    stageRef.current?.rememberPosition();
+    setView(v);
+  }, []);
+
   const onStartLabel = useCallback(
     (id: number) => {
       setLabelError(null);
       setMode("review");
       onSelectFlight(id);
+      // Label on the untouched video: a rendered view carries the system's own bounce marks.
+      if (view !== "source" && media.includes("source")) onViewChange("source");
       setLabelingId(id);
     },
-    [onSelectFlight],
+    [onSelectFlight, view, media, onViewChange],
   );
   const onCancelLabel = useCallback(() => setLabelingId(null), []);
   const onLabel = useCallback(
@@ -351,11 +358,6 @@ export default function App() {
   const onJobDone = useCallback((newRunId: string) => void loadRuns(newRunId), [loadRuns]);
   const job = useAnalysisJob(onJobDone);
   const pickFile = useCallback(() => fileRef.current?.click(), []);
-
-  const onViewChange = useCallback((v: MediaName) => {
-    stageRef.current?.rememberPosition();
-    setView(v);
-  }, []);
 
   const onToggleLayer = useCallback((k: keyof Layers) => {
     setLayers((prev) => {

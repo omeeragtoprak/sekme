@@ -219,10 +219,20 @@ record, the same offset on the US Open clips is 0.1–3.3 cm at the centre line 
 
 ## Open findings (games 1–5, WASB detections; descriptive, nothing changed)
 
-Of the first bounces missed on games 1–5, 54 lie inside a flight whose bounce was placed elsewhere.
-In 42 of them the system's bounce sits at no labelled bounce, typically *before* the real one (median
-4.2 frames earlier; 78 % earlier): the changepoint takes a kink in the descending track for the bounce.
-26 of the 54 flights also span a stroke the hit detector missed, so two shots are fitted as one. Both
-point at the same next step as the rejected experiments above: event segmentation. Games 8–10 have
-now been used for many accept/reject decisions; a further change there would need new labelled data
-(e.g. bounces marked in the Review Room) to be tested honestly.
+Where each labelled first bounce of games 1–5 is lost (238; the flight that covers it, fitted bounce
+within 3 frames counts as found):
+
+| Outcome | First bounces |
+|---|---|
+| found | 159 |
+| far→near flight ends at the bounce: the hit detector fired on the near-side bounce, so no kink is left inside the flight | 28 |
+| a changepoint was found but the 3D fit was rejected (24 of 36: reprojection error) and the image fallback was not trusted; 23 of the 36 span a labelled stroke the hit detector missed (two shots fitted as one) | 36 |
+| a bounce was fitted, more than 3 frames off (all 10 *earlier*, median 4.0 frames) | 10 |
+| no flight covers it / too few calibrated detections | 5 |
+
+An earlier version of this note counted 54 misses "inside a flight whose bounce was placed
+elsewhere"; that group mixed the 36 rejected fits (no call made at all) with the 10 misplaced ones.
+Timing is the smallest part: **hit/bounce segmentation** — false hits at near-side bounces and missed
+strokes — accounts for most of the losses. It is the same step the rejected hit gate addressed. Games
+8–10 have now been used for many accept/reject decisions; a further change there would need new
+labelled data (e.g. bounces marked in the Review Room) to be tested honestly.

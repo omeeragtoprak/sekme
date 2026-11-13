@@ -171,6 +171,48 @@ def validate(net: torch.nn.Module, loader: DataLoader, dev: torch.device, thr: f
     return detection_scores(pred, truth)
 
 
+RESUME_KEYS = ("epochs", "batch", "lr", "train_games", "blur", "centre_labels")
+
+
+def state_path(out: Path) -> Path:
+    return out.with_name(out.stem + ".state.pt")
+
+
+def atomic_save(obj: dict, path: Path) -> None:
+    """torch.save through a temporary file, so a kill mid-write never leaves a truncated file."""
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(obj, tmp)
+    tmp.replace(path)
+
+
+def recipe(args: dict, steps_per_epoch: int) -> dict:
+    """What a resumed run must share with the stopped one (the schedule spans epochs x steps_per_epoch)."""
+    return {**{k: args[k] for k in RESUME_KEYS}, "steps_per_epoch": steps_per_epoch}
+
+
+def save_state(path: Path, net: torch.nn.Module, opt: torch.optim.Optimizer, sched, *, epoch: int,
+               best: float, step: int, history: list, recipe: dict) -> None:
+    """Everything needed to continue after ``epoch``."""
+    atomic_save({"model": net.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
+                 "epoch": epoch, "best": best, "step": step, "history": history, "args": recipe,
+                 "rng": torch.get_rng_state()}, path)
+
+
+def load_state(path: Path, net: torch.nn.Module, opt: torch.optim.Optimizer, sched,
+               recipe: dict) -> tuple[int, float, int, list]:
+    """Restore a run saved by save_state; refuses a state written with a different recipe."""
+    s = torch.load(path, map_location="cpu", weights_only=False)
+    saved = s["args"]
+    # A state written before steps_per_epoch was recorded still has to match the rest of the recipe.
+    if set(RESUME_KEYS) - set(saved) or any(saved[k] != recipe.get(k) for k in saved):
+        raise SystemExit(f"{path} was written with {saved}, this run is {recipe}")
+    net.load_state_dict(s["model"])
+    opt.load_state_dict(s["opt"])
+    sched.load_state_dict(s["sched"])
+    torch.set_rng_state(s["rng"])
+    return s["epoch"], s["best"], s["step"], s["history"]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, default=12)
@@ -183,6 +225,8 @@ def main() -> None:
     ap.add_argument("--centre-labels", action="store_true",
                     help="targets at the ball's image centre (labels minus LABEL_OFFSET, pixel-centre mapping)")
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--resume", action="store_true",
+                    help="continue from <out stem>.state.pt (written after every epoch) if it exists")
     args = ap.parse_args()
     torch.manual_seed(0)
     dev = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
@@ -212,8 +256,18 @@ def main() -> None:
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args.lr, total_steps=args.epochs * len(train),
                                                 pct_start=0.1)
-    best, step, history = -1.0, 0, []
-    for epoch in range(args.epochs):
+    best, step, history, start = -1.0, 0, [], 0
+    state, rec = state_path(out), recipe(vars(args), len(train))
+    if args.resume and state.exists():
+        start, best, step, history = load_state(state, net, opt, sched, rec)
+        if out.exists():  # the best checkpoint is written just before the state: a kill in between
+            ck = torch.load(out, map_location="cpu", weights_only=False)  # leaves it one epoch ahead
+            if ck.get("epoch", 0) > start and all(ck["args"].get(k) == rec[k] for k in RESUME_KEYS):
+                best = max(best, ck["val"]["4px"]["f1"])
+        print(f"resumed after epoch {start} (best F1@4px {best})", flush=True)
+    elif args.resume:
+        print(f"--resume: no {state.name}, starting from scratch", flush=True)
+    for epoch in range(start, args.epochs):
         t1, losses = time.time(), []
         for x, y, _ in train:
             loss = wbce_loss(net(x.to(dev)), y.to(dev))
@@ -234,9 +288,10 @@ def main() -> None:
         if scores["4px"]["f1"] > best:
             best = scores["4px"]["f1"]
             out.parent.mkdir(exist_ok=True)
-            torch.save({"arch": ARCH, "model": net.state_dict(), "epoch": epoch + 1, "val": scores,
-                        "history": history, "trained_on": trained_on, "selected_on": selected_on,
-                        "args": vars(args), "label_offset_px": LABEL_OFFSET if c else None}, out)
+            atomic_save({"arch": ARCH, "model": net.state_dict(), "epoch": epoch + 1, "val": scores,
+                         "history": history, "trained_on": trained_on, "selected_on": selected_on,
+                         "args": vars(args), "label_offset_px": LABEL_OFFSET if c else None}, out)
+        save_state(state, net, opt, sched, epoch=epoch + 1, best=best, step=step, history=history, recipe=rec)
     print("best val F1@4px", best, "->", out)
 
 
