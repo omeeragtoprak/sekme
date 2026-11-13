@@ -94,7 +94,16 @@ export type Job = {
   error: string | null;
 };
 
-export type ModelCard = { file: string; source: string; license: string; sha256: string };
+export type ModelCard = {
+  file: string;
+  source: string;
+  license: string;
+  sha256: string;
+  /** Only on this project's own checkpoints: the training split, the epoch-choice split, the chosen epoch. */
+  trained_on?: string;
+  selected_on?: string;
+  epoch?: number;
+};
 
 export type PlayerSummary = {
   label: PlayerLabel;

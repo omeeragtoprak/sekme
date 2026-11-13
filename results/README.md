@@ -13,3 +13,4 @@ scripts reproduce these files from them.
 | `players_human_labelled.txt` | player recall on hand-labelled frames (Tennis Player Actions, CC BY 4.0) | `scripts/eval_mendeley.py --players` |
 | `pose_human_labelled.txt` | pose PCK on hand-labelled frames; stroke-type agreement on US Open 2023 | `scripts/eval_mendeley.py --pose`, pipeline runs |
 | `radar.txt` | fitted serve speed vs the stadium radar board, current defaults, 5 clips | `sekme analyze` reports |
+| `position_bias.txt` | TrackNet label vs ball image centre per game (no network; constant + speed term), network offsets, bounce depth bias vs raw and centred references, bootstrap intervals | `scripts/label_offset.py`, `scripts/detection_offset.py`, `scripts/eval_ball.py`, `scripts/eval_tracknet.py --centred-reference`, `scripts/bootstrap_bounce.py` |

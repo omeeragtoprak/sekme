@@ -8,7 +8,7 @@ and their uncertainty, self-checks) is this project's code; see [ARCHITECTURE.md
 
 | Role | Default network | Trained by | Training data | Alternative (`--model KEY=PATH`) |
 |---|---|---|---|---|
-| Ball | SEKME ball U-Net (`models/ball_unet.py`) | this project | TrackNet tennis, games 1–5 | WASB HRNet (its authors, MIT) |
+| Ball | SEKME ball U-Net v3 (`models/ball_unet.py`) | this project | TrackNet tennis, games 1–7 (v1: 1–5), targets corrected for the labels' offset | WASB HRNet (its authors, MIT) |
 | Court keypoints | SEKME court U-Net (`models/court_unet.py`) | this project | TennisCourtDetector labels: the 6 630 frames of `data_train.json` (of 8 841) | TennisCourtDetector network (its author, no published licence) |
 | Players | YOLO26-s + ByteTrack (Ultralytics, AGPL-3.0) | Ultralytics | COCO | SEKME person U-Net, distilled from YOLO26-s |
 | Pose | YOLO26-s-pose (Ultralytics, AGPL-3.0) | Ultralytics | COCO | SEKME pose U-Net, distilled from YOLO26-s-pose |
@@ -22,6 +22,8 @@ the git history and in [EVAL_TRACKNET.md](EVAL_TRACKNET.md). Repeated use makes 
 which is why the human-labelled set below is kept for the final checks.
 
 ## SEKME ball network
+
+This section describes v1 (games 1–5); v2 and v3, the current default, are at the end of it.
 
 **Task.** Find the ball in every frame of broadcast video. The ball is 2–6 px wide at the network's
 input size, often blurred into a streak, and the court carries ball-sized white marks.
@@ -107,6 +109,142 @@ stadium radar than with WASB (mean |error| 7.7 % vs 4.9 % on 6 timed serves), mo
 
 The validation and test numbers are not comparable: validation scores single windows by argmax,
 the test uses the production detector (heatmaps averaged over three windows, blob centroids).
+
+### Ball network v2
+
+Aimed at the blurred-ball weakness above. Same architecture, loss and schedule as v1; two changes:
+
+- **Data:** games 1–7 for training, like WASB, with every fifth clip of those games held out to choose
+  the epoch (52 training clips, 13 selection clips). Games 8–10 stay the test set.
+- **Motion blur:** on 30 % of the training windows, the same straight-line smear (3–9 px long, random
+  angle) is applied to all three frames, imitating a fast ball or a camera pan.
+
+12 epochs (~2.9 h on the M4); epoch 10 chosen (selection F1 at 4 px 0.847, not comparable with v1's
+0.770: different clips). v1 is kept as `models/sekme_ball_v1.pt`.
+
+**Rule, written before training** (commit b6f8f8c): v2 replaces v1 only if on games 8–10 its
+frame-level F1 at 4 px and its end-to-end first-bounce recall are both at least v1's (0.912, 108 / 142).
+
+| Games 8–10 | v1 | **v2** | WASB |
+|---|---|---|---|
+| F1 at 4 px (precision / recall) | 0.912 (0.945 / 0.881) | **0.922** (0.949 / 0.897) | 0.928 (0.967 / 0.893) |
+| F1 at 10 px | 0.958 | **0.965** | 0.955 |
+| first bounce after a stroke found | 108 / 142 | **110 / 142** | 110 / 142 |
+| bounces found / false alarms / precision | 111 / 10 / 91.7 % | **113 / 7 / 94.2 %** | 112 / 9 / 92.6 % |
+| distance to the labelled contact, median / p90 | 15.0 / 37.7 cm | 16.1 / 37.7 cm | 11.4 / 33.4 cm |
+| decisive calls consistent with the label | 105 / 105 | 107 / 107 | 108 / 108 |
+| truth inside the reported 95 % ellipse (1 px label noise) | 87 % | 89 % | 91 % |
+
+**Decision.** Both conditions hold, so v2 is the default. Outside the rule: the median bounce distance
+grew by 1.1 cm (p90 unchanged), and the reported uncertainty kept pace (89 % inside the 95 % ellipse).
+Games 8–10 have now been used for several accept/reject decisions (see the git history); the remaining gap to WASB in bounce
+position (16 vs 11 cm) is not something to tune on them further.
+
+**Defect found after the decision** (independent review, 2026-11-13): 3 of the 7 blur lengths
+(4, 6, 8 px) were even, and an even-length line kernel is not centred on `cv2.filter2D`'s anchor, so
+in ~13 % of training windows the blurred frames sat ~0.6 px (network pixels; ~1.4 px at 1280×720),
+mostly vertically, away from their labels. Fixed: odd lengths only, with a test that the blur never
+moves a point's centre (`tests/test_ball_unet.py`). `scripts/eval_ball.py` now also reports the mean
+detection − label offset (`bias_px`).
+
+### TrackNet labels are offset from the ball (found 2026-11-13)
+
+Measuring the mean detection − label offset (`eval_ball.py`, `bias_px`) on the selection clips gave
+(dx, dy) = (−1.30, +0.62) px for v1 and (−1.37, +0.78) px for v2 (1280×720, SE 0.03): far beyond what
+the blur defect could cause, and in v1 too, which has no blur. A check that uses no network
+(`scripts/label_offset.py`: the moving ball isolated by frame differencing, its centroid within 8 px
+of the label) shows where it comes from: **the TrackNet labels sit (+1.53, +1.39) px from the ball's
+centre in the image** (medians +1.56, +1.53; n = 1 970; the same with unweighted masks, so lighting
+does not drive it). An independent review then showed it has two parts: a constant, and a term
+proportional to the ball's speed: on most games the labels lead the ball's image by 0.1–0.19 frame
+(below). Its origin is not known; the labelling tool and convention are not documented. With the
+training mapping `label × scale` (which also ignores `cv2.resize`'s half-pixel centres) this predicts
+what the networks do:
+
+- across the image (x), horizontal flips turn the label offset into ±, so the network learns the ball's
+  image centre: predicted −1.5 px against the label, measured −1.30 / −1.37;
+- down the image (y), nothing cancels it: predicted +0.75 px against the label (+2.1 px below the
+  ball's image centre), measured +0.62 / +0.78.
+
+So our ball networks place the ball ~2 px (1280×720) below its centre in the image. Down the image is
+depth on court, the camera's weak axis: at the far baseline 2 px is of the order of 20 cm, pulling
+bounces towards the camera. The TrackNet benchmark compares against the same labels, which carry
+1.4 px of the offset themselves, so it under-reports this. `eval_tracknet.py --centred-reference`,
+`calibration_check.py … --centred-reference` and `eval_ball.py --centred-truth` now score against
+the label minus (1.5, 1.5) px (`LABEL_OFFSET_PX` in `courtvision/eval/tracknet.py`).
+
+**Constant and speed term, per game** (`scripts/label_offset.py --per-game`, offset = constant + slope ×
+velocity). The constant ranges from 0.6 to 1.7 px between games (games 8–10: (1.14, 0.84), (1.33, 1.18),
+(0.62, 0.65) px); the slope is −0.10 to −0.19 frame on eight games and ~0 on games 4–5. Only the
+constant moves a bounce: a point shifted along its own track stays on the same line, and the reference
+contact is where two such lines meet. The centred references (`eval_tracknet.py --centred-reference`,
+`calibration_check.py`) therefore subtract each game's constant (`GAME_LABEL_OFFSET_PX`). The ball
+networks reproduce the labels' lead (`scripts/detection_offset.py`: slope against the labels ≈ 0).
+
+### Ball network v3 (current default)
+
+v2's recipe with the corrected blur and `--centre-labels`: targets at the label minus (1.5, 1.5) px,
+through `cv2.resize`'s pixel-centre mapping; the epoch is chosen on the selection clips against the same
+centred positions. v2 and v3 share their training and selection clips, so they are compared there
+(`eval_ball.py --selection`, production detector), not on games 8–10.
+
+**Rule, written before training:** v3 replaces v2 if both hold on the selection clips:
+(a) its mean offset from the ball's image centre (`--centred-truth`, `bias_px`) is smaller than v2's
+in both x and y (v2: +0.14, +2.28 px); (b) its F1 at 10 px against the raw labels, which a 1.5 px
+shift barely touches, is at most 1 point below v2's. Games 8–10 are then run once to report v3, with
+both references, not to decide.
+
+12 epochs (~2.9 h); epoch 12, the last, was best on the selection clips (validation F1 at 4 px against
+the centred positions 0.895, still rising slowly). v2 is kept as `models/sekme_ball_v2.pt`.
+
+| Selection clips (games 1–7, every fifth clip; 3 012 frames) | v2 | **v3** |
+|---|---|---|
+| mean offset from label − (1.5, 1.5) px, dx / dy (SE 0.03; the rule's measure) | +0.13 / +2.27 px | **−0.08 / −0.04 px** |
+| F1 at 10 px, raw labels | 0.959 | **0.964** |
+| F1 at 4 px, centred positions | 0.820 | **0.937** |
+| F1 at 4 px, raw labels | 0.893 | 0.844 |
+| time per frame | 22.6 ms | 22.7 ms |
+
+**Decision.** Both conditions hold — the vertical offset falls from 2.3 px to under 0.1 px, and F1 at
+10 px rises by half a point — so v3 is the default. Condition (a) is close to circular, since the 1.5 px
+came from these clips; games 8–10 below are the independent check. (The rule's +0.14 / +2.28 px for v2 was its raw-label
+offset plus 1.5 px; measured directly against the centred positions it is +0.13 / +2.27 px.) F1 at 4 px against the *raw*
+labels falls, as it must: v3 now places the ball 1.5 px from where those labels sit, which is where
+the ball is.
+
+**Games 8–10, run once after the decision** (for the report; the raw reference is the one the earlier
+tables use, the centred one subtracts each game's constant label offset, see
+[EVAL_TRACKNET.md](EVAL_TRACKNET.md#systematic-offsets-2026-11-13-evidence-in-resultsposition_biastxt)):
+
+| Games 8–10 | v2 | **v3** | WASB |
+|---|---|---|---|
+| F1 at 4 px / 10 px, raw labels | 0.922 / 0.965 | **0.921 / 0.969** | 0.928 / 0.955 |
+| constant offset from the ball's image centre, dx / dy (range over the 3 games) | +0.1 / +1.8…+2.1 px | **0.0 / −0.1…−0.3 px** | +0.5…+0.75 / +0.25…+0.64 px |
+| first bounce after a stroke found | 110 / 142 | 109 / 142 | 110 / 142 |
+| bounces found / false alarms / precision | 113 / 7 / 94.2 % | 112 / 8 / 93.3 % | 112 / 9 / 92.6 % |
+| distance to the reference, median / p90, raw | 16.1 / 37.7 cm | **10.0 / 29.6 cm** | 11.4 / 33.4 cm |
+| the same, centred reference | 21.1 / 41.9 cm | **11.4 / 31.3 cm** | 13.3 / 36.6 cm |
+| median depth offset (towards the camera −), centred | −19.6 cm | **−5.9 cm** | −9.8 cm |
+| decisive calls consistent with the label | 107 / 107 | 107 / 107 | 108 / 108 |
+| truth inside the 95 % ellipse (1 px label noise), raw / centred | 89 / 87 % | 92 / 94 % | 91 / 89 % |
+| time per frame | 22.5 ms | 22.6 ms | 40.1 ms |
+
+The labels on games 8–10 sit closer to the ball's centre than on games 1–7, so v3 is further from
+them than its training assumed, yet within 0.3 px of the ball itself. The bounce positions moved as
+the offset analysis predicted: the median depth offset shrank by ~14 cm. With a clip bootstrap
+(`scripts/bootstrap_bounce.py`, 30 clips) v3's median distance is 6.1 cm below v2's (95 % interval
+2.9–10.6 cm) and **on par with WASB** (−1.4 cm, interval −2.9 to +1.0 cm; centred −1.9, −4.0 to +0.4):
+not demonstrably better. One first bounce fewer was found than with v2 (109 vs 110).
+
+**Real broadcast and radar with v3** (`runs/<id>_v3`, `results/radar.txt`). US Open 2023 final, 90 s:
+54 calls on 65 shots (v1: 52 on 66), the same 2 of 3 serves; v3 now sees 2 of the 7 blurred frames after
+the missed serve's contact (WASB 4). Radar on 5 timed serves: mean |error| 3.9 % (v1 7.7 % on 6, WASB
+4.9 %); the fast 60 fps serve v1 measured at −18.7 % is −0.4 %. Serves recognised on the five clips:
+11 (v1 13); one of the lost ones had a radar pair (v1 −6.9 %).
+
+Order of events: v3's games 8–10 run was first scored against the fixed (1.5, 1.5) px reference
+(v3 13.7 cm, WASB 16.4, v1 23.5, v2 24.4 cm); the per-game constants came after it, following the
+review. The ranking is the same under every reference.
 
 ## SEKME court network
 

@@ -62,3 +62,20 @@ def test_window_stride_spaces_the_three_frames_and_keeps_three_votes(tmp_path, m
     assert windows[0] == [0, 2, 4] and windows[-1] == [5, 7, 9]
     votes = {j: sum(j in w for w in windows) for j in range(10)}
     assert all(votes[j] == 3 for j in range(4, 6))
+
+
+def test_motion_blur_never_moves_the_ball_away_from_its_label():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from train_ball import motion_blur
+
+    yy, xx = np.mgrid[0:41, 0:41]
+    for seed in range(100):
+        img = np.zeros((41, 41, 3), np.float32)
+        img[20, 20] = 1.0
+        out = motion_blur(img, np.random.default_rng(seed))[..., 0]
+        assert out.sum() == np.float32(1.0) or abs(out.sum() - 1.0) < 1e-4  # brightness kept
+        cx, cy = (out * xx).sum() / out.sum(), (out * yy).sum() / out.sum()
+        assert abs(cx - 20) < 0.05 and abs(cy - 20) < 0.05, (seed, cx, cy)  # centre unmoved

@@ -1,0 +1,107 @@
+# Ball position offsets and bounce depth bias (1280x720 px; court y points away from the camera)
+## TrackNet label vs the ball's image centre, no network (scripts/label_offset.py, selection clips of games 1-7)
+intensity-weighted: n=1970  image centre - label  dx -1.53 (SE 0.04, median -1.56)  dy -1.39 (SE 0.05, median -1.53) px
+unweighted: n=1970  image centre - label  dx -1.53 (SE 0.04, median -1.57)  dy -1.37 (SE 0.05, median -1.50) px
+## Detection - label, selection clips (scripts/eval_ball.py --selection, production detector; WASB from cached detections of data/tracknet/runs)
+sekme_ball.pt bias_px {"n": 2753, "dx": -1.365, "dy": 0.775, "se": 0.028} F1@4px 0.8925 F1@10px 0.9591
+sekme_ball_v1.pt bias_px {"n": 2862, "dx": -1.302, "dy": 0.621, "se": 0.026} F1@4px 0.9233 F1@10px 0.9795
+wasb_tennis_best.pth.tar bias_px {"n": 2910, "dx": -1.00, "dy": -1.05} (cached detections, its own training clips)
+(v1 was trained on the games 1-5 clips among these and WASB on all of them: their F1 here is not held-out; the offsets are what matters.)
+## System bounce - reference contact, TrackNet games 8-10 (scripts/eval_tracknet.py; centred: labels minus (1.5, 1.5) px)
+WASB + TCD court, raw reference: n=112 median |error| 11.4 cm, median dx -0.1 cm, median dy -3.6 cm (negative = towards the camera)
+WASB + TCD court, centred reference: n=112 median |error| 16.4 cm, median dx +2.4 cm, median dy -14.0 cm (negative = towards the camera)
+SEKME v1 + SEKME court, raw reference: n=111 median |error| 15.1 cm, median dx -1.3 cm, median dy -13.1 cm (negative = towards the camera)
+SEKME v1 + SEKME court, centred reference: n=111 median |error| 23.5 cm, median dx +1.3 cm, median dy -23.2 cm (negative = towards the camera)
+SEKME v2 + SEKME court, raw reference: n=113 median |error| 16.1 cm, median dx -0.9 cm, median dy -14.9 cm (negative = towards the camera)
+SEKME v2 + SEKME court, centred reference: n=113 median |error| 24.4 cm, median dx +2.2 cm, median dy -22.1 cm (negative = towards the camera)
+(SEKME v1 with the TennisCourtDetector court instead of ours: raw median |error| 15.0 cm, the same as with our court,
+ so the depth difference to WASB comes from the ball network, not the court network.)
+## Reference construction on simulated shots with exact pixels (scripts/reference_bias_sim.py, 300 shots, TrackNet-like camera)
+far half: n=142  reference - truth: median dx -0.0 cm, dy +6.2 cm  |  system - truth: median dy -0.1 cm, median |error| 0.2 cm
+near half: n=156  reference - truth: median dx -0.0 cm, dy +4.0 cm  |  system - truth: median dy +0.0 cm, median |error| 0.0 cm
+(The reference's straight-line extrapolation over a curved track puts the contact 4-6 cm away from the camera;
+ the 3D fit is unbiased on exact pixels.)
+## The label offset per game (scripts/label_offset.py --per-game; selection clips for games 1-7, all clips for 8-10)
+game1: n=264  image centre - label  dx -1.75  dy -1.21 (SE 0.12) px
+game2: n=774  image centre - label  dx -1.51  dy -0.91 (SE 0.10) px
+game3: n=211  image centre - label  dx -1.72  dy -1.44 (SE 0.20) px
+game4: n=521  image centre - label  dx -1.41  dy -1.65 (SE 0.06) px
+game5: n=238  image centre - label  dx -1.60  dy -1.60 (SE 0.08) px
+game6: n=419  image centre - label  dx -1.00  dy -1.56 (SE 0.14) px
+game7: n=182  image centre - label  dx -1.64  dy -1.74 (SE 0.18) px
+game8: n=1417 image centre - label  dx -1.02  dy -1.04 (SE 0.06) px
+game9: n=1020 image centre - label  dx -1.29  dy -1.15 (SE 0.08) px
+game10: n=1296 image centre - label  dx -0.50  dy -0.58 (SE 0.06) px
+games 8-10 pooled (--test): n=3733  dx -0.91 (SE 0.03)  dy -0.91 (SE 0.04) px
+(Not one convention: 0.5 to 1.75 px between games. GAME_LABEL_OFFSET_PX in courtvision/eval/tracknet.py holds these;
+ the "centred" rows above used a fixed (1.5, 1.5) px and are superseded by the per-game rows below.)
+## Ball network v3 (trained on labels minus (1.5, 1.5) px), detection - label
+selection clips: sekme_ball.pt (v3) bias_px {"n": 2782, "dx": -1.58, "dy": -1.541, "se": 0.027}  (label offset there: -1.53, -1.39)
+games 8-10:      v3   {"n": 5181, "dx": -0.998, "dy": -1.046}  minus the games' label offset (-0.91, -0.91): about (-0.09, -0.14) px from the image centre
+games 8-10:      v2   {"n": 5139, "dx": -0.857, "dy": +1.123}  about (+0.05, +2.03) px
+games 8-10:      v1   {"n": 5070, "dx": -0.887, "dy": +1.205}  about (+0.02, +2.12) px
+games 8-10:      WASB {"n": 5031, "dx": -0.346, "dy": -0.434}  about (+0.56, +0.48) px
+(The same picture as on the selection clips: v3 within ~0.15 px of the ball's image centre, WASB ~0.5 px right of and
+ below it, v1/v2 ~2 px below it. The image-centre figures subtract a pooled offset from a slightly different frame set.)
+## System bounce - reference contact, games 8-10, reference centred per game (eval_tracknet.py --centred-reference)
+WASB + TCD court:     n=112 median |error| 13.5 cm (p90 36.6), median dx +1.2 cm, median dy  -9.6 cm
+SEKME v1 + SEKME court: n=111 median |error| 20.3 cm (p90 42.7), median dx +0.5 cm, median dy -19.2 cm
+SEKME v2 + SEKME court: n=113 median |error| 21.2 cm (p90 42.7), median dx +0.9 cm, median dy -19.5 cm
+SEKME v3 + SEKME court: n=112 median |error| 11.0 cm (p90 30.9), median dx +0.1 cm, median dy  -5.6 cm
+SEKME v3 + SEKME court, raw reference: n=112 median |error| 10.0 cm (p90 29.6), median dx -1.4 cm, median dy +0.2 cm
+(Adding the reference construction's own +4 to +6 cm away from the camera (simulation above), the depth bias against
+ the true bounce is roughly: v3 -1 cm, WASB -5 cm, v1/v2 -15 cm. These rest on two separate measurements; read
+ them as a few centimetres either way.)
+## The label offset per game, split into constant + slope * velocity (scripts/label_offset.py --per-game; independent review 2026-11-13)
+game1: n=264  image centre - label (weighted)  mean dx -1.75 (SE 0.10) dy -1.21 (SE 0.12)  |  constant dx -1.54 (SE 0.07) dy -1.39 (SE 0.08) px, slope x -0.110 y -0.097 frame
+game2: n=774  image centre - label (weighted)  mean dx -1.51 (SE 0.09) dy -0.91 (SE 0.10)  |  constant dx -1.41 (SE 0.05) dy -0.82 (SE 0.06) px, slope x -0.158 y -0.134 frame
+game3: n=211  image centre - label (weighted)  mean dx -1.72 (SE 0.18) dy -1.44 (SE 0.20)  |  constant dx -1.71 (SE 0.11) dy -1.20 (SE 0.13) px, slope x -0.194 y -0.150 frame
+game4: n=521  image centre - label (weighted)  mean dx -1.41 (SE 0.06) dy -1.65 (SE 0.06)  |  constant dx -1.40 (SE 0.06) dy -1.56 (SE 0.06) px, slope x -0.038 y -0.046 frame
+game5: n=238  image centre - label (weighted)  mean dx -1.60 (SE 0.07) dy -1.60 (SE 0.08)  |  constant dx -1.60 (SE 0.07) dy -1.60 (SE 0.09) px, slope x -0.017 y +0.000 frame
+game6: n=419  image centre - label (weighted)  mean dx -1.00 (SE 0.12) dy -1.56 (SE 0.14)  |  constant dx -1.09 (SE 0.08) dy -1.54 (SE 0.09) px, slope x -0.156 y -0.159 frame
+game7: n=182  image centre - label (weighted)  mean dx -1.64 (SE 0.17) dy -1.74 (SE 0.18)  |  constant dx -1.21 (SE 0.11) dy -1.44 (SE 0.12) px, slope x -0.111 y -0.099 frame
+game8: n=1417  image centre - label (weighted)  mean dx -1.02 (SE 0.06) dy -1.04 (SE 0.06)  |  constant dx -1.14 (SE 0.04) dy -0.84 (SE 0.04) px, slope x -0.143 y -0.138 frame
+game9: n=1020  image centre - label (weighted)  mean dx -1.29 (SE 0.07) dy -1.15 (SE 0.08)  |  constant dx -1.33 (SE 0.05) dy -1.18 (SE 0.05) px, slope x -0.140 y -0.131 frame
+game10: n=1296  image centre - label (weighted)  mean dx -0.50 (SE 0.04) dy -0.58 (SE 0.06)  |  constant dx -0.62 (SE 0.03) dy -0.65 (SE 0.03) px, slope x -0.123 y -0.122 frame
+(The labels lead the ball's image by 0.10-0.19 frame on most games (slope), ~0 on games 4-5; the constant is what
+ moves a bounce reference, since a speed term shifts each point along its own track. GAME_LABEL_OFFSET_PX now holds
+ these constants; the per-game means above and the rows computed with them are superseded by the rows below.)
+## Network detection - label on games 8-10, constant + slope (scripts/detection_offset.py, cached candidates of each run)
+runs game8: n=1698  detection - label  mean dx -0.61 dy -0.59  |  constant dx -0.62 (SE 0.03) dy -0.59 (SE 0.03), slope x -0.012 y +0.003  |  constant from the ball's centre dx +0.52 dy +0.25 px
+runs game9: n=1371  detection - label  mean dx -0.62 dy -0.80  |  constant dx -0.63 (SE 0.04) dy -0.81 (SE 0.04), slope x -0.022 y -0.033  |  constant from the ball's centre dx +0.70 dy +0.37 px
+runs game10: n=1792  detection - label  mean dx +0.14 dy +0.01  |  constant dx +0.13 (SE 0.02) dy -0.01 (SE 0.03), slope x -0.012 y -0.027  |  constant from the ball's centre dx +0.75 dy +0.64 px
+runs_court game8: n=1670  detection - label  mean dx -1.09 dy +1.10  |  constant dx -1.11 (SE 0.03) dy +1.13 (SE 0.03), slope x -0.031 y -0.021  |  constant from the ball's centre dx +0.03 dy +1.97 px
+runs_court game9: n=1368  detection - label  mean dx -1.21 dy +0.88  |  constant dx -1.22 (SE 0.04) dy +0.87 (SE 0.04), slope x -0.022 y -0.019  |  constant from the ball's centre dx +0.11 dy +2.05 px
+runs_court game10: n=1856  detection - label  mean dx -0.45 dy +1.54  |  constant dx -0.46 (SE 0.02) dy +1.53 (SE 0.02), slope x -0.015 y -0.015  |  constant from the ball's centre dx +0.16 dy +2.18 px
+runs_ball_v2 game8: n=1700  detection - label  mean dx -0.98 dy +1.11  |  constant dx -1.00 (SE 0.03) dy +1.14 (SE 0.03), slope x -0.038 y -0.020  |  constant from the ball's centre dx +0.14 dy +1.98 px
+runs_ball_v2 game9: n=1383  detection - label  mean dx -1.24 dy +0.66  |  constant dx -1.25 (SE 0.04) dy +0.64 (SE 0.04), slope x -0.017 y -0.028  |  constant from the ball's centre dx +0.08 dy +1.82 px
+runs_ball_v2 game10: n=1893  detection - label  mean dx -0.45 dy +1.48  |  constant dx -0.44 (SE 0.02) dy +1.47 (SE 0.02), slope x +0.015 y -0.001  |  constant from the ball's centre dx +0.18 dy +2.12 px
+runs_ball_v3 game8: n=1707  detection - label  mean dx -1.13 dy -1.08  |  constant dx -1.16 (SE 0.03) dy -1.05 (SE 0.03), slope x -0.046 y -0.029  |  constant from the ball's centre dx -0.02 dy -0.21 px
+runs_ball_v3 game9: n=1388  detection - label  mean dx -1.35 dy -1.42  |  constant dx -1.36 (SE 0.03) dy -1.45 (SE 0.04), slope x -0.031 y -0.034  |  constant from the ball's centre dx -0.03 dy -0.27 px
+runs_ball_v3 game10: n=1910  detection - label  mean dx -0.61 dy -0.74  |  constant dx -0.60 (SE 0.02) dy -0.74 (SE 0.02), slope x +0.013 y -0.009  |  constant from the ball's centre dx +0.02 dy -0.09 px
+(runs = WASB, runs_court = v1, runs_ball_v2 = v2, runs_ball_v3 = v3. The networks reproduce the labels' lead (slope
+ near 0 against the labels); their constant offset from the ball's centre: v3 (0.0, -0.1 to -0.3) px, WASB (+0.5 to
+ +0.75, +0.25 to +0.64) px, v1/v2 (0.0 to +0.2, +1.8 to +2.2) px.)
+## System bounce - reference contact, games 8-10, reference centred with the per-game constants
+WASB + TCD court:       n=112 median |error| 13.3 cm (p90 36.6), median dx +1.5 cm, median dy  -9.8 cm
+SEKME v1 + SEKME court: n=111 median |error| 19.9 cm (p90 43.2), median dx +0.7 cm, median dy -19.2 cm
+SEKME v2 + SEKME court: n=113 median |error| 21.1 cm (p90 41.9), median dx +1.2 cm, median dy -19.6 cm
+SEKME v3 + SEKME court: n=112 median |error| 11.4 cm (p90 31.3), median dx +0.3 cm, median dy  -5.9 cm
+(Order of events: v3's games 8-10 run was first scored against the fixed (1.5, 1.5) px reference: median |error|
+ 13.7 cm, p90 34.3, against WASB 16.4, v1 23.5, v2 24.4 cm. The per-game references came after; the ranking is the
+ same under all three references.)
+## Median bounce distance, differences with a 95 % interval (clip bootstrap over the 30 clips, 5 000 resamples)
+v3 - WASB, raw reference:     -1.4 cm (-2.9 to +1.0)
+v3 - WASB, centred reference: -1.9 cm (-4.0 to +0.4)
+v3 - v2, raw reference:       -6.1 cm (-10.6 to -2.9)
+v3 - v2, centred reference:   -9.6 cm (-12.9 to -5.4)
+(v3 is on par with WASB, not demonstrably better; it is clearly better than v2.)
+## Uncertainty calibration against the centred reference (calibration_check.py centred_*.json --centred-reference)
+runs: label noise 1.0 px  n=112  normalised error median 1.29 (calibrated: 1.18)  inside the 95% ellipse 89%
+runs: label noise 2.0 px  n=112  normalised error median 0.78 (calibrated: 1.18)  inside the 95% ellipse 99%
+runs_court: label noise 1.0 px  n=111  normalised error median 1.44 (calibrated: 1.18)  inside the 95% ellipse 87%
+runs_court: label noise 2.0 px  n=111  normalised error median 0.87 (calibrated: 1.18)  inside the 95% ellipse 99%
+runs_ball_v2: label noise 1.0 px  n=113  normalised error median 1.50 (calibrated: 1.18)  inside the 95% ellipse 87%
+runs_ball_v2: label noise 2.0 px  n=113  normalised error median 0.90 (calibrated: 1.18)  inside the 95% ellipse 98%
+runs_ball_v3: label noise 1.0 px  n=112  normalised error median 1.12 (calibrated: 1.18)  inside the 95% ellipse 94%
+runs_ball_v3: label noise 2.0 px  n=112  normalised error median 0.66 (calibrated: 1.18)  inside the 95% ellipse 99%

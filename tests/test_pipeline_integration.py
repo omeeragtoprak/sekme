@@ -58,3 +58,17 @@ def test_perception_cache_key_changes_with_the_networks(tmp_path):
     cfg.models["ball"] = str(a)
     cfg.ball_stride = 2
     assert perception_key("video", cfg) != k1
+
+
+def test_model_card_reads_our_checkpoints_with_numpy_scores(tmp_path):
+    import numpy as np
+    import torch
+
+    from courtvision.pipeline import _model_card
+
+    path = tmp_path / "ball.pt"
+    torch.save({"arch": "sekme-ball-unet", "model": {}, "epoch": 10, "val": {"f1": np.float64(0.85)},
+                "trained_on": "TrackNet tennis games 1-7"}, path)
+    card = _model_card("ball", str(path))  # a report must not fail on the checkpoint's own metadata
+    assert card["trained_on"] == "TrackNet tennis games 1-7" and card["epoch"] == 10
+    assert card["source"].startswith("this project")

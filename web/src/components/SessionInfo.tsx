@@ -42,6 +42,12 @@ function ModelRow({ label, card }: { label: string; card: ModelCard | undefined 
         </span>
       </div>
       <p className="row-sub">{card.source}</p>
+      {card.trained_on && (
+        <p className="row-sub row-sub--tertiary" title={card.selected_on ? `Tur seçimi: ${card.selected_on}` : undefined}>
+          Eğitim: {card.trained_on}
+          {card.epoch != null && ` · ${card.epoch}. tur`}
+        </p>
+      )}
       <p className="row-sub row-sub--tertiary num" title={`${card.file}\nsha256 ${card.sha256}`}>
         {card.file} · sha256 {card.sha256.slice(0, 12)}…
       </p>

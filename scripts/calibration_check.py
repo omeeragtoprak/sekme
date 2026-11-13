@@ -1,6 +1,8 @@
 """Is the reported bounce uncertainty honest? TrackNet games 8-10, system bounces vs reference contacts.
 
-    .venv/bin/python scripts/calibration_check.py RESULTS_JSON RUNS_DIR   (both relative to data/tracknet)
+    .venv/bin/python scripts/calibration_check.py RESULTS_JSON RUNS_DIR [--centred-reference]
+    (both relative to data/tracknet; --centred-reference: labels minus their game's GAME_LABEL_OFFSET_PX, as
+    eval_tracknet.py; pass the results file that eval_tracknet.py --centred-reference wrote)
 
 For every matched bounce, the error between the system bounce and the reference contact is normalised by
 the combined covariance: the system's reported one plus the reference's own, obtained by perturbing the
@@ -20,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from courtvision.eval.labels import world_from_px  # noqa: E402
-from courtvision.eval.tracknet import Labels, ball_centre_ground, contacts, load_labels  # noqa: E402
+from courtvision.eval.tracknet import GAME_LABEL_OFFSET_PX, Labels, ball_centre_ground, contacts, load_labels  # noqa: E402
 
 DATA = ROOT / "data" / "tracknet"
 TEST_GAMES = ("game8", "game9", "game10")
@@ -31,14 +33,19 @@ def read(path: Path) -> dict:
         return json.load(f)
 
 
-def normalised_errors(results: str, runs: str, label_px: float, n_sim: int = 200) -> np.ndarray:
+def normalised_errors(results: str, runs: str, label_px: float, n_sim: int = 200,
+                      centred: bool = False) -> np.ndarray:
     rng = np.random.default_rng(0)
     z = []
     for cid, clip_res in read(DATA / results).items():
         game, clip = cid.split("_")
         if game not in TEST_GAMES:
             continue
-        lab = load_labels(DATA / "Dataset" / game / clip / "Label.csv")
+        offset = GAME_LABEL_OFFSET_PX[game] if centred else (0.0, 0.0)
+        if tuple(clip_res.get("reference_offset_px", offset)) != tuple(offset):
+            raise SystemExit(f"{results}: {cid} was scored with reference offset {clip_res['reference_offset_px']}, "
+                             f"not {offset}; pass the matching results file or flag")
+        lab = load_labels(DATA / "Dataset" / game / clip / "Label.csv", offset)
         report = read(DATA / runs / cid / "report.json")
         homographies = read(DATA / runs / cid / "frames.json")["H"]
         camera = report["calibration"]["camera_center_m"]
@@ -63,7 +70,7 @@ def normalised_errors(results: str, runs: str, label_px: float, n_sim: int = 200
 def main() -> None:
     results, runs = sys.argv[1], sys.argv[2]
     for label_px in (1.0, 2.0):
-        z = normalised_errors(results, runs, label_px)
+        z = normalised_errors(results, runs, label_px, centred="--centred-reference" in sys.argv[3:])
         print(f"{runs}: label noise {label_px} px  n={len(z)}  normalised error median {np.median(z):.2f} "
               f"(calibrated: 1.18)  inside the 95% ellipse {100 * np.mean(z < 2.45):.0f}%")
 

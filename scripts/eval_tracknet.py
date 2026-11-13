@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from courtvision.eval.labels import zone_from_name  # noqa: E402
-from courtvision.eval.tracknet import contacts, load_labels, match  # noqa: E402
+from courtvision.eval.tracknet import GAME_LABEL_OFFSET_PX, contacts, load_labels, match  # noqa: E402
 from courtvision.officiating.line_call import call_bounce  # noqa: E402
 
 DATA = ROOT / "data" / "tracknet"
@@ -56,8 +56,8 @@ def analyse(video: Path, cid: str, rerun: bool = False, runs_dir: str = "runs", 
     return run
 
 
-def score_clip(clip: Path, run: Path) -> dict:
-    lab = load_labels(clip / "Label.csv")
+def score_clip(clip: Path, run: Path, offset: tuple[float, float] = (0.0, 0.0)) -> dict:
+    lab = load_labels(clip / "Label.csv", offset)
     refs = contacts(lab)
     # First bounce after a stroke: the one a line call is about (later ones end a point already decided).
     first, seen = {}, False
@@ -86,7 +86,8 @@ def score_clip(clip: Path, run: Path) -> dict:
                      "dy_m": None if m.error_m is None else float(m.sys_xy[1] - m.ref_xy[1]),
                      "sys_verdict": m.sys_verdict, "ref_verdict": ref_verdict})
     return {"refs": rows, "false_alarms": false_alarms, "n_frames": int(len(lab.status)),
-            "calib_valid": report["calibration"]["valid_frames"], "flights": len(report["flights"])}
+            "calib_valid": report["calibration"]["valid_frames"], "flights": len(report["flights"]),
+            "reference_offset_px": list(offset)}
 
 
 def summary(res: dict[str, dict], games: tuple[str, ...]) -> dict:
@@ -124,6 +125,8 @@ def main() -> None:
     ap.add_argument("--runs-dir", default="runs", help="run folder under data/tracknet (keeps model variants apart)")
     ap.add_argument("--ball-model", help="ball network checkpoint passed to the analysis")
     ap.add_argument("--model", action="append", default=[], help="KEY=PATH passed to the analysis (repeatable)")
+    ap.add_argument("--centred-reference", action="store_true",
+                    help="reference contacts from labels minus their game's GAME_LABEL_OFFSET_PX (image centre)")
     args = ap.parse_args()
     games = sorted((DATA / "Dataset").glob("game*"), key=lambda p: int(p.name[4:]))
     if args.games:
@@ -136,7 +139,7 @@ def main() -> None:
             run = analyse(clip_video(clip, cid), cid, args.rerun, args.runs_dir, args.ball_model, args.model)
             if run is None:
                 continue
-            res[cid] = score_clip(clip, run)
+            res[cid] = score_clip(clip, run, GAME_LABEL_OFFSET_PX[g.name] if args.centred_reference else (0.0, 0.0))
             print(f"  {cid}: refs {len(res[cid]['refs'])}, found "
                   f"{sum(r['sys_frame'] is not None for r in res[cid]['refs'])}, false {res[cid]['false_alarms']}",
                   flush=True)

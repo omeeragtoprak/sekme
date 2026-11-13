@@ -38,7 +38,24 @@ class Contact:
     from_tracks: bool  # False: fell back to the labelled bounce frame itself
 
 
-def load_labels(path: Path) -> Labels:
+# TrackNet ball labels sit ~1.5 px right of and below the ball's centre in the image (1280x720 pixels),
+# measured without any network by scripts/label_offset.py on the selection clips of games 1-7. The ball
+# network v3 was trained against labels minus this offset.
+LABEL_OFFSET_PX = (1.5, 1.5)
+
+# The offset is not one convention. Per game it is a constant of 0.6 to 1.7 px plus a term proportional to the
+# ball's speed (the labels lead the image by up to ~0.16 frame); scripts/label_offset.py --per-game, every fifth
+# clip of games 1-7, all clips of games 8-10. These are the constants: only they move a bounce reference (a speed
+# term shifts each point along its own track). Centred references use their own game's constant.
+GAME_LABEL_OFFSET_PX = {
+    "game1": (1.54, 1.39), "game2": (1.41, 0.82), "game3": (1.71, 1.20), "game4": (1.40, 1.56),
+    "game5": (1.60, 1.60), "game6": (1.09, 1.54), "game7": (1.21, 1.44),
+    "game8": (1.14, 0.84), "game9": (1.33, 1.18), "game10": (0.62, 0.65),
+}
+
+
+def load_labels(path: Path, offset: tuple[float, float] = (0.0, 0.0)) -> Labels:
+    """Labels of one clip; ``offset`` (px) is subtracted from every position (GAME_LABEL_OFFSET_PX: image centre)."""
     rows = list(csv.DictReader(path.open(newline="")))
     n = len(rows)
     vis = np.zeros(n, bool)
@@ -48,7 +65,7 @@ def load_labels(path: Path) -> Labels:
         v = (r.get("visibility") or "0").strip()
         vis[i] = v not in ("", "0")
         if vis[i]:
-            xy[i] = [float(r["x-coordinate"]), float(r["y-coordinate"])]
+            xy[i] = [float(r["x-coordinate"]) - offset[0], float(r["y-coordinate"]) - offset[1]]
         s = (r.get("status") or "").strip()
         st[i] = int(float(s)) if s else 0
     return Labels(vis, xy, st)

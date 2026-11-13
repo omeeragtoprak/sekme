@@ -54,8 +54,7 @@ OWN_CARDS = {
     "sekme-court-unet": {"source": "this project: SEKME court U-Net, scripts/train_court.py on the "
                                    "TennisCourtDetector labels (8 841 broadcast frames)",
                          "license": "AGPL-3.0 (own weights; the dataset has no stated licence)"},
-    "sekme-ball-unet": {"source": "this project: SEKME ball U-Net, scripts/train_ball.py on TrackNet tennis "
-                                  "games 1-5",
+    "sekme-ball-unet": {"source": "this project: SEKME ball U-Net, scripts/train_ball.py on TrackNet tennis",
                         "license": "AGPL-3.0 (own weights; the TrackNet data has no stated licence)"},
     "sekme-person-unet": {"source": "this project: SEKME person U-Net, scripts/train_players.py, distilled from "
                                     "YOLO26-s boxes on broadcast frames",
@@ -101,6 +100,10 @@ def perception_key(video_sha: str, cfg: PipelineConfig) -> dict:
 def _model_card(key: str, path: str) -> dict:
     arch = ball_arch(path) if key == "ball" else _own_arch(path)
     card = OWN_CARDS.get(arch or "", THIRD_PARTY_CARDS[key])
+    if arch in OWN_CARDS:  # our checkpoints record their own training split and epoch choice
+        # weights_only=False: their validation scores are numpy scalars (ball_arch loads them the same way)
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        card = {**card, **{k: ckpt[k] for k in ("trained_on", "selected_on", "epoch") if k in ckpt}}
     return {**card, "file": f"models/{Path(path).name}", "sha256": _sha256(path)}
 
 
@@ -115,7 +118,7 @@ LIMITATIONS = [
     "kurtarılamıyor.",
     "File üstü yükseklik 3B uydurmadan geliyor ve tek kamerayla yaklaşık 0,1–0,25 m 1σ belirsizlik taşıyor; "
     "değer bu belirsizlikle birlikte gösterilir.",
-    "Bağımsız ölçüm: elle etiketlenmiş TrackNet maçlarında sekme konumu ortanca ~15 cm (etiketin kendi belirsizliği "
+    "Bağımsız ölçüm: elle etiketlenmiş TrackNet maçlarında sekme konumu ortanca ~16 cm (etiketin kendi belirsizliği "
     "~10 cm'nin altını ayırt edemez); çizgiye santimetre yakın kararların doğruluğu henüz ölçülmedi. İnceleme "
     "Odası'ndaki etiketleme aracıyla (gerçek sekme noktasına tıklama) kendi görüntünüzde ölçülebilir.",
     "Skor ve sayı sonucu henüz çıkarılmıyor; klip başlamadan önce vurulmuş topların vuruş hızı verilmiyor.",
