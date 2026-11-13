@@ -20,6 +20,11 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "promo" / "assets"
 SR = 48_000
 OUT_FPS = 30
+RUNS_SUFFIX = "_v4"  # the film is cut from the runs made with ball network v4: runs/<video id>_v4
+
+
+def run_dir(run: str) -> Path:
+    return ROOT / "runs" / f"{run}{RUNS_SUFFIX}"
 
 
 @dataclass
@@ -35,7 +40,7 @@ class Shot:
     def path(self) -> Path:
         if self.source == "raw":
             return ROOT / "data" / "videos" / f"{self.run}.mp4"
-        return ROOT / "runs" / self.run / f"{self.source}.mp4"
+        return run_dir(self.run) / f"{self.source}.mp4"
 
     @property
     def duration(self) -> float:
@@ -102,13 +107,13 @@ def cut(shot: Shot) -> Path:
 
 
 def still(name: str, run: str, source: str, t: float) -> None:
-    src = ROOT / "data" / "videos" / f"{run}.mp4" if source == "raw" else ROOT / "runs" / run / f"{source}.mp4"
+    src = ROOT / "data" / "videos" / f"{run}.mp4" if source == "raw" else run_dir(run) / f"{source}.mp4"
     ffmpeg("-ss", f"{t}", "-i", str(src), "-frames:v", "1", "-vf", "scale=1920:1080:flags=lanczos", "-q:v", "2",
            str(ASSETS / f"f_{name}.jpg"))
 
 
 def shot_events(shot: Shot) -> None:
-    report = json.loads((ROOT / "runs" / shot.run / "report.json").read_text())
+    report = json.loads((run_dir(shot.run) / "report.json").read_text())
     fps = report["video"]["fps"]
     for f in report["flights"]:
         for t, kind in ((f["start_frame"] / fps, "hit"), ((f.get("bounce") or {}).get("frame"), "bounce")):

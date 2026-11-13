@@ -1,5 +1,14 @@
 # Serve speed vs stadium radar board (sekme analyze; report broadcast.serve_speed; scripts/radar_table.py)
-## current defaults: SEKME ball v3 + SEKME court (runs/<id>_v3, --no-render)
+## current defaults: SEKME ball v4 + SEKME court (runs/<id>_v4; the two film clips rendered, the others --no-render)
+usopen2023_final_hd_v4 | models: models/sekme_court.pt models/sekme_ball.pt models/yolo26s.pt models/yolo26s-pose.pt | pairs: [(0, 157.5, 149.7, 5.2), (37, 163.5, 151.3, 8.1)] | unmatched: {'cut': 3, 'timing': 1}
+usopen2023_final_hd_90-179s_v4 | models: models/sekme_court.pt models/sekme_ball.pt models/yolo26s.pt models/yolo26s-pose.pt | pairs: [(12, 171.5, 175.4, -2.2), (45, 143.7, 148.1, -3.0)] | unmatched: {'cut': 4, 'timing': 1}
+usopen2025_final_hd_v4 | models: models/sekme_court.pt models/sekme_ball.pt models/yolo26s.pt models/yolo26s-pose.pt | pairs: [] | unmatched: {'timing': 4, 'cut': 1}
+usopen2024_final_hl_v4 | models: models/sekme_court.pt models/sekme_ball.pt models/yolo26s.pt models/yolo26s-pose.pt | pairs: [] | unmatched: {'cut': 3, 'timing': 5}
+usopen2025_qf_djokovic_fritz_hl_v4 | models: models/sekme_court.pt models/sekme_ball.pt models/yolo26s.pt models/yolo26s-pose.pt | pairs: [(93, 146.6, 175.4, -16.5)] | unmatched: {'timing': 6, 'cut': 1}
+ALL n=5 mean -1.7 % (SE 4.3), mean |error| 7.0 %, SD 9.5 %
+## the same serves, v3 -> v4 (error %): 2023 final +5.2 -> +5.2, +7.8 -> +8.1; 2023 final 90-179 s -2.6 -> -2.2,
+## -3.4 -> -3.0; 2025 QF (60 fps) -0.4 -> -16.5; serves recognised on the five clips: v3 11, v4 13
+## previous defaults: SEKME ball v3 + SEKME court (runs/<id>_v3, --no-render)
 usopen2023_final_hd_v3 | models: models/sekme_court.pt models/sekme_ball.pt models/yolo26s.pt models/yolo26s-pose.pt | pairs: [(0, 157.5, 149.7, 5.2), (37, 163.1, 151.3, 7.8)] | unmatched: {'cut': 3, 'timing': 1}
 usopen2023_final_hd_90-179s_v3 | models: models/sekme_court.pt models/sekme_ball.pt models/yolo26s.pt models/yolo26s-pose.pt | pairs: [(11, 170.8, 175.4, -2.6), (45, 143.0, 148.1, -3.4)] | unmatched: {'cut': 4, 'timing': 1}
 usopen2025_final_hd_v3 | models: models/sekme_court.pt models/sekme_ball.pt models/yolo26s.pt models/yolo26s-pose.pt | pairs: [] | unmatched: {'timing': 4, 'cut': 1}

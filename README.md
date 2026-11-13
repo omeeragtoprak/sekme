@@ -113,19 +113,20 @@ v4 was chosen over v3 on the held-out clips of games 1–7 by a rule written bef
 difference +0.2 cm, 95 % interval −0.6 to +1.6 cm by clip bootstrap) and with WASB's (−1.2 cm, −2.5 to
 +1.6 cm); v3's are clearly closer than v2's (−6.1 cm, −10.6 to −2.9 cm). See [MODELS.md](docs/MODELS.md).
 
-**Real broadcast** (ball network v3; US Open 2023 final highlights, 720p, first 90 s): 2 530 / 2 698
+**Real broadcast** (current defaults; US Open 2023 final highlights, 720p, first 90 s): 2 530 / 2 698
 frames calibrated (the rest are close-ups, correctly excluded), line-fit residual 0.34 px, camera
-recovered 33 m back and 10 m up; 54 calls on 65 shots (52 IN, 1 OUT checked by eye, 1 low-confidence);
+recovered 33 m back and 10 m up; 53 calls on 66 shots (51 IN, 1 OUT checked by eye, 1 low-confidence);
 2 / 3 visible serves found (our ball network still misses most of the motion-blurred frames right after
 one serve's contact; WASB finds all 3). US Open 2025 final (1080p, 60 fps): 71.5 % of frames
-calibrated, 26 calls on 42 shots.
+calibrated, 22 calls on 43 shots (ball v3: 26 on 42).
 
 **Radar** ([results/radar.txt](results/radar.txt); 5 official US Open clips, pairs kept only when the board
-change is timed to ≤ 4 s). With ball network v3: 5 serves, +5.2, +7.8, −2.6, −3.4, −0.4 % → mean
-+1.3 % (SE 2.2), mean |error| 3.9 %. With ball v1 it was 6 serves, mean |error| 7.7 %, and with WASB
-4.9 %; the fast 60 fps serve that v1 measured at −18.7 % (WASB −8.9 %) is now −0.4 %. One serve that
-v1 recognised in the 2025 final is not recognised with v3 (toss and serve merged into one flight).
-Five serves are too few for a bias claim either way.
+change is timed to ≤ 4 s). With the current defaults (ball v4): 5 serves, +5.2, +8.1, −2.2, −3.0,
+−16.5 % → mean −1.7 % (SE 4.3), mean |error| 7.0 %. The outlier is the fast 60 fps serve: −16.5 % with
+v4, −0.4 % with ball v3, −18.7 % with v1 and −8.9 % with WASB; v3's five serves gave mean |error|
+3.9 %, v1's six 7.7 %, WASB 4.9 %. One serve that v1 recognised in the 2025 final is recognised by
+neither v3 nor v4 (toss and serve merged into one flight). Five serves are too few for a bias claim
+either way.
 
 ## Quick start
 
@@ -176,8 +177,8 @@ promo/             HyperFrames promo film (footage not included)
 - The SEKME ball network still misses some of the most motion-blurred balls right after a serve
   (one of three serves on the 2023 final clip). It was trained at 30 fps and is fed every second
   frame on 60 fps footage. Trained on 7 matches only: more data is the obvious next step.
-- Serve recognition on broadcast clips is not measured against labels: with ball v3 it finds 11 serves
-  on the five US Open clips where v1 found 13. The cause is not established; a change to the dead-ball
+- Serve recognition on broadcast clips is not measured against labels: with ball v4 it finds 13 serves
+  on the five US Open clips (v3 11, v1 13). The cause is not established; a change to the dead-ball
   check was tried and rejected ([details](docs/EVAL_TRACKNET.md)). The Review Room's *Servis etiketi*
   section measures serve recall (and, once every serve is marked, precision) on your own footage
   ([labelling guide, Turkish](docs/ETIKETLEME_TR.md)).

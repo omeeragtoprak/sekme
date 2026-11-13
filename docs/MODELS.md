@@ -315,6 +315,13 @@ games 8–10 do not decide, and reversing the decision because of them would mak
 again, so v4 stays the default; v3 is one file copy away (`models/sekme_ball_v3.pt`). The next ball
 network change needs data that has not been used yet.
 
+**Real broadcast and radar with v4** (`runs/<id>_v4`, `results/radar.txt`). US Open 2023 final, 90 s:
+53 calls on 66 shots (v3: 54 on 65), the same OUT ball and the same 2 of 3 serves. 2025 final: 22 calls
+on 43 shots (v3: 26 on 42). Serves recognised on the five clips: 13 (v3 11, v1 13). Radar on 5 timed
+serves: mean |error| 7.0 % (v3 3.9 %): four serves within 0.4 point of v3's, but the fast 60 fps serve
+that v3 had brought to −0.4 % is back at −16.5 % (v1 −18.7 %). Together with games 8–10, the
+independent checks do not show v4 better than v3; they were not part of its rule.
+
 ## SEKME court network
 
 A 5-level U-Net (`src/courtvision/models/court_unet.py`; 32-64-128-256-256 channels, 22×40 bottleneck)

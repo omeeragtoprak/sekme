@@ -69,7 +69,7 @@
       <div id="shade" class="shade clip" data-start="5.2" data-duration="2.1" data-track-index="4"></div>
       <div id="verdict" class="verdict clip" data-start="5.25" data-duration="2.05" data-track-index="5">
         <div class="w">DIŞARIDA</div>
-        <div class="d">sağ tekler yan çizgisinin 106 cm dışında <span>· ± 6 cm · tek yayın kamerası</span></div>
+        <div class="d">uzak dip çizginin 138 cm dışında <span>· ± 23 cm · tek yayın kamerası</span></div>
       </div>
 
       <div id="logo1" class="clip logo-wrap" data-start="7.3" data-duration="2.7" data-track-index="0">
@@ -125,7 +125,7 @@
       <div id="c4" class="col clip" data-start="21.95" data-duration="4.1" data-track-index="2">
         <div class="num">04 / 07</div><div class="title">Emin değilse gerekçesini söyler</div>
         <div class="items">
-          <div class="item"><b>%76</b>geometriye göre içeride · çizgiye +10 cm, ± 15 cm</div>
+          <div class="item"><b>%11</b>geometriye göre içeride · çizgiye −19 cm, ± 15 cm</div>
           <div class="item">karşı oyuncu topa vurdu, oyun sürdü</div>
           <div class="item"><b class="o">İçeride</b>düşük güven: %95 eşiğinin altında</div>
         </div>
@@ -142,7 +142,7 @@
         <div class="num">06 / 07</div><div class="title">Başka maç, aynı sistem</div>
         <div class="items">
           <div class="item"><b>Sinner – Alcaraz</b>2025 US Open finali</div>
-          <div class="item"><b class="g">İçeride</b>servis çizgisine +81 cm · ± 8 cm</div>
+          <div class="item"><b class="g">İçeride</b>servis çizgisine +94 cm · ± 7 cm</div>
           <div class="item">maça özel ayar yok</div>
         </div>
       </div>
@@ -239,9 +239,9 @@
 
       // --- Counters land with the serve's numbers.
       const n3 = { v: 0 }, n3s = { v: 0 };
-      tl.fromTo(n3, { v: 0 }, { v: 202, duration: 0.8, ease: "power2.out", onUpdate: () => {
+      tl.fromTo(n3, { v: 0 }, { v: 201, duration: 0.8, ease: "power2.out", onUpdate: () => {
         document.getElementById("n3").textContent = "+" + Math.round(n3.v); } }, 19.4);
-      tl.fromTo(n3s, { v: 0 }, { v: 160, duration: 0.8, ease: "power2.out", onUpdate: () => {
+      tl.fromTo(n3s, { v: 0 }, { v: 164, duration: 0.8, ease: "power2.out", onUpdate: () => {
         document.getElementById("n3s").textContent = Math.round(n3s.v); } }, 20.0);
 
       window.__timelines["main"] = tl;
