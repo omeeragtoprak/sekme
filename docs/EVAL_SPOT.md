@@ -19,21 +19,24 @@ never touched.
   for train/val.
 - **Videos:** full-match broadcasts on the US Open and Wimbledon YouTube channels (ids in the repo's
   `videos.csv`). Kept local for research, not redistributed, like the other broadcast footage here.
-- **Resolution: 360p.** On 2026-11-13 the download tool offered only a 640×360 stream for these videos.
-  The ball network sees 512×288 either way, but 360p streams are heavily compressed; results are for
-  360p and say so. None of these matches overlaps TrackNet or the project's own footage.
+- **Resolution: 720p** (H.264), the highest the matches' uploads offer here; 25 fps (Wimbledon) or
+  29.97 fps (US Open), as in the labels. None of these matches overlaps TrackNet or the project's own
+  footage. *Amended before any download:* the first version of this plan said 360p, because an older
+  download tool on this machine offered nothing better; the project's own (newer) tool offers 720p.
+- **Disk:** matches are processed one at a time; a match's video is deleted once all its clips are
+  analysed, and each clip is deleted once analysed.
 
-## Matches (chosen by download size, the only criterion: local disk space is limited)
+## Matches (chosen by download size, ranked on the first 360p probe; the only criterion, as local disk space is limited)
 
-| Use | Match | Clips | ≈ MB |
+| Use | Match | Clips | ≈ MB (720p) |
 |---|---|---|---|
-| dev | usopen_2019_womens_round1_williams_sharapova | 97 | 125 |
-| dev | usopen_2021_womens_semifinal_raducanu_sakkari | 140 | 157 |
-| dev | wimbledon_2019_womens_round1_gauff_williams | 142 | 236 |
-| test | wimbledon_2019_womens_final_halep_williams | 64 | 147 |
-| test | usopen_2019_womens_osaka_gauff | 70 | 174 |
-| test | usopen_2019_womens_final_andreescu_williams | 91 | 285 |
-| test | wimbledon_2018_womens_quarterfinal_williams_giorgi | 78 | 300 |
+| dev | usopen_2019_womens_round1_williams_sharapova | 97 | 249 |
+| dev | usopen_2021_womens_semifinal_raducanu_sakkari | 140 | 302 |
+| dev | wimbledon_2019_womens_round1_gauff_williams | 142 | 532 |
+| test | wimbledon_2019_womens_final_halep_williams | 64 | 310 |
+| test | usopen_2019_womens_osaka_gauff | 70 | 351 |
+| test | usopen_2019_womens_final_andreescu_williams | 91 | 584 |
+| test | wimbledon_2018_womens_quarterfinal_williams_giorgi | 78 | 689 |
 
 Every clip of each listed match is used (dev: train and val clips together). All seven are women's
 matches, because the men's best-of-five videos are the long ones; that limits how far the numbers

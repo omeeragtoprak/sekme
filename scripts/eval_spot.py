@@ -119,6 +119,8 @@ def main() -> None:
     ap.add_argument("--videos", default=str(DATA / "videos"))
     ap.add_argument("--runs-dir", default="runs_spot")
     ap.add_argument("--keep-clips", action="store_true")
+    ap.add_argument("--delete-videos", action="store_true",
+                    help="delete a match video once every one of its clips has a report or failure record")
     args = ap.parse_args()
     sample_path = DATA / f"sample_{args.name}.json"
 
@@ -140,8 +142,14 @@ def main() -> None:
     runs = DATA / args.runs_dir
     if args.cmd == "run":  # one clip analysed at a time: one GPU job
         for m in sample["matches"]:
-            run_match(Path(args.videos) / f"{m}.mp4", [c for c in sample["clips"] if match_name(c["video"]) == m],
-                      runs, DATA / "clips_tmp", args.keep_clips)
+            src = Path(args.videos) / f"{m}.mp4"
+            if not src.exists():
+                print(f"{m}: no video yet, skipped", flush=True)
+                continue
+            run_match(src, [c for c in sample["clips"] if match_name(c["video"]) == m], runs, DATA / "clips_tmp",
+                      args.keep_clips)
+            if args.delete_videos:  # run_match returns only when every clip of the match is done
+                src.unlink()
         return
 
     rows, missing = [], []
