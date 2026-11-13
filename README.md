@@ -24,15 +24,15 @@ It then checks itself against what the broadcast shows: the score graphic and th
 - **Physics, not pixels.** Bounce-anchored 3D flight fit (gravity, drag, per-phase spin) with a full
   covariance; calls by Monte Carlo against the legal zone; calibration error carried into every call.
 - **Own ball network.** A compact U-Net designed and trained in this project on TrackNet. On matches it
-  never saw: F1 0.969 at 10 px (WASB, the published reference: 0.955), 0.921 at 4 px (WASB 0.928), at
+  never saw: F1 0.965 at 10 px (WASB, the published reference: 0.955), 0.910 at 4 px (WASB 0.928), at
   56 % of WASB's time per frame. It is the default ([how it was built and tested](docs/MODELS.md)).
 - **Found a bias in the labels.** The TrackNet ball labels sit 0.6–1.7 px off the ball's centre,
   differently per match (measured without any network). Our earlier networks learned it and put the
-  ball ~2 px low in the image, which on court pulls bounces ~15 cm towards the camera. Ball network v3
-  is trained on corrected targets: within 0.3 px of the ball's centre, and its bounces moved as predicted ([analysis](docs/EVAL_TRACKNET.md#systematic-offsets-2026-11-13-evidence-in-resultsposition_biastxt)).
+  ball ~2 px low in the image, which on court pulls bounces ~15 cm towards the camera. Ball networks v3
+  and v4 are trained on corrected targets: within 0.3 px of the ball's centre, and its bounces moved as predicted ([analysis](docs/EVAL_TRACKNET.md#systematic-offsets-2026-11-13-evidence-in-resultsposition_biastxt)).
 - **Independent benchmark.** On human-labelled broadcast bounces from matches never used to fit or
   tune anything (TrackNet games 8–10; used only for accept/reject decisions, each logged): 77 % of first
-  bounces after a stroke found, 93 % precision, median 10 cm from the labelled contact, 107 / 107
+  bounces after a stroke found, 93 % precision, median 10 cm from the labelled contact, 108 / 108
   decisive calls consistent — few of them close to a line, so this rules out gross errors, it does not
   measure centimetre accuracy ([details](docs/EVAL_TRACKNET.md)).
 - **Checks itself.** On-device OCR of the score graphic and the stadium radar board; fitted serve
@@ -69,7 +69,7 @@ More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 | Role | Network | Trained by | Data |
 |---|---|---|---|
-| Ball (default) | **SEKME ball U-Net v3** (`models/ball_unet.py`, ~1.95 M parameters) | this project (`scripts/train_ball.py`) | TrackNet tennis, games 1–7 (a fifth of the clips held out for selection), motion-blur augmentation, targets corrected for the labels' offset; test on 8–10 |
+| Ball (default) | **SEKME ball U-Net v4** (`models/ball_unet.py`, ~1.95 M parameters) | this project (`scripts/train_ball.py`) | TrackNet tennis, games 1–7 (a fifth of the clips held out for selection), motion-blur augmentation, targets corrected for the labels' offset; test on 8–10 |
 | Ball (reference, `--ball-model`) | WASB HRNet (Tarashima et al., BMVC 2023) | its authors | TrackNet tennis, games 1–7 |
 | Court keypoints (default) | **SEKME court U-Net** (`models/court_unet.py`, 5 levels, 14 heatmaps) | this project (`scripts/train_court.py`) | TennisCourtDetector labels: 6 630 training frames (8 841 in all) |
 | Court keypoints (reference, `--model court=…`) | TrackNet-style VGG encoder–decoder (yastrebksv/TennisCourtDetector; our re-implementation loads its checkpoint) | its author | same labels |
@@ -98,20 +98,22 @@ fitter only approximates, half the shots *aimed* within 15–20 cm of a line):
 **TrackNet benchmark** (human-labelled bounces; games 8–10 unseen by the ball network and never used
 for tuning):
 
-| games 8–10 | SEKME ball U-Net v3 (default) | SEKME v2 | WASB (reference) |
-|---|---|---|---|
-| ball, frame F1 at 4 px / 10 px | 0.921 / 0.969 | 0.922 / 0.965 | 0.928 / 0.955 |
-| first bounce after a stroke found | 109 / 142 (77 %) | 110 / 142 (77 %) | 110 / 142 (77 %) |
-| precision | 93 % | 94 % | 93 % |
-| distance to the labelled contact, median / p90 | 10 / 30 cm | 16 / 38 cm | 11 / 33 cm |
-| the same against the ball's centre (labels corrected per game) | 11 / 31 cm | 21 / 42 cm | 13 / 37 cm |
-| decisive calls consistent with the label | 107 / 107 | 107 / 107 | 108 / 108 |
-| truth inside the reported 95 % ellipse (1 px label noise) | 92 % | 89 % | 91 % |
+| games 8–10 | SEKME ball U-Net v4 (default) | SEKME v3 | SEKME v2 | WASB (reference) |
+|---|---|---|---|---|
+| ball, frame F1 at 4 px / 10 px | 0.910 / 0.965 | 0.921 / 0.969 | 0.922 / 0.965 | 0.928 / 0.955 |
+| first bounce after a stroke found | 110 / 142 (77 %) | 109 / 142 (77 %) | 110 / 142 (77 %) | 110 / 142 (77 %) |
+| precision | 93 % | 93 % | 94 % | 93 % |
+| distance to the labelled contact, median / p90 | 10 / 32 cm | 10 / 30 cm | 16 / 38 cm | 11 / 33 cm |
+| the same against the ball's centre (labels corrected per game) | 11 / 33 cm | 11 / 31 cm | 21 / 42 cm | 13 / 37 cm |
+| decisive calls consistent with the label | 108 / 108 | 107 / 107 | 107 / 107 | 108 / 108 |
+| truth inside the reported 95 % ellipse (1 px label noise) | 91 % | 92 % | 89 % | 91 % |
 
-v3's bounces are on par with WASB's (median difference −1.4 cm, 95 % interval −2.9 to +1.0 cm by clip
-bootstrap) and clearly closer than v2's (−6.1 cm, −10.6 to −2.9 cm).
+v4 was chosen over v3 on the held-out clips of games 1–7 by a rule written before training; on games
+8–10 (report only) its frame F1 is about a point lower and its bounces are on par with v3's (median
+difference +0.2 cm, 95 % interval −0.6 to +1.6 cm by clip bootstrap) and with WASB's (−1.2 cm, −2.5 to
++1.6 cm); v3's are clearly closer than v2's (−6.1 cm, −10.6 to −2.9 cm). See [MODELS.md](docs/MODELS.md).
 
-**Real broadcast** (current defaults; US Open 2023 final highlights, 720p, first 90 s): 2 530 / 2 698
+**Real broadcast** (ball network v3; US Open 2023 final highlights, 720p, first 90 s): 2 530 / 2 698
 frames calibrated (the rest are close-ups, correctly excluded), line-fit residual 0.34 px, camera
 recovered 33 m back and 10 m up; 54 calls on 65 shots (52 IN, 1 OUT checked by eye, 1 low-confidence);
 2 / 3 visible serves found (our ball network still misses most of the motion-blurred frames right after
@@ -119,7 +121,7 @@ one serve's contact; WASB finds all 3). US Open 2025 final (1080p, 60 fps): 71.5
 calibrated, 26 calls on 42 shots.
 
 **Radar** ([results/radar.txt](results/radar.txt); 5 official US Open clips, pairs kept only when the board
-change is timed to ≤ 4 s). With the current defaults: 5 serves, +5.2, +7.8, −2.6, −3.4, −0.4 % → mean
+change is timed to ≤ 4 s). With ball network v3: 5 serves, +5.2, +7.8, −2.6, −3.4, −0.4 % → mean
 +1.3 % (SE 2.2), mean |error| 3.9 %. With ball v1 it was 6 serves, mean |error| 7.7 %, and with WASB
 4.9 %; the fast 60 fps serve that v1 measured at −18.7 % (WASB −8.9 %) is now −0.4 %. One serve that
 v1 recognised in the 2025 final is not recognised with v3 (toss and serve merged into one flight).

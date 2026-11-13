@@ -18,7 +18,12 @@ DATA = Path(__file__).resolve().parents[1] / "data" / "tracknet"
 PAIRS = [("test_ball_v3.json", "results.json", "v3 - WASB, raw reference"),
          ("centred_v3.json", "centred_wasb.json", "v3 - WASB, centred reference"),
          ("test_ball_v3.json", "test_ball_v2.json", "v3 - v2, raw reference"),
-         ("centred_v3.json", "centred_v2.json", "v3 - v2, centred reference")]
+         ("centred_v3.json", "centred_v2.json", "v3 - v2, centred reference"),
+         # v4 appended after v3 so the shared random stream, and v3's published intervals, stay the same
+         ("test_ball_v4.json", "results.json", "v4 - WASB, raw reference"),
+         ("centred_v4.json", "centred_wasb.json", "v4 - WASB, centred reference"),
+         ("test_ball_v4.json", "test_ball_v3.json", "v4 - v3, raw reference"),
+         ("centred_v4.json", "centred_v3.json", "v4 - v3, centred reference")]
 
 
 def errors_cm(name: str) -> dict[str, list[float]]:

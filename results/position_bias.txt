@@ -105,3 +105,11 @@ runs_ball_v2: label noise 1.0 px  n=113  normalised error median 1.50 (calibrate
 runs_ball_v2: label noise 2.0 px  n=113  normalised error median 0.90 (calibrated: 1.18)  inside the 95% ellipse 98%
 runs_ball_v3: label noise 1.0 px  n=112  normalised error median 1.12 (calibrated: 1.18)  inside the 95% ellipse 94%
 runs_ball_v3: label noise 2.0 px  n=112  normalised error median 0.66 (calibrated: 1.18)  inside the 95% ellipse 99%
+## Median bounce distance, v4 pairs (clip bootstrap, appended after the v3 pairs, same seed and stream)
+v4 - WASB, raw reference: median difference -1.2 cm, 95 % interval -2.5 to +1.6 cm (30 clips)
+v4 - WASB, centred reference: median difference -2.3 cm, 95 % interval -4.2 to +0.2 cm (30 clips)
+v4 - v3, raw reference: median difference +0.2 cm, 95 % interval -0.6 to +1.6 cm (30 clips)
+v4 - v3, centred reference: median difference -0.5 cm, 95 % interval -1.6 to +1.0 cm (30 clips)
+## Uncertainty calibration against the centred reference, v4 (calibration_check.py centred_v4.json runs_ball_v4 --centred-reference)
+runs_ball_v4: label noise 1.0 px  n=113  normalised error median 1.13 (calibrated: 1.18)  inside the 95% ellipse 93%
+runs_ball_v4: label noise 2.0 px  n=113  normalised error median 0.69 (calibrated: 1.18)  inside the 95% ellipse 99%

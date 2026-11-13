@@ -8,7 +8,7 @@ and their uncertainty, self-checks) is this project's code; see [ARCHITECTURE.md
 
 | Role | Default network | Trained by | Training data | Alternative (`--model KEY=PATH`) |
 |---|---|---|---|---|
-| Ball | SEKME ball U-Net v3 (`models/ball_unet.py`) | this project | TrackNet tennis, games 1–7 (v1: 1–5), targets corrected for the labels' offset | WASB HRNet (its authors, MIT) |
+| Ball | SEKME ball U-Net v4 (`models/ball_unet.py`) | this project | TrackNet tennis, games 1–7 (v1: 1–5), targets corrected for the labels' offset | WASB HRNet (its authors, MIT) |
 | Court keypoints | SEKME court U-Net (`models/court_unet.py`) | this project | TennisCourtDetector labels: the 6 630 frames of `data_train.json` (of 8 841) | TennisCourtDetector network (its author, no published licence) |
 | Players | YOLO26-s + ByteTrack (Ultralytics, AGPL-3.0) | Ultralytics | COCO | SEKME person U-Net, distilled from YOLO26-s |
 | Pose | YOLO26-s-pose (Ultralytics, AGPL-3.0) | Ultralytics | COCO | SEKME pose U-Net, distilled from YOLO26-s-pose |
@@ -23,7 +23,7 @@ which is why the human-labelled set below is kept for the final checks.
 
 ## SEKME ball network
 
-This section describes v1 (games 1–5); v2 and v3, the current default, are at the end of it.
+This section describes v1 (games 1–5); v2, v3 and v4, the current default, are at the end of it.
 
 **Task.** Find the ball in every frame of broadcast video. The ball is 2–6 px wide at the network's
 input size, often blurred into a streak, and the court carries ball-sized white marks.
@@ -181,7 +181,7 @@ contact is where two such lines meet. The centred references (`eval_tracknet.py 
 `calibration_check.py`) therefore subtract each game's constant (`GAME_LABEL_OFFSET_PX`). The ball
 networks reproduce the labels' lead (`scripts/detection_offset.py`: slope against the labels ≈ 0).
 
-### Ball network v3 (current default)
+### Ball network v3 (default until v4, 2026-11-13)
 
 v2's recipe with the corrected blur and `--centre-labels`: targets at the label minus (1.5, 1.5) px,
 through `cv2.resize`'s pixel-centre mapping; the epoch is chosen on the selection clips against the same
@@ -251,7 +251,7 @@ Order of events: v3's games 8–10 run was first scored against the fixed (1.5, 
 (v3 13.7 cm, WASB 16.4, v1 23.5, v2 24.4 cm); the per-game constants came after it, following the
 review. The ranking is the same under every reference.
 
-### Ball network v4 (planned, 2026-11-13)
+### Ball network v4 (current default, 2026-11-13)
 
 v3's recipe unchanged except the length: 20 epochs instead of 12 (one-cycle schedule over the whole
 run). v3's selection score was still rising at its last epoch.
@@ -269,6 +269,51 @@ epoch-14 checkpoint comes before the learning rate has annealed, so it is not th
 It was not scored on the selection clips, and the rule above stands for a complete 20-epoch run.
 For information only: the training log's validation F1 at 4 px was 0.905 at epoch 14 (v3: 0.895 at
 its last epoch, 12). v3 stays the default.
+
+**Complete run (2026-11-13, restarted from scratch with per-epoch saved state).** 20 epochs, ~15 min
+each; epoch 19 was best on the selection clips (validation F1 at 4 px against the centred positions
+0.907; epoch 20: 0.907). Scored once on the selection clips with v3 re-run alongside
+(`data/tracknet/eval_selection_v4_{centred,raw}.txt`):
+
+| Selection clips (3 012 frames) | v3 | **v4** | rule |
+|---|---|---|---|
+| (a) F1 at 4 px, centred positions | 0.937 | **0.943** | ≥ 0.942 |
+| (b) mean offset from the centred positions, dx / dy (SE 0.03) | −0.08 / −0.04 px | **−0.11 / −0.04 px** | within ±0.3 px |
+| (c) F1 at 10 px, raw labels | 0.964 | **0.966** | ≥ 0.959 |
+| F1 at 4 px, raw labels | 0.844 | 0.852 | — |
+| time per frame | 22.1 ms | 22.1 ms | — |
+
+**Decision.** All three hold, so v4 is the default (`models/sekme_ball.pt`; v3 is kept as
+`models/sekme_ball_v3.pt`). Condition (a) is met by a thin margin: 0.9426 against 0.942, a gain of
+0.6 point over v3, measured on the clips that also chose v4's epoch, so it is slightly optimistic.
+Games 8–10 below are the independent report.
+
+**Games 8–10, run once after the decision** (report only, as the rule says; `data/tracknet/test_ball_v4.json`,
+`centred_v4.json`, `runs_ball_v4`; v3 and WASB from their earlier runs):
+
+| Games 8–10 | v3 | **v4** | WASB |
+|---|---|---|---|
+| F1 at 4 px / 10 px, raw labels | 0.921 / 0.969 | **0.910 / 0.965** | 0.928 / 0.955 |
+| F1 at 4 px, label − (1.5, 1.5) px | 0.940 | **0.931** | 0.906 |
+| first bounce after a stroke found | 109 / 142 | **110 / 142** | 110 / 142 |
+| bounces found / false alarms / precision | 112 / 8 / 93.3 % | **113 / 9 / 92.6 %** | 112 / 9 / 92.6 % |
+| distance to the reference, median / p90, raw | 10.0 / 29.6 cm | **10.3 / 32.4 cm** | 11.4 / 33.4 cm |
+| the same, centred reference | 11.4 / 31.3 cm | **11.0 / 32.5 cm** | 13.3 / 36.6 cm |
+| decisive calls consistent with the label | 107 / 107 | **108 / 108** | 108 / 108 |
+| truth inside the 95 % ellipse (1 px label noise), raw / centred | 92 / 94 % | **91 / 93 %** | 91 / 89 % |
+| time per frame | 22.6 ms | 22.6 ms | 40.1 ms |
+
+Clip bootstrap (`scripts/bootstrap_bounce.py`): v4 − v3 median distance +0.2 cm raw (95 % interval
+−0.6 to +1.6), −0.5 cm centred (−1.6 to +1.0); v4 − WASB −1.2 cm raw (−2.5 to +1.6), −2.3 cm centred
+(−4.2 to +0.2).
+
+**What this shows.** The selection-clip gain did **not** carry over to the unseen matches: frame-level
+F1 is about one point lower than v3's at 4 px (half a point at 10 px), most likely because the longer
+run fitted games 1–7 more closely. The bounce results, which the calls rest on, are on par with v3's
+(one more first bounce, one more false alarm, distance within ±1 cm by bootstrap). Under the rule
+games 8–10 do not decide, and reversing the decision because of them would make them a decision set
+again, so v4 stays the default; v3 is one file copy away (`models/sekme_ball_v3.pt`). The next ball
+network change needs data that has not been used yet.
 
 ## SEKME court network
 

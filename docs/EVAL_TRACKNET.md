@@ -31,8 +31,10 @@ not the court calibration (bounded separately by the court-line residual, README
 History on games 8–10: first run 69 % recall / 95 % precision / 12 cm (107 found, 103/103 decisive);
 the 2D fallback below brought it to the table above.
 
-**Current defaults** (SEKME ball network v3 + SEKME court network, `data/tracknet/test_ball_v3.json`),
-games 8–10: first bounce after a stroke 109 / 142, 112 bounces found with 8 false alarms (precision
+**Current defaults** (SEKME ball network v4 + SEKME court network, `data/tracknet/test_ball_v4.json`),
+games 8–10: first bounce after a stroke 110 / 142, 113 bounces found with 9 false alarms (precision
+93 %), median / p90 10 / 32 cm, decisive calls 108 / 108; on par with v3 (MODELS.md, v4). Ball v3
+(`data/tracknet/test_ball_v3.json`), games 8–10: first bounce after a stroke 109 / 142, 112 bounces found with 8 false alarms (precision
 93 %), distance to the reference median / p90 **10 / 30 cm**, decisive calls 107 / 107. Ball v2 gave
 110 / 142, 7 false alarms, 16 / 38 cm, 107 / 107; v1 108 / 142, 10 false alarms, 15 / 38 cm, 105 / 105.
 Every variant is in `results/tracknet_benchmark.txt`; the networks and the rules that chose them are in

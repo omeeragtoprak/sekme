@@ -7,6 +7,7 @@ scripts reproduce these files from them.
 | File | What | Produced by |
 |---|---|---|
 | `ball_network_test.txt` | ball networks on TrackNet games 8–10, frame level | `scripts/eval_ball.py` |
+| `ball_network_selection.txt` | ball networks on the selection clips (games 1–7, every fifth clip): the evidence for each version decision | `scripts/eval_ball.py --selection` |
 | `court_network_test.txt` | court networks on the TennisCourtDetector validation split, with leak-free subsets | `scripts/train_court.py --test` |
 | `tracknet_benchmark.txt` | end-to-end bounce benchmark, games 8–10, three model sets | `scripts/eval_tracknet.py` |
 | `uncertainty_calibration.txt` | whether the reported bounce uncertainty is honest | `scripts/calibration_check.py` |
