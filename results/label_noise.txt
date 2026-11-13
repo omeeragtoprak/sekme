@@ -1,0 +1,6 @@
+# Per-frame noise of ball positions, three-cornered hat (scripts/label_noise.py; games 8-10, fast-moving frames)
+runs_ball_v3 games [8, 9, 10] n=3598 x: noise SD  label 0.91  centroid 0.37  detection 0.34 px  (pairwise SD label-centroid 0.98, label-detection 0.97, centroid-detection 0.50)
+runs_ball_v3 games [8, 9, 10] n=3598 y: noise SD  label 1.09  centroid 0.54  detection 0.39 px  (pairwise SD label-centroid 1.22, label-detection 1.16, centroid-detection 0.67)
+runs games [8, 9, 10] n=3527 x: noise SD  label 0.91  centroid 0.34  detection 0.48 px  (pairwise SD label-centroid 0.97, label-detection 1.03, centroid-detection 0.58)
+runs games [8, 9, 10] n=3527 y: noise SD  label 1.08  centroid 0.55  detection 0.51 px  (pairwise SD label-centroid 1.21, label-detection 1.19, centroid-detection 0.75)
+(runs_ball_v3 = SEKME ball v3, runs = WASB. The label noise is the same with either network: ~1 px, the value calibration_check.py uses.)

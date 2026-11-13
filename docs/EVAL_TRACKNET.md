@@ -148,3 +148,81 @@ elsewhere (two of them 2.4 s apart in the 2024 final), and 12 IN calls changed i
 (d) the radar pairs were unchanged. The dead-ball check is not what keeps these serves out; not merged
 (patch kept outside the repository). Serve recall on broadcast clips needs labelled serves before it
 can be tuned.
+
+## Hit detection: a bounce taken for a stroke (rule written before the games 8–10 run, 2026-11-13)
+
+**Finding (games 1–7, WASB detections).** Of the 115 first bounces missed, 40 had a "hit" detected at
+the bounce itself (±3 frames): after a bounce on the near half the rising ball moves up the image, the
+reversal detector takes that for the near player's stroke, the incoming flight ends there and its
+bounce is lost. The real stroke comes later as a second reversal. What separates the two is the
+horizontal image velocity: across a bounce it carries on, across a stroke it breaks. On games 1–5,
+|Δvx| / incoming speed had a median of 1.83 (near-side strokes, n = 80) against 0.12 (bounces taken
+for strokes, n = 27). (TrackNet's hit labels are incomplete, so hit-level precision is not a usable
+metric here; decisions use the bounce metrics.)
+
+**Change** (`events/hits.py`, `BOUNCE_VX_CHANGE`). A near-side reversal with |Δvx| below T × incoming
+speed (velocities over ±0.2 s) is not a stroke; the detector keeps the incoming state, so the next
+reversal becomes the stroke. T was chosen on games 1–5 from {0.15, 0.25, 0.35}: first bounces 158 →
+175 / 175 / 172 of 241, precision 85.8 → 87.8 / 87.4 / 88.5 %; **T = 0.15** (most first bounces, then
+precision). Check on games 6–7, not used for the choice: first bounces 62 → 67 / 88, precision 97.3 →
+96.0 %, decisive calls 69 / 69. Games 1–7 together: 220 → 242 / 329 (66.9 → 73.6 %), precision
+89.1 → 90.0 %.
+
+**Rule for the single games 8–10 run** (default networks, ball v3 + SEKME court; baseline
+`test_ball_v3.json`: 109 / 142 first bounces, precision 93.3 %, median 10.0 cm, 107 / 107). The change
+becomes the default only if all hold: (a) at least 112 first bounces found (baseline + 3); (b)
+precision at least 92.0 %; (c) every decisive call consistent with the label; (d) median distance to
+the reference at most 11.0 cm.
+
+**Result: rejected.** Games 8–10: (a) 113 / 142 first bounces (baseline 109) ✓; (b) precision 94.3 %
+(7 false alarms) ✓; (d) median 10.2 cm ✓; (c) failed: 110 / 111 decisive calls consistent. The
+exception is a bounce the gate newly found (`game8_Clip9`, frame 209): called IN at P(in) = 0.997,
+5.9 cm inside the right singles sideline with a lateral σ of 2.1 cm, while the reference contact lies
+6.6 cm further out (OUT). A confident wrong call is the error the rule exists to stop, so the gate is
+not the default and was removed from the code (it is in the git history, commit e46775d). What it
+leaves open: the recall gain is real on all three game sets, and the failure is the call's
+uncertainty on a near-sideline bounce at the end of a point ("next stroke not seen"), not the gate's
+logic; a fix there would have to be checked on new data, since games 8–10 have now been used again.
+
+## Bounces in the frame of the lines (rule written before the games 8–10 run, 2026-11-13)
+
+**Finding (games 1–7, WASB detections).** The reported uncertainty was over-confident across the court:
+75 % of bounces inside their 95 % ellipse against the per-game centred reference (1 px label noise,
+which a three-cornered-hat estimate on games 8–10 confirms: label noise 0.9 / 1.1 px in x / y, our
+ball network's 0.34 / 0.39 px). Lateral |z| had a median of 1.11 (0.67 if calibrated). Cause: the 3D fit
+works with the pinhole camera recovered from the homography (square pixels, principal point at the
+image centre), and on six of the seven games that camera puts ground points 2–6 cm (median, centre
+line) away from where the homography — which locates the painted lines — puts them. The reference uses
+the homography, and so do the lines.
+
+**Change** (`events/flights.py`, `in_line_frame`, flag `LINE_FRAME_BOUNCE`). After a successful 3D fit
+the bounce is read where the fit's camera images it, back through the homography, and the fitted track
+is moved by that offset. No parameter. Games 1–7 end to end: bounces found unchanged (220 / 329 first,
+29 false alarms); median lateral error 5.32 → 3.85 cm; median distance 14.0 → 13.2 cm (raw reference),
+16.0 → 15.0 cm (centred); inside the 95 % ellipse 75 → 85 % (near half 89 %, far half 81 %); decisive
+calls 227 / 227 (raw reference; one call became low-confidence).
+
+**Rule for the single games 8–10 run** (ball v3 + SEKME court, events re-run on the cached detections).
+The flag becomes the default only if all hold: (a) median lateral |error| against the centred
+reference lower than with the flag off; (b) median distance to the reference at most 10.5 cm (raw;
+baseline 10.0) and 11.9 cm (centred; baseline 11.4); (c) every decisive call consistent with the label
+(raw reference); (d) at least 108 first bounces found and precision at least 92 %.
+
+**Result: rejected.** Games 8–10: (a) failed: median lateral error 3.17 → 3.21 cm (centred); (b) failed
+for the raw reference, 10.0 → 11.1 cm (centred 11.4 → 11.2 cm); (c) 107 / 107 and (d) 109 / 142, 93.3 %
+held. Afterwards, not part of the rule: the camera-vs-homography offset is small on games 8 and 10 (0.7
+and 0.2 cm at the centre line) but 5.2 cm on game 9, and even there the lateral error did not fall
+(3.90 → 4.12 cm). So the games 1–7 gain did not carry over to ball v3 with the SEKME court network, and
+the proposed mechanism is not established; removed from the code (git history, commit d568168). For the
+record, the same offset on the US Open clips is 0.1–3.3 cm at the centre line (sidelines p90 up to
+6.8 cm), so the question matters on real footage; settling it needs labelled bounces from it.
+
+## Open findings (games 1–5, WASB detections; descriptive, nothing changed)
+
+Of the first bounces missed on games 1–5, 54 lie inside a flight whose bounce was placed elsewhere.
+In 42 of them the system's bounce sits at no labelled bounce, typically *before* the real one (median
+4.2 frames earlier; 78 % earlier): the changepoint takes a kink in the descending track for the bounce.
+26 of the 54 flights also span a stroke the hit detector missed, so two shots are fitted as one. Both
+point at the same next step as the rejected experiments above: event segmentation. Games 8–10 have
+now been used for many accept/reject decisions; a further change there would need new labelled data
+(e.g. bounces marked in the Review Room) to be tested honestly.

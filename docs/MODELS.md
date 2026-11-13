@@ -236,6 +236,11 @@ the offset analysis predicted: the median depth offset shrank by ~14 cm. With a 
 2.9–10.6 cm) and **on par with WASB** (−1.4 cm, interval −2.9 to +1.0 cm; centred −1.9, −4.0 to +0.4):
 not demonstrably better. One first bounce fewer was found than with v2 (109 vs 110).
 
+**Per-frame precision.** On fast-moving frames of games 8–10, a three-cornered hat between the label,
+the ball's image centroid and the detection (`scripts/label_noise.py`, `results/label_noise.txt`)
+gives v3's per-frame noise as 0.34 / 0.39 px (x / y) against WASB's 0.48 / 0.51 px, and the labels'
+own as ~1 px (0.91 / 1.09) with either network.
+
 **Real broadcast and radar with v3** (`runs/<id>_v3`, `results/radar.txt`). US Open 2023 final, 90 s:
 54 calls on 65 shots (v1: 52 on 66), the same 2 of 3 serves; v3 now sees 2 of the 7 blurred frames after
 the missed serve's contact (WASB 4). Radar on 5 timed serves: mean |error| 3.9 % (v1 7.7 % on 6, WASB
@@ -245,6 +250,18 @@ the missed serve's contact (WASB 4). Radar on 5 timed serves: mean |error| 3.9 %
 Order of events: v3's games 8–10 run was first scored against the fixed (1.5, 1.5) px reference
 (v3 13.7 cm, WASB 16.4, v1 23.5, v2 24.4 cm); the per-game constants came after it, following the
 review. The ranking is the same under every reference.
+
+### Ball network v4 (planned, 2026-11-13)
+
+v3's recipe unchanged except the length: 20 epochs instead of 12 (one-cycle schedule over the whole
+run). v3's selection score was still rising at its last epoch.
+
+**Rule, written before training:** v4 replaces v3 only if all hold on the selection clips
+(`eval_ball.py --selection`, production detector; the same clips also choose v4's epoch, as they did
+v3's): (a) F1 at 4 px against the centred positions (`--centred-truth`) at least 0.5 point above v3's
+0.937; (b) its mean offset from the centred positions within 0.3 px on both axes; (c) F1 at 10 px
+against the raw labels at most 0.5 point below v3's 0.964. Games 8–10 are then run once to report,
+not to decide.
 
 ## SEKME court network
 
