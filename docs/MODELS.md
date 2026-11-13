@@ -263,6 +263,13 @@ v3's): (a) F1 at 4 px against the centred positions (`--centred-truth`) at least
 against the raw labels at most 0.5 point below v3's 0.964. Games 8–10 are then run once to report,
 not to decide.
 
+**First run interrupted (2026-11-13).** The run was stopped from outside after epoch 14 of 20,
+when the machine ran low on memory; it was not a training error. Under the one-cycle schedule an
+epoch-14 checkpoint comes before the learning rate has annealed, so it is not the planned candidate.
+It was not scored on the selection clips, and the rule above stands for a complete 20-epoch run.
+For information only: the training log's validation F1 at 4 px was 0.905 at epoch 14 (v3: 0.895 at
+its last epoch, 12). v3 stays the default.
+
 ## SEKME court network
 
 A 5-level U-Net (`src/courtvision/models/court_unet.py`; 32-64-128-256-256 channels, 22×40 bottleneck)
