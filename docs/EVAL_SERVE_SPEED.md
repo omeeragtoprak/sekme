@@ -257,7 +257,9 @@ videos (deleted after each batch) would have made the earlier runs unusable. It 
 source); the one function the pipeline took from the Review Room's module (linking the source video into the
 run folder) moved to `io/video.py`. Also: the frame lists count frames with the pipeline's own reader (the
 first version used a faster count that could differ at a damaged last frame); a failing `git` counts as
-uncommitted code; the label files must be committed before scoring; the ball model file must be there.
+uncommitted code; the label files must be committed (in a tracked folder, e.g. `results/six_labels/`) before
+scoring; the ball model file must be there; the models must be the same for all six videos. A third check
+found no blocker.
 
 Not changed, noted: s = round(fps / 30) is already 2 from 45 fps, so "s = 1 below 50 fps" above is only
 true below 45 fps; the rule keeps videos of 50 fps and more, and all six are 60 fps.

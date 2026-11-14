@@ -112,6 +112,8 @@ def analysis_code() -> list[str]:
         parts = mod.split(".")
         todo += [".".join(parts[:i]) for i in range(1, len(parts))]  # parent packages run their __init__
         for node in ast.walk(ast.parse(f.read_text())):
+            if isinstance(node, ast.ImportFrom) and node.level > 0:
+                raise SystemExit(f"{f}: relative import; analysis_code() resolves absolute imports only")
             if isinstance(node, ast.Import):
                 todo += [a.name for a in node.names if a.name.startswith("courtvision")]
             elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("courtvision"):
@@ -247,7 +249,7 @@ def committed(labels_dir: Path) -> bool:
     """Every label file is tracked by git and unchanged since its commit (labels are committed before scoring)."""
     files = sorted(labels_dir.glob("*.json"))
     tracked = git("ls-files", "--error-unmatch", "--", *map(str, files))
-    return bool(files) and tracked.returncode == 0 and clean([str(labels_dir)])
+    return bool(files) and tracked.returncode == 0 and clean([str(f) for f in files])
 
 
 def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
@@ -273,6 +275,9 @@ def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
         raise SystemExit(f"{BALL_MODEL} missing: the runs cannot be checked to use ball v4")
     ball_sha = hashlib.sha256(BALL_MODEL.read_bytes()).hexdigest()
     problems = [p for n in NAMES for p in check_provenance(n, rep[n], manifest, ball_sha)]
+    first = {m: c.get("sha256") for m, c in rep[NAMES[0]]["default"]["models"].items()}
+    problems += [f"{n}: models differ from {NAMES[0]}'s" for n in NAMES[1:]
+                 if {m: c.get("sha256") for m, c in rep[n]["default"]["models"].items()} != first]
     if problems:
         raise SystemExit("\n".join(problems[:8]))
     lab = {}
