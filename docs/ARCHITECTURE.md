@@ -103,9 +103,12 @@ independently of each other, so `build_flights` can hand the fits to a process p
 `SEKME_FIT_WORKERS`; workers get the track, calibration and players once). On the same clip, cached detections,
 no rendering or OCR: analysis 143.2 s in turn (the 164 s above was measured earlier, under other load), 45.4 s
 with 4 workers, and the report is identical apart from its
-creation time and timings (also checked in a test, flight by flight, to the bit). It is opt-in: the workers
-import the code afresh, so a script that patches it at run time (as the development experiments do) has to stay
-at one process, and short runs (fewer than 24 fits) are fitted in turn anyway.
+creation time and timings (also checked in a test, flight by flight, to the bit). The library fits in turn by
+default: the workers import the code afresh, so a script that patches it at run time (as the development
+experiments in `devir/scratch` do, calling `pipeline.analyze` in-process) must stay at one process. `sekme analyze`
+and `sekme serve` are never patched, so they default to half the cores, at most 4 (`--fit-workers 1` or
+`SEKME_FIT_WORKERS=1` fits in turn); the evaluation scripts run the command line in a subprocess and get the same
+results faster. Short runs (fewer than 24 fits) are fitted in turn anyway.
 
 **Review Room on a long run (measured 2026-11-14, 554 s clip, 33 209 frames, 237 shots).** Playback and frame
 steps: the timeline used to rebuild its ~600 markers on every frame (54.7 ms median per step, development

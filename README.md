@@ -180,7 +180,7 @@ promo/             HyperFrames promo film (footage not included)
 - About 2.7× slower than real time on an M4 for 720p30 (90 s: 246 s without HUD rendering) and about 6× for
   1080p60 (90 s: 556 s), measured 2026-11-14; the ball and person networks take most of it (190 s and 483 s)
   and are GPU-bound, while re-analysing cached detections takes 22 s and 35 s (on a long clip the 3D fits run in
-  parallel with `--fit-workers 4`, about 3× faster, same results).
+  parallel by default, about 3× faster with 4 processes, same results; `--fit-workers 1` fits them in turn).
 - The SEKME ball network still misses some of the most motion-blurred balls right after a serve
   (one of three serves on the 2023 final clip). It was trained at 30 fps and is fed every second
   frame on 60 fps footage. Trained on 7 matches only: more data is the obvious next step.

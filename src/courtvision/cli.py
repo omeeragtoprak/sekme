@@ -11,6 +11,19 @@ from pathlib import Path
 from courtvision.errors import MissingModelError, UnreadableVideoError
 
 
+def default_fit_workers() -> int:
+    """Processes for the 3D flight fits when the command line is not told: half the cores, at most 4. The results
+    are the same in turn or in parallel; the library itself fits in turn (experiments patch it at run time)."""
+    return max(1, min(4, (os.cpu_count() or 2) // 2))
+
+
+def _set_fit_workers(n: int | None) -> None:
+    if n is not None:
+        os.environ["SEKME_FIT_WORKERS"] = str(max(1, n))
+    elif not os.environ.get("SEKME_FIT_WORKERS"):
+        os.environ["SEKME_FIT_WORKERS"] = str(default_fit_workers())
+
+
 def _analyze(args: argparse.Namespace) -> int:
     from courtvision.events.serves import TOSS_BRIDGE_S
     from courtvision.pipeline import PipelineConfig, analyze
@@ -33,8 +46,7 @@ def _analyze(args: argparse.Namespace) -> int:
         if key not in cfg.models or not path:
             raise SystemExit(f"--model expects KEY=PATH with KEY in {sorted(cfg.models)}, got {item!r}")
         cfg.models[key] = str(Path(path).resolve())
-    if args.fit_workers is not None:
-        os.environ["SEKME_FIT_WORKERS"] = str(max(1, args.fit_workers))
+    _set_fit_workers(args.fit_workers)
     report = analyze(args.video, out, cfg, progress)
     print(file=sys.stderr)
     if report["video"].get("irregular_frame_intervals"):
@@ -64,6 +76,7 @@ def _serve(args: argparse.Namespace) -> int:
     if not local:
         print(f"uyarı: İnceleme Odası {args.host} adresinde, kimlik doğrulaması olmadan açılıyor; ağdaki herkes "
               "analizleri görebilir ve video yükleyebilir", file=sys.stderr)
+    _set_fit_workers(None)  # uploaded videos: fits in parallel unless SEKME_FIT_WORKERS says otherwise
     app = create_app(Path(args.runs), analyze_fn=run_analysis, allowed_hosts=None if local else ["*"])
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0
@@ -112,8 +125,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="candidate: frame counts set on 30 fps video scaled by round(fps / 30) (off by default, "
                         "docs/EVAL_SERVE_SPEED.md)")
     a.add_argument("--fit-workers", type=int, default=None, metavar="N",
-                   help="processes for the 3D flight fits (same results; default SEKME_FIT_WORKERS or 1). "
-                        "About 3x faster re-analysis of a long run with 4")
+                   help="processes for the 3D flight fits (same results; default SEKME_FIT_WORKERS, else half "
+                        "the cores up to 4). 1 fits them in turn")
     a.add_argument("--model", action="append", default=[], metavar="KEY=PATH",
                    help="override a network checkpoint: court, ball, players or pose (repeatable)")
     a.set_defaults(fn=_analyze)

@@ -182,3 +182,26 @@ def test_a_missing_model_file_is_named_before_anything_is_written(monkeypatch, t
     assert main(["analyze", str(tmp_path / "x.mp4"), "--out", str(out), "--model",
                  f"ball={tmp_path / 'gone' / 'sekme_ball.pt'}"]) == 2
     assert "model dosyası bulunamadı" in capsys.readouterr().err
+
+
+def test_the_command_line_fits_in_parallel_by_default_but_respects_a_setting(monkeypatch, tmp_path) -> None:
+    import os
+
+    import courtvision.cli as cli
+    import courtvision.pipeline as pipeline
+
+    seen = []
+
+    def fake_analyze(video, out, cfg, progress):
+        seen.append(os.environ.get("SEKME_FIT_WORKERS"))
+        raise pipeline.MissingModelError("stop here")  # the CLI prints it and exits with 2
+
+    monkeypatch.setattr(pipeline, "analyze", fake_analyze)
+    monkeypatch.setattr(cli, "default_fit_workers", lambda: 3)
+    args = ["analyze", str(tmp_path / "x.mp4"), "--out", str(tmp_path / "run")]
+    monkeypatch.delenv("SEKME_FIT_WORKERS", raising=False)
+    assert cli.main(args) == 2 and seen[-1] == "3"  # the command line is never patched: in parallel
+    monkeypatch.delenv("SEKME_FIT_WORKERS", raising=False)
+    assert cli.main([*args, "--fit-workers", "1"]) == 2 and seen[-1] == "1"
+    monkeypatch.setenv("SEKME_FIT_WORKERS", "2")
+    assert cli.main(args) == 2 and seen[-1] == "2"  # an explicit environment setting wins over the default
