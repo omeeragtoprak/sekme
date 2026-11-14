@@ -92,6 +92,16 @@ commit are recorded here before the first scoring, and both candidates are score
   ±5 %, the automatic board pairs, the change in the bounce's standard deviations and in P(in), and the
   same with the toss bridge.
 
+## Scoring code (committed before any download)
+
+`scripts/eval_six_videos.py run` analyses each video once on the GPU and the three variants from that
+cache; `score` refuses to score a partial set and applies both rules through `courtvision.eval.six_videos`
+(tests: `tests/test_six_videos.py`, including that its matching is the serve-contact test's). A dry run
+on the development clip (US Open 2025 final, 150–704 s, seeded with its existing cache; nothing kept)
+went through: the 60 fps rule answered "cannot decide" (one video), and the pin's criteria were computed
+on 17 paired serves (mean |error| −5.3 points, 13 closer, 1 further, no serve verdict changed), which
+shows the rule can be met on development data and decides nothing.
+
 ## Limits
 
 - Six highlight videos of one tournament and one broadcaster; the board itself is a measurement with
