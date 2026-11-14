@@ -181,10 +181,12 @@ promo/             HyperFrames promo film (footage not included)
 - The SEKME ball network still misses some of the most motion-blurred balls right after a serve
   (one of three serves on the 2023 final clip). It was trained at 30 fps and is fed every second
   frame on 60 fps footage. Trained on 7 matches only: more data is the obvious next step.
-- **Serve recall is low.** On 554 s of unused US Open 2025 final footage the pipeline finds 6 of the 23
-  serves shown from the main camera (either ball net), 3–4 of the 18 near-side ones: the ball net loses
-  the nearly still ball at the toss apex, and a near-side serve's struck ball is slow in the image, so
-  toss and serve stay one flight ([details](docs/EVAL_SERVE_CONTACT.md)). A candidate fix
+- **Serve recall is low at 60 fps.** On 554 s of unused US Open 2025 final footage (1080p60) the pipeline
+  finds 6 of the 23 serves shown from the main camera (either ball net); on the same footage at 30 fps
+  (every second frame) it finds 18. Some frame-based thresholds were set at 30 fps: the filter for
+  court-fixed spots removes the ball hanging at the toss apex at 60 fps, and a near-side serve's struck
+  ball is slow per frame, so toss and serve stay one flight ([details](docs/EVAL_SERVE_CONTACT.md),
+  [docs/EVAL_SPOT.md](docs/EVAL_SPOT.md)). A candidate fix
   (`--toss-bridge`, off by default) finds 21 of those 23 serves, but that footage is now development data:
   it becomes the default only if it passes a rule written for unused matches ([docs/EVAL_SPOT.md](docs/EVAL_SPOT.md)).
   A change to the dead-ball check
