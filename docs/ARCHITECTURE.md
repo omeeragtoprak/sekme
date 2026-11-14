@@ -56,7 +56,8 @@ flowchart LR
   rejected experiments are documented in `docs/EVAL_TRACKNET.md`.
 - **Caches are keyed by the video hash, the networks and the settings they depend on** (ball stride,
   calibrator keyframe interval, shot-cut threshold, person input size; poses also by each hit's side and box).
-  `--reuse-perception` re-runs everything after perception in seconds, which is how regressions are checked.
+  `--reuse-perception` re-runs everything after perception without the networks (seconds on a short clip, a few
+minutes on a long one), which is how regressions are checked.
 
 ## Candidates (off by default)
 
@@ -94,12 +95,14 @@ the loop up. Both networks are bound by GPU arithmetic: batching 2-8 ball window
 heatmaps but only about 5 % less time per window, and PyTorch's MPS backend runs one stream, so running the two
 networks in separate threads would not overlap their GPU work. Faster perception would mean fewer inferences
 (e.g. every second window at 60 fps) or smaller inputs, which change the detections and would need their own
-rule and test; nothing was changed.
+rule and test; nothing was changed. (These 600 frames cost less per frame than the README's full-run figures for
+a 90 s 1080p60 clip, 190 s and 483 s; the cost depends on the scene and on the machine's load.)
 
 **The fits in worker processes (2026-11-14).** The flights of a run are planned in order and then fitted
 independently of each other, so `build_flights` can hand the fits to a process pool (`--fit-workers N` or
 `SEKME_FIT_WORKERS`; workers get the track, calibration and players once). On the same clip, cached detections,
-no rendering or OCR: analysis 143.2 s in turn, 45.4 s with 4 workers, and the report is identical apart from its
+no rendering or OCR: analysis 143.2 s in turn (the 164 s above was measured earlier, under other load), 45.4 s
+with 4 workers, and the report is identical apart from its
 creation time and timings (also checked in a test, flight by flight, to the bit). It is opt-in: the workers
 import the code afresh, so a script that patches it at run time (as the development experiments do) has to stay
 at one process, and short runs (fewer than 24 fits) are fitted in turn anyway.
@@ -170,8 +173,9 @@ The 60 fps development evidence (US Open 2025 clips and the same footage at 30 f
 
 Two code reviews read the event, physics, call, tracker, calibration and OCR modules. The bugs that could
 change a ball track or crash were fixed (`docs/EVAL_TRACKNET.md`, "Ball tracker bugs"; the OCR and
-calibration guards). Left as they are, because changing them changes how existing broadcast graphics are
-read and that can only be checked by re-reading every clip:
+calibration guards). These two were left at first, because changing them changes how existing broadcast
+graphics are read and that can only be checked by re-reading every clip (the first was then corrected, the
+second remains open; see the result below):
 
 - `broadcast/scoreboard.py`: the tolerance for lining up score columns is half a row height in normalised
   x, which is about 0.9 row heights in pixels on 16:9 video; a missing digit in one row could take the
@@ -215,8 +219,8 @@ bounce on the other half of the court is scored as outside its zone, not inside 
 
 A board value is tied to a serve only when the change is seen within 4 s (`MAX_UPDATE_WINDOW_S`), so that a
 value following an edited-out serve is not given to the next one. On the US Open 2025 final 150–704 s clip, whose
-19 matched serves have the board read by eye, only 8 get an automatic value (7 agree with the eye reading); most
-of the rest are dropped for that window although the board shows the right number (the board is not on screen
+19 matched serves have the board read by eye, only a minority get an automatic value (measured below: 1 on the
+default run, 9 on the scaled 60 fps run); most of the rest are dropped for that window although the board shows the right number (the board is not on screen
 all the time). **Change:** a wider window is accepted when the serve's whole search window lies inside one span
 the pipeline could analyse (no shot cut, calibrated) and exactly one serve is a candidate, since then no
 edited-out serve can be behind the value. **Rule:** adopted if, on that clip (development data; the scaled
