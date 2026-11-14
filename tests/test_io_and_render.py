@@ -153,7 +153,9 @@ def test_irregular_frame_intervals_counts_dropped_or_stretched_frames(monkeypatc
     even = [i / 30 for i in range(90)]
     assert count(even) == 0
     assert count(even[:40] + even[41:]) == 1  # one dropped frame: one interval twice as long
-    assert count(even[:10] + ["N/A"] + even[10:]) == 0  # a packet without a timestamp is skipped
+    assert count(even[:40] + ["N/A"] + even[41:]) == 0  # a packet without a timestamp: not judged, no warning
+    assert count(even[:40] + [even[40], even[40]] + even[41:]) == 0  # a duplicated timestamp is not a gap
+    assert count(even[::-1]) == 0  # packets in decode order (B-frames) are sorted first
     assert count([0.0]) == 0
 
     def missing(name: str) -> str:
@@ -161,3 +163,22 @@ def test_irregular_frame_intervals_counts_dropped_or_stretched_frames(monkeypatc
 
     monkeypatch.setattr(vid, "_bin", missing)  # CI has no ffprobe: no warning rather than a failure
     assert vid.irregular_frame_intervals("x.mp4") == 0
+
+
+def test_a_missing_model_file_is_named_before_anything_is_written(monkeypatch, tmp_path, capsys) -> None:
+    import courtvision.pipeline as pipeline
+    from courtvision.cli import main
+    from courtvision.errors import MissingModelError
+    from courtvision.io.video import VideoInfo
+
+    monkeypatch.setattr(pipeline, "probe", lambda v: VideoInfo(str(v), 1280, 720, 30.0, 90, 3.0, False))
+    cfg = pipeline.PipelineConfig()
+    cfg.models["ball"] = str(tmp_path / "gone" / "sekme_ball.pt")
+    out = tmp_path / "run"
+    with pytest.raises(MissingModelError, match="ball: sekme_ball.pt"):
+        pipeline.analyze(tmp_path / "x.mp4", out, cfg)
+    assert not out.exists()
+    # The command line says it in one line (no traceback) and exits with 2.
+    assert main(["analyze", str(tmp_path / "x.mp4"), "--out", str(out), "--model",
+                 f"ball={tmp_path / 'gone' / 'sekme_ball.pt'}"]) == 2
+    assert "model dosyası bulunamadı" in capsys.readouterr().err

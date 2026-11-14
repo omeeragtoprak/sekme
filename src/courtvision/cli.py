@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-from courtvision.errors import UnreadableVideoError
+from courtvision.errors import MissingModelError, UnreadableVideoError
 
 
 def _analyze(args: argparse.Namespace) -> int:
@@ -135,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     try:
         return int(args.fn(args))
-    except UnreadableVideoError as exc:  # a wrong input file, not a bug: no traceback
+    except (UnreadableVideoError, MissingModelError) as exc:  # a wrong input or setup, not a bug: no traceback
         print(f"hata: {exc}", file=sys.stderr)
         return 2
 

@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
 from courtvision import __version__
-from courtvision.errors import UnreadableVideoError
+from courtvision.errors import MissingModelError, UnreadableVideoError
 from courtvision.eval.labels import evaluate, px_scale_cm, serve_state, serve_summary, summarize, world_from_px
 
 SERVE_TOL_S = 0.5  # a labelled serve and a system serve within this many seconds are the same serve
@@ -386,6 +386,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
                 except UnreadableVideoError as exc:  # the upload is not a usable video: say so and drop it
                     job.status, job.error = "error", str(exc).replace(dest.name, shown_name, 1)
                     dest.unlink(missing_ok=True)
+                except MissingModelError as exc:  # this server lacks a network: say which (the upload is fine)
+                    job.status, job.error = "error", str(exc)
                 except Exception as exc:  # reported to the client through the job status
                     job.status, job.error = "error", f"{type(exc).__name__}: {exc}"
 
@@ -403,7 +405,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
     if dist.is_dir():
         app.mount("/", _WebFiles(directory=dist, html=True), name="web")
     else:
-        @app.get("/", response_class=HTMLResponse)
+        @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
         def no_web_app() -> str:
             return NO_WEB_APP_HTML
     return app

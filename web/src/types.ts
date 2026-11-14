@@ -268,6 +268,8 @@ export type Report = {
     n_frames: number;
     duration_s: number;
     sha256: string;
+    /** Frame intervals more than 25 % off the median (variable frame rate); absent in older reports. */
+    irregular_frame_intervals?: number;
   };
   models: Record<"court" | "ball" | "players", ModelCard> & { pose?: ModelCard };
   candidates?: Record<string, number | boolean>; // flags of candidates not yet decided (docs/ARCHITECTURE.md)

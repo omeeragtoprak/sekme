@@ -26,7 +26,7 @@ from courtvision import __version__
 from courtvision.analytics.kinematics import player_kinematics
 from courtvision.broadcast import ocr
 from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
-from courtvision.errors import UnreadableVideoError
+from courtvision.errors import MissingModelError, UnreadableVideoError
 from courtvision.eval.broadcast_check import Serve, check, serve_anchored_names, side_names
 from courtvision.events.flights import Flight, build_flights, measurable_segments
 from courtvision.events.hits import detect_hits_in_segments
@@ -357,6 +357,10 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
             progress: Callable[[str, float], None] | None = None) -> dict:
     cfg = cfg or PipelineConfig()
     info = probe(video)  # before the run folder exists: an unreadable file leaves no empty run behind
+    missing = [f"{k}: {Path(v).name}" for k, v in cfg.models.items() if not Path(v).is_file()]
+    if missing:
+        raise MissingModelError(f"model dosyası bulunamadı ({', '.join(missing)}); ağırlıklar repoda değil, "
+                                "docs/MODELS.md")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     prog = progress or (lambda stage, frac: None)

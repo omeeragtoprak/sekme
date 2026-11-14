@@ -105,19 +105,20 @@ def probe(path: str | Path) -> VideoInfo:
 def irregular_frame_intervals(path: str | Path) -> int:
     """Frame intervals that differ from the video's median interval by more than 25 % (variable frame rate, e.g.
     a phone dropping frames in low light), from the packets' timestamps. 0 when they cannot be read."""
-    try:
-        out = subprocess.run([_bin("ffprobe"), "-v", "error", "-select_streams", "v:0", "-show_entries",
+    try:  # "V": video streams that are not attached pictures (cover art)
+        out = subprocess.run([_bin("ffprobe"), "-v", "error", "-select_streams", "V:0", "-show_entries",
                               "packet=pts_time", "-of", "csv=p=0", str(path)],
-                             check=True, capture_output=True, text=True).stdout
-    except (OSError, RuntimeError, subprocess.CalledProcessError):
+                             check=True, capture_output=True, text=True, timeout=120).stdout
+    except (OSError, RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return 0
     times = []
     for field_ in out.split():
         try:
             times.append(float(field_.strip(",")))
-        except ValueError:  # "N/A": a packet without a timestamp
-            continue
+        except ValueError:  # "N/A": a packet without a timestamp; the spacing cannot be judged
+            return 0
     d = np.diff(np.sort(np.array(times)))
+    d = d[d > 0]  # duplicated timestamps say nothing about the spacing
     if len(d) < 2 or not np.median(d) > 0:
         return 0
     r = d / np.median(d)

@@ -291,3 +291,9 @@ container's type (`video/webm`, `video/quicktime`, `video/x-matroska`).
 not real slow motion) runs to the end: all 240 frames calibrated, ball network stride 4, and its first call is
 the 30 fps excerpt's (IN, +147 cm against +146 cm). Real high-frame-rate footage has not been tested; the
 frame-count thresholds discussed above apply four times more strongly there.
+
+**A fresh clone.** The weights are not in the repository. A missing checkpoint used to end in a traceback from
+hashing it, after an empty run folder had been made; `analyze` now checks the four checkpoints first and stops with
+one line naming the missing ones (`MissingModelError`; the command line exits with 2, a Review Room job shows the
+line and keeps the upload). Without a built web app, `sekme serve` answers `/` with a page that says how to build
+it instead of a JSON 404.

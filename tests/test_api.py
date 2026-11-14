@@ -270,4 +270,5 @@ def test_without_a_built_web_app_the_root_page_says_how_to_build_it(tmp_path: Pa
     r = c.get("/")
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
     assert "npm run build" in r.text
+    assert c.head("/").status_code == 200
     assert c.get("/api/health").status_code == 200  # the API itself still works
