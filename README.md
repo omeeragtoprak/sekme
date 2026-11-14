@@ -186,9 +186,10 @@ promo/             HyperFrames promo film (footage not included)
   (every second frame) it finds 18. Some frame-based thresholds were set at 30 fps: the filter for
   court-fixed spots removes the ball hanging at the toss apex at 60 fps, and a near-side serve's struck
   ball is slow per frame, so toss and serve stay one flight ([details](docs/EVAL_SERVE_CONTACT.md),
-  [docs/EVAL_SPOT.md](docs/EVAL_SPOT.md)). A candidate fix
-  (`--toss-bridge`, off by default) finds 21 of those 23 serves, but that footage is now development data:
-  it becomes the default only if it passes a rule written for unused matches ([docs/EVAL_SPOT.md](docs/EVAL_SPOT.md)).
+  [docs/EVAL_SPOT.md](docs/EVAL_SPOT.md)). A candidate that scales those frame counts at 60 fps
+  (`--fps-scaled-thresholds`, off by default) finds 20 of the 23 on that clip, now development data; it
+  becomes the default only if it passes a rule written for six unused videos
+  ([docs/EVAL_SERVE_SPEED.md](docs/EVAL_SERVE_SPEED.md)).
   A change to the dead-ball check
   was tried and rejected earlier ([details](docs/EVAL_TRACKNET.md)). The Review Room's *Servis etiketi*
   section measures serve recall (and, once every serve is marked, precision) on your own footage

@@ -83,7 +83,7 @@ generalise.
 4. A test result that rejects a candidate is final for it; its code is removed and the result stays
    documented.
 
-## Candidate 1: toss bridge in the serve detector (rule written 2026-11-14, before any E2E-Spot download)
+## Candidate 1 (withdrawn before any download): toss bridge in the serve detector (rule written 2026-11-14)
 
 **Change** (`sekme analyze --toss-bridge`, `serves.TOSS_BRIDGE_S = 0.3`; off by default): two toss runs
 separated only by missed frames, at most 0.3 s of them, are joined when the ball rises into the gap and
@@ -118,9 +118,9 @@ where the struck ball moves twice as far per frame.
 only if all hold:
 
 1. **Serve recall** (flight serves matched within 0.5 s, in percentage points) rises by at least
-   min(5, half of the baseline's missed share) *(amended, see below; first version: min(10, …))*; and in
-   **every** test match it is strictly higher than the baseline's (at least one more labelled serve
-   matched). Matched counts are reported with the percentages.
+   min(10, half of the baseline's missed share); and in **every** test match it is strictly higher than
+   the baseline's (at least one more labelled serve matched). Matched counts are reported with the
+   percentages.
 2. **Serve precision without likely faults** (`precision_excl_faults`: a system serve with no label but a
    labelled serve of the same side later in the same clip within 30 s is set apart, since the labels
    carry fewer serves than clips and probably leave faults out) falls by no more than 5 points. Plain
@@ -146,15 +146,16 @@ there may be smaller than on the development clip; the margin in rule 1 shrinks 
 headroom for that reason. **Serve speed is not part of the rule:** on the development clip the newly
 found serves' fitted speeds are worse (mean |error| against the eye-read board 9.6 % on 5 serves → 14.9 %
 on 20); if accepted, near-side serve speeds are reported with that caveat until a speed check passes.
-This is the first of the two candidates the test matches allow (rule 3).
+It was to be the first of the two candidates the test matches allow (rule 3); it was withdrawn before any download (below), so both remain.
 
-**Amendment before any download (2026-11-14, afternoon): margin 10 → 5 points, made knowing a development
-estimate.** The rule above was written from 60 fps development data only. To see what to expect at the
-test matches' 25–30 fps, every second frame of the same development clip (US Open 2025 final, 150–704 s)
-was made into a 30 fps video and analysed: the default detector already finds 18 of the 23 labelled serves
-there (6 at 60 fps), the candidate 20 (+8.7 points). A margin of 10 points would reject a change that adds
-real serves without false ones; 5 points with a rise in every match is the bar for "worth adopting". This
-amendment was made after seeing that estimate, on development data, and is stated as such.
+**Withdrawn before any download (2026-11-14).** To see what to expect at the test matches' 25–30 fps,
+every second frame of the development clip (US Open 2025 final, 150–704 s) was made into a 30 fps video:
+the default detector already finds 18 of the 23 labelled serves there (6 at 60 fps), the candidate 20
+(+8.7 points, under the 10-point margin). A first reaction lowered the margin to 5 points (commit
+53db63d); an independent review judged that fitting the bar to the estimate, and it is withdrawn. Instead
+the candidate is withdrawn from these matches: its main effect is a 60 fps one, which a better-founded
+candidate now addresses (below), and neither of the two test slots is used. The toss bridge stays in the
+code, off by default, and is reported on the six US Open videos of `docs/EVAL_SERVE_SPEED.md`.
 
 Why 60 fps was so much worse (development finding, not part of this rule): the ball network does detect
 the ball at the toss apex (scores 12–15 on the missed frames), but `drop_court_fixed`, which removes

@@ -58,9 +58,13 @@ test data. The download needs the user's explicit yes (file, source, size).
 
 ## Runs
 
-Ball v4 and the default serve detector (no toss bridge). Perception once per video (one GPU job at a
-time), then two analyses from the cached perception: without and with `--pin-serve-height`. Nothing
-else differs. With the toss bridge as well: reported, not used.
+Ball v4. Perception once per video (one GPU job at a time), then, from that one cache: the default
+analysis, `--fps-scaled-thresholds` (the second candidate, below), the same plus `--pin-serve-height`, and,
+reported only, the toss bridge. *(Amended before any download, after an independent review: the pin was
+first to be judged on the default detector, which at 60 fps finds about a quarter of the serves; it is now
+judged on the runs with scaled thresholds, with and without the pin, so it has serves to be judged on.
+Its effect, the fit's contact height, does not depend on which serves are found.)* Both rules and the code
+commit are recorded here before the first scoring, and both candidates are scored in one pass.
 
 ## Measurement
 
@@ -108,3 +112,37 @@ inconclusive outcome; the paired set taken from the unpinned run, a pinned rejec
 the majority criterion raised to two thirds with ties defined; every verdict change on a serve flight,
 REVIEW included, fails the rule; the limits on the measured height and the bounce covariance added; a
 test that the flag sets the serve anchor's band (`tests/test_events_gates.py`).
+
+## Second candidate on the same videos: frame counts scaled at 60 fps (rule written 2026-11-14, before any download)
+
+**Change** (`sekme analyze --fps-scaled-thresholds`; off by default): three frame counts that were set on
+30 fps video are scaled by s = round(fps / 30), the factor the ball network's input stride already uses
+(s = 1 at 25–30 fps, so nothing changes there; s = 2 at 50–60 fps): the court-fixed filter's window and
+count (`drop_court_fixed`, ±15 and 10 frames → ±30 and 20), the toss run's gap (2 → 4 frames) and the toss
+speed limit per frame (÷ 2).
+
+**Why** (development data only, `docs/EVAL_SPOT.md`, end of candidate 1): on the US Open 2025 final,
+150–704 s, the default pipeline finds 6 of 23 labelled serves at 60 fps and 18 at 30 fps (every second
+frame). The ball network does detect the ball at the toss apex at 60 fps; the court-fixed filter removes
+it, because a ball hanging for 0.17 s fills 10 frames. With the change: 20 of 23 at 60 fps (19 within 2
+frames). On the four 60 fps development clips it also keeps 3–5 % more ball detections and changes some
+calls (one IN → REVIEW, two OUT counts, a few bounces moved), which nothing local can check.
+
+**Rule**, on the six videos of this plan with the labels made for it (videos below 50 fps are left out:
+s = round(fps / 30) is 1 there and the change does nothing; if fewer than three remain, this footage
+cannot decide), default analysis against `--fps-scaled-thresholds`:
+
+1. pooled **serve recall** (labelled main-camera serves found as serve flights, matched as in
+   `scripts/eval_serve_contact.py`) rises by **at least 10 points** (a floor: the development effect is
+   much larger, so criteria 2–4 are the real test);
+2. the share of matched serves within 2 frames of their bracket falls by **no more than 5 points**;
+3. **no decisive call flips**: no bounce found by both runs (within 2 frames) is called IN by one and OUT
+   by the other, both decisive (REVIEW in either run is not a flip). Two confident opposite calls on one
+   bounce mean one is a confident error, the error the project's rules exist to stop;
+4. **false serves**: serve flights not matched to a label, leaving out those followed by a labelled serve
+   of the same side within 30 s (a fault the labels skip), rise by **no more than 2** over the six videos.
+
+Otherwise it is rejected and its code removed. Reported, not used: ball detections, calls added or lost,
+REVIEW changes, bounce shifts, and the speed pairs. Still counted in frames after the change: the serve
+contact search windows (`b − 2 … b + 3`, `refine_contact`, `contact_in_gap`) and the 3-detection minimum
+of a toss run; at 60 fps they cover half the time.

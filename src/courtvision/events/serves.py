@@ -40,8 +40,11 @@ def _box_near(track: PlayerTrack, i: int, win: int = 5) -> np.ndarray | None:
     return np.median(b, axis=0) if len(b) else None
 
 
-def _toss_runs(ball: BallTrack, track: PlayerTrack, s: int, e: int, bridge: int = 0) -> list[tuple[int, int]]:
+def _toss_runs(ball: BallTrack, track: PlayerTrack, s: int, e: int, bridge: int = 0,
+               frame_scale: int = 1) -> list[tuple[int, int]]:
     """Runs of >= 3 detections that are slow and above the player's shoulders (gaps up to 2 frames).
+
+    ``frame_scale`` (candidate, 2 at 60 fps): the gap and the per-frame speed limit were set at 30 fps.
 
     ``bridge`` > 0 (candidate): two runs separated only by missed frames, at most ``bridge`` of them, are
     joined when the ball rises into the gap and falls out of it, i.e. the gap holds the toss apex.
@@ -50,7 +53,7 @@ def _toss_runs(ball: BallTrack, track: PlayerTrack, s: int, e: int, bridge: int 
     run: list[int] = []
     for i in range(s, e):
         if ball.source[i] != 1:
-            if run and i - run[-1] > 2:
+            if run and i - run[-1] > 2 * frame_scale:
                 runs.append((run[0], run[-1]))
                 run = []
             continue
@@ -62,7 +65,7 @@ def _toss_runs(ball: BallTrack, track: PlayerTrack, s: int, e: int, bridge: int 
             prev = ball.xy[i - 1] if i > 0 else np.full(2, np.nan)
             speed = float(np.linalg.norm(ball.xy[i] - prev)) if np.all(np.isfinite(prev)) else 0.0
             ok = (box[0] - TOSS_REACH * h <= x <= box[2] + TOSS_REACH * h and y < box[1] + TOSS_ABOVE * h
-                  and speed < TOSS_MAX_SPEED * h)
+                  and speed < TOSS_MAX_SPEED / frame_scale * h)
         if ok:
             run.append(i)
         elif run:
@@ -99,7 +102,8 @@ def _bridge_apex(ball: BallTrack, runs: list[tuple[int, int]], bridge: int) -> l
 
 
 def detect_serves(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
-                  segments: list[tuple[int, int]], dead_ball_s: float = 1.0, bridge_s: float = 0.0) -> list[Hit]:
+                  segments: list[tuple[int, int]], dead_ball_s: float = 1.0, bridge_s: float = 0.0,
+                  frame_scale: int = 1) -> list[Hit]:
     """Serve contacts: a toss above a baseline player after a dead ball, then a strike towards the opponent.
 
     ``bridge_s`` > 0 is a candidate (off by default): a toss may span a missed apex up to that long, and
@@ -111,7 +115,7 @@ def detect_serves(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
     serves: list[Hit] = []
     for S, E in segments:
         for side, track in players.items():
-            for a, b in _toss_runs(ball, track, S, E, bridge):
+            for a, b in _toss_runs(ball, track, S, E, bridge, frame_scale):
                 box = _box_near(track, a)
                 if box is None:
                     continue

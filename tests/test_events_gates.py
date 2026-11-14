@@ -358,3 +358,37 @@ def test_the_pin_candidate_narrows_only_the_serve_anchor_to_the_measured_contact
     assert (got[False].z_max - got[False].z_min, got[False].z_scale) == pytest.approx((0.6, 0.1))
     assert (got[True].z_max - got[True].z_min, got[True].z_scale) == pytest.approx((0.1, 0.01))
     assert 0.5 * (got[True].z_min + got[True].z_max) == pytest.approx(h)
+
+
+def test_at_60_fps_the_court_fixed_filter_needs_its_frame_counts_scaled_to_keep_the_toss_apex() -> None:
+    # US Open 2025 final, serve at frame 1933 (60 fps): the net found the ball at the apex (frames 1913-1923,
+    # scores 12-15), but a ball hanging for 0.2 s is >= 10 of +-15 frames on one spot and was removed.
+    n = 80
+    H = np.diag([0.02, 0.02, 1.0])
+    cands = [[BallCandidate(500.0, 500.0, 8.0), BallCandidate(100.0 + 10 * i, 300.0, 10.0)] for i in range(n)]
+    for i in range(30, 42):  # 12 frames at the apex
+        cands[i][1] = BallCandidate(400.0, 300.0, 10.0)
+    ground = [H] * n
+    at30 = drop_court_fixed(cands, ground)
+    assert not any(c.y == 300.0 for c in at30[36])  # frame counts set at 30 fps: the apex ball is dropped
+    at60 = drop_court_fixed(cands, ground, win=30, min_frames=20)  # the same 0.5 s / 0.33 s at 60 fps
+    assert all(any(c.y == 300.0 for c in cs) for cs in at60)  # the ball survives everywhere
+    assert all(not any((c.x, c.y) == (500.0, 500.0) for c in cs) for cs in at60)  # a painted mark still goes
+
+
+def test_at_60_fps_scaled_serve_thresholds_find_a_near_serve_the_30_fps_frame_counts_miss():
+    n = 140
+    xy = np.full((n, 2), np.nan)
+    for t in range(n):
+        if t < 20:
+            xy[t] = (1060, 640)
+        elif t <= 75:
+            if not 49 <= t <= 51:  # a 3-frame gap at the apex (kept by the scaled court-fixed filter)
+                xy[t] = (1060 - 0.4 * (t - 20), 470 + 0.189 * (t - 50) ** 2)
+        elif t <= 120:
+            xy[t] = (1038 - 5 * (t - 75), 588 - 6 * (t - 75))  # 7.8 px per frame: 0.078 player heights
+    src = np.where(np.isfinite(xy[:, 0]), 1, 0)
+    ball = BallTrack(xy, src.astype(float), src)
+    assert detect_serves(ball, _players(n), 60.0, [(0, n)]) == []
+    sv = detect_serves(ball, _players(n), 60.0, [(0, n)], frame_scale=2)
+    assert len(sv) == 1 and sv[0].side == "near" and 72 <= sv[0].frame <= 78  # contact at 75

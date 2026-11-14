@@ -83,6 +83,12 @@ MODEL_FILES = {
 BALL_TRAIN_FPS = 30.0  # both ball networks were trained on 30 fps TrackNet video
 
 
+def frame_scale(fps: float) -> int:
+    """Frames per 30 fps frame (1 at 25-30 fps, 2 at 50-60 fps): the ball net's input stride, and the factor
+    for frame counts set on 30 fps video (candidate --fps-scaled-thresholds)."""
+    return max(1, round(fps / BALL_TRAIN_FPS))
+
+
 def _own_arch(path: str) -> str | None:
     try:
         ckpt = torch.load(path, map_location="cpu", weights_only=True)
@@ -151,6 +157,7 @@ class PipelineConfig:
     ball_stride: int = 0  # frames between the ball network's three inputs; 0: match its 30 fps training video
     serve_toss_bridge_s: float = 0.0  # candidate, off by default (docs/EVAL_SPOT.md): 0.3 bridges a missed toss apex
     pin_serve_height: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md)
+    fps_scaled_thresholds: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): 60 fps frame counts
     models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
@@ -203,7 +210,7 @@ def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog)
     """Single decode pass feeding the court calibrator, the ball model and the person tracker."""
     calibrator = CourtCalibrator(CourtKeypointDetector(cfg.models["court"], device), court, cfg.keyframe_interval)
     ball_det = BallDetector(cfg.models["ball"], device, half=True)
-    stride = cfg.ball_stride or max(1, round(info.fps / BALL_TRAIN_FPS))
+    stride = cfg.ball_stride or frame_scale(info.fps)
     ball_det.start((info.width, info.height), stride)
     people = person_tracker(cfg.models["players"], device.type, imgsz=cfg.player_imgsz)
     pending, dets, cuts = [], [], [0]
@@ -344,13 +351,16 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     t1 = time.time()
     prog("analysis", 0.0)
     calib = calibrate_sequence(meas, cuts, (info.width, info.height), court)
-    ball = track_ball(drop_court_fixed(cands, [c.H_inv if c.valid else None for c in calib]), info.width)
+    # Frame counts below were set on 30 fps video; the candidate scales them like the ball net's input stride.
+    fscale = frame_scale(info.fps) if cfg.fps_scaled_thresholds else 1
+    ball = track_ball(drop_court_fixed(cands, [c.H_inv if c.valid else None for c in calib],
+                                       win=15 * fscale, min_frames=10 * fscale), info.width)
     players = select_players(dets, calib, info.fps)
     kin = {side: player_kinematics(tr.world, info.fps) for side, tr in players.items()}
     segments = measurable_segments(calib, cuts, min_len=int(info.fps))
     hits = detect_hits_in_segments(ball, players, info.fps, info.height, segments)
-    hits = merge_serves(hits, detect_serves(ball, players, info.fps, segments, bridge_s=cfg.serve_toss_bridge_s),
-                        info.fps)
+    hits = merge_serves(hits, detect_serves(ball, players, info.fps, segments, bridge_s=cfg.serve_toss_bridge_s,
+                                            frame_scale=fscale), info.fps)
     flights = build_flights(ball, hits, calib, info.fps, players, segments, frame_w=info.width,
                             pin_serve_height=cfg.pin_serve_height)
     timings["analysis_s"] = time.time() - t1
@@ -377,7 +387,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
                   "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": video_sha},
         "models": {k: _model_card(k, v) for k, v in cfg.models.items()},
         "candidates": {k: v for k, v in (("serve_toss_bridge_s", cfg.serve_toss_bridge_s),
-                                         ("pin_serve_height", cfg.pin_serve_height)) if v},
+                                         ("pin_serve_height", cfg.pin_serve_height),
+                                         ("fps_scaled_thresholds", cfg.fps_scaled_thresholds)) if v},
         "calibration": {
             "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts,
             "line_support_median": _f(np.median([c.support for c in valid]) if valid else None),
