@@ -44,7 +44,7 @@ flowchart LR
 | Broadcast check | `broadcast/ocr.py`, `broadcast/scoreboard.py`, `eval/broadcast_check.py` | names, score, serve-speed board; used to check the system, never as an input to a call |
 | Analytics | `analytics/kinematics.py` | player speed, distance, peaks |
 | Output | `pipeline.py`, `render/hud.py`, `api/app.py`, `web/` | `report.json`, `frames.json`, HUD videos, Review Room with an append-only review log |
-| Training and evaluation | `models/unet.py`, `scripts/train_*.py`, `scripts/eval_*.py`, `eval/labels.py`, `eval/tracknet.py`, `eval/sim_benchmark.py` | our networks' training, own-footage labels, TrackNet benchmark, simulation benchmark, network tests |
+| Training and evaluation | `models/unet.py`, `scripts/train_*.py`, `scripts/eval_*.py`, `eval/labels.py`, `eval/tracknet.py`, `eval/spot.py`, `eval/six_videos.py`, `eval/provenance.py`, `eval/sim_benchmark.py` | our networks' training, own-footage labels, TrackNet benchmark, E2E-Spot and six-video test protocols with their run checks, simulation benchmark, network tests |
 
 ## Design rules
 
@@ -54,8 +54,9 @@ flowchart LR
 - **Measure, do not assume.** Each change to the event logic is checked on independent data
   (TrackNet games never used for tuning, the stadium radar) and rejected when it does not hold up there;
   rejected experiments are documented in `docs/EVAL_TRACKNET.md`.
-- **Caches are keyed by the video hash.** `--reuse-perception` re-runs everything after perception in
-  seconds, which is how regressions are checked.
+- **Caches are keyed by the video hash, the networks and the settings they depend on** (ball stride,
+  calibrator keyframe interval, shot-cut threshold, person input size; poses also by each hit's side and box).
+  `--reuse-perception` re-runs everything after perception in seconds, which is how regressions are checked.
 
 ## Candidates (off by default)
 
@@ -100,6 +101,25 @@ read and that can only be checked by re-reading every clip:
   other row's token.
 - `broadcast/scoreboard.py`: a graphic without a point column whose last set reads "0 0" is taken as
   showing points, so that frame's end-change count is one short (it can only mislabel names, never a call).
+
+**Rule for fixing these two (written 2026-11-14, before any comparison).** Fixes: the column tolerance converted
+to horizontal units with the frame's aspect ratio (half a row height in pixels); a last column whose values are
+all "0" and that holds no point-only value (15, 30, 40, AD) is a games column, not points, unless the graphic's
+other readings in the same clip show a point column. Measured on the six broadcast clips with the OCR run once
+more and its text boxes kept (so later parsing changes need no OCR): every score reading the fixes change is
+checked by eye on its frame. Adopted if the fixed reading is right on more of the changed frames than the old
+one and the serve-anchored names of the US Open 2025 final 150–704 s clip stay 21 / 21 correct against the
+labeller's serve identities; if no reading changes, adopted as a correctness fix with that result recorded.
+Otherwise the code stays and the result is recorded here.
+
+**Result (2026-11-14).** The six clips were read again by OCR (2402 frames, one every 0.5 s) and each frame was
+parsed by the old and the corrected column tolerance: **no reading changed** (real graphics space their columns
+about 0.023 of the frame width apart, wider than either tolerance), so the tolerance correction is adopted as a
+correctness fix and the 2025 final's names are unchanged by construction. The "0 0" case **never occurred** (no
+reading with a 0–0 point column in any frame), so the second correction, which needs the clip's other readings
+to decide, was not written: nothing here could test it, and it stays a known issue. The text boxes are kept in
+`data/broadcast_ocr/` (per frame, with the frame size; re-parsing without the video skips the serving marker),
+collected by `devir/scratch/ocr_collect.py`.
 
 Also from the pipeline review (2026-11-14), checked and left:
 

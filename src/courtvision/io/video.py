@@ -43,7 +43,15 @@ def probe(path: str | Path) -> VideoInfo:
     ).stdout
     meta = json.loads(out)
     v = next(s for s in meta["streams"] if s["codec_type"] == "video")
-    fps = float(Fraction(v.get("avg_frame_rate") or v["r_frame_rate"]))
+    def rate(s: str | None) -> float | None:  # "0/0" (no average rate) counts as missing
+        if not s or s.endswith("/0"):
+            return None
+        r = float(Fraction(s))
+        return r if r > 0 else None
+
+    fps = rate(v.get("avg_frame_rate")) or rate(v.get("r_frame_rate"))
+    if fps is None:
+        raise ValueError(f"{path}: no frame rate in the video stream")
     duration = float(meta["format"].get("duration", v.get("duration", 0.0)))
     n = int(v.get("nb_frames") or round(duration * fps))
     has_audio = any(s["codec_type"] == "audio" for s in meta["streams"])

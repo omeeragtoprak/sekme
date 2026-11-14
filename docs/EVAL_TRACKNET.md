@@ -271,3 +271,31 @@ never reached either bug). On the broadcast clips (reported) 94 of 33 209 ball f
 at most 0.2 cm, one call was added; the 23 labelled serves of the 2025 final are matched exactly as before.
 Two unreachable edge cases from the same review were hardened (`detect_hits` on a track shorter than its
 direction window, an empty mask in `_fit_one`).
+
+## Two scorer corrections (decided 2026-11-14, before measuring their effect)
+
+A code review of `courtvision.eval.tracknet` found two places where the scorer does not do what this document
+says it measures: (1) system bounces are paired with references greedily in the references' order, so an
+earlier reference can take a system bounce that is closer to the next one; (2) a reference contact's two
+track lines are fitted on the labelled points up to 4 frames before and after the bounce, even when that window
+reaches back over the hit (status 1) or forward into the next bounce. Corrections: pairs closest-first, one to
+one, as the other evaluations here do; the windows stop at the neighbouring hit or bounce. They are measurement
+corrections, so they are **adopted whichever way the numbers move**; the development numbers (games 1–7, the
+`runs_dev_base` detections) are re-stated below with both scorers, and games 8–10, which are used up, are not
+re-scored.
+
+**Result (games 1–7, `runs_dev_base`; adopted as decided).**
+
+| | old scorer | corrected |
+|---|---|---|
+| first bounces found | 220 / 329 (66.9 %) | 220 / 323 (68.1 %) |
+| games 6–7 | 62 / 88 (70.5 %) | 62 / 87 (71.3 %) |
+| all bounces found, false alarms, precision | 236, 29, 89.1 % | 236, 29, 89.1 % |
+| decisive calls consistent, median error | 228 / 228, 14.0 cm | 228 / 228, 14.0 cm |
+
+The pairing correction changed no pair on these games. The window correction changed six references, all of
+the same kind: one bounce labelled on two adjacent frames (game 1 clips 7, 10, 11, 12, 13; game 6 clip 2). The
+old windows let the second label's track line run through the first, so both contacts landed on the first
+label and both counted as first bounces, one found and one "missed"; now the duplicate is a second bounce. 15
+of the 369 reference contacts now use the labelled point instead of crossing a neighbouring hit or bounce.
+Numbers elsewhere in these documents were measured with the old scorer and stay as recorded.

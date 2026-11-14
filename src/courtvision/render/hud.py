@@ -120,6 +120,16 @@ def ground_ellipse_px(H: np.ndarray, mean: np.ndarray, cov: np.ndarray, k: float
     return apply_h(H, mean + k * (circ * w) @ V.T)
 
 
+def mini_ellipse_px(m: MiniCourt, xy: np.ndarray, cov: np.ndarray, k: float = 2.4477) -> np.ndarray:
+    """The 95 % ground ellipse on the mini court, point by point through its mapping: the mini court scales x and
+    y differently, so an ellipse scaled per eigen-axis (cv2.ellipse) would be wrong whenever it is tilted."""
+    w, V = np.linalg.eigh(np.asarray(cov, dtype=float))
+    ang = np.linspace(0, 2 * np.pi, 48)
+    ring = np.asarray(xy, dtype=float) + k * (np.stack([np.cos(ang), np.sin(ang)], axis=1)
+                                              * np.sqrt(np.clip(w, 0, None))) @ V.T
+    return np.array([m.to_px(q) for q in ring], np.int32)
+
+
 @dataclass
 class OverlayState:
     """Everything the renderer needs for one frame (built by the pipeline)."""
@@ -231,10 +241,7 @@ class Renderer:
             for bnc in st.bounces:
                 col = VERDICT_COLOR.get(bnc["verdict"], AMBER)
                 c = m.to_px(np.asarray(bnc["xy"]))
-                w, V = np.linalg.eigh(np.asarray(bnc["cov"]))
-                ax = (max(1, int(2.45 * np.sqrt(max(w[1], 0)) * m.sx)),
-                      max(1, int(2.45 * np.sqrt(max(w[0], 0)) * m.sy)))
-                cv2.ellipse(out, c, ax, -np.degrees(np.arctan2(V[1, 1], V[0, 1])), 0, 360, col, 1, cv2.LINE_AA)
+                cv2.polylines(out, [mini_ellipse_px(m, bnc["xy"], bnc["cov"])], True, col, 1, cv2.LINE_AA)
                 cv2.circle(out, c, u(4), col, -1, cv2.LINE_AA)
         for side in ("near", "far"):
             p = st.players.get(side)
@@ -255,7 +262,8 @@ class Renderer:
             where = "YAKIN" if side == "near" else "UZAK"
             texts.append(TextItem((x, y0 + u(12)), f"{label} · {where}", u(22), GREY))
             spd, dist, peak = p.get("speed_kmh"), p.get("dist_m"), p.get("peak_kmh")
-            val = f"{num(spd)} km/sa  |  {dist:.0f} m  |  en yüksek {num(peak)}" if spd is not None else "—"
+            val = (f"{num(spd)} km/sa  |  {'—' if dist is None else num(dist, 0)} m  |  en yüksek "
+                   f"{'—' if peak is None else num(peak)}") if spd is not None else "—"
             texts.append(TextItem((x, y0 + u(42)), val, u(32), WHITE))
         texts.append(TextItem((cols[2], y0 + u(12)), "SON VURUŞ HIZI · 3B UYDURMA", u(22), GREY))
         ss = f"{st.last_shot_speed:.0f} km/sa" if st.last_shot_speed else "—"

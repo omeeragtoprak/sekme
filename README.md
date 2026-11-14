@@ -155,10 +155,10 @@ src/courtvision/   Python package (the internal name; the CLI is `sekme`)
   calib/ geometry/ camera, line refit, court model   physics/  3D flight fit
   events/          image_track, hits, serves, flights, strokes
   officiating/     line calls                        broadcast/ OCR of score graphic and radar board
-  eval/            labels, TrackNet, simulation, broadcast check
+  eval/            labels, TrackNet, E2E-Spot and six-video protocols, run provenance, simulation, broadcast check
   render/ api/     HUD videos, Review Room API       analytics/ sim/ io/
 web/               Review Room (React 19, Vite, three.js)
-scripts/           TrackNet benchmark, ball-network training and test
+scripts/           training of each network; TrackNet, E2E-Spot, serve-contact and six-video evaluations; label analyses
 tests/             unit, regression cases from real footage, API, end to end
 docs/              architecture, models, benchmark, licences; history/ holds the original plan
 promo/             HyperFrames promo film (footage not included)

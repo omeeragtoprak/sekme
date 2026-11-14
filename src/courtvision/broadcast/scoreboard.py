@@ -170,8 +170,10 @@ def parse_scoreboard(boxes: list[TextBox], img: np.ndarray | None, frame: int, t
         return None
     _, top, bot, rows, marks = best
     # Align number tokens of both rows into columns.
-    # A column holds at most one token per row; tokens closer than half a row height share a column.
-    tol = 0.5 * min(top.h, bot.h)
+    # A column holds at most one token per row; tokens closer than half a row height share a column. Box
+    # coordinates are normalised per axis, so the row height (y) is converted to x units with the frame's shape.
+    aspect = img.shape[0] / img.shape[1] if img is not None else 9 / 16
+    tol = 0.5 * min(top.h, bot.h) * aspect
     cols: list[list[tuple[int, TextBox]]] = []
     for ri, toks in enumerate(rows):
         for tk in toks:

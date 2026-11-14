@@ -76,6 +76,8 @@ def run_benchmark(camera: Camera, n_shots: int = 60, fps: float = 30.0, pixel_no
             decisive += 1
             correct += int((call.verdict == "IN") == truth_in)
     n = len(errs)
+    if n == 0:
+        raise ValueError("no simulated shot was fitted: nothing to report")
     return BenchmarkReport(
         n_shots=n, fps=fps, pixel_noise=pixel_noise,
         median_error_cm=100 * float(np.median(errs)), p90_error_cm=100 * float(np.percentile(errs, 90)),

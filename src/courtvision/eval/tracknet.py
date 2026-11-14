@@ -75,9 +75,12 @@ def contacts(lab: Labels, reach: int = 4) -> list[Contact]:
     """Reference contacts: meeting point of the labelled tracks just before and just after each bounce."""
     out = []
     n = len(lab.status)
+    events = np.flatnonzero(lab.status > 0)  # hits (1) and bounces (2): a track line never crosses one
     for i in np.flatnonzero(lab.status == 2):
-        pre = [j for j in range(max(0, i - reach), i) if lab.visible[j]][-2:]
-        post = [j for j in range(i + 1, min(n, i + 1 + reach)) if lab.visible[j]][:2]
+        lo = max([max(0, i - reach), *(e + 1 for e in events if e < i)])
+        hi = min([min(n, i + 1 + reach), *(e for e in events if e > i)])
+        pre = [j for j in range(lo, i) if lab.visible[j]][-2:]
+        post = [j for j in range(i + 1, hi) if lab.visible[j]][:2]
         if len(pre) < 2 or len(post) < 2:
             if lab.visible[i]:
                 out.append(Contact(float(i), lab.xy[i].copy(), False))
@@ -123,28 +126,29 @@ def ball_centre_ground(g: np.ndarray, camera: np.ndarray | None) -> np.ndarray:
 
 def match(refs: list[Contact], bounces: list[tuple[float, np.ndarray, str | None]], H: list,
           tol: float = 3.0, camera: np.ndarray | None = None) -> tuple[list[Match], int]:
-    """Pair each reference contact with the nearest unused system bounce within ``tol`` frames.
+    """Pair reference contacts with system bounces within ``tol`` frames, one to one, closest pairs first.
 
     ``bounces`` holds (frame, ground xy, verdict) of the system's measured bounces; ``H`` the per-frame
     world->image homographies (None where uncalibrated). Returns the matches (unmatched references keep
     ``sys_frame`` None) and the number of system bounces with no reference (false alarms).
     """
+    refs = sorted(refs, key=lambda c: c.frame)
+    pairs = sorted((abs(f - c.frame), i, j) for i, c in enumerate(refs) for j, (f, _, _) in enumerate(bounces)
+                   if abs(f - c.frame) <= tol)
+    taken: dict[int, int] = {}
     used: set[int] = set()
+    for _, i, j in pairs:
+        if i not in taken and j not in used:
+            taken[i] = j
+            used.add(j)
     out = []
-    for c in sorted(refs, key=lambda c: c.frame):
+    for i, c in enumerate(refs):
         k = int(round(c.frame))
         h = H[k] if 0 <= k < len(H) else None
         ref_xy = ball_centre_ground(np.asarray(world_from_px(h, tuple(c.px))), camera) if h is not None else None
-        best = None
-        for j, (f, _, _) in enumerate(bounces):
-            if j in used or abs(f - c.frame) > tol:
-                continue
-            if best is None or abs(f - c.frame) < abs(bounces[best][0] - c.frame):
-                best = j
-        if best is None:
+        if i not in taken:
             out.append(Match(c.frame, None, ref_xy, None))
             continue
-        used.add(best)
-        f, xy, verdict = bounces[best]
+        f, xy, verdict = bounces[taken[i]]
         out.append(Match(c.frame, f, ref_xy, np.asarray(xy, float), verdict))
     return out, len(bounces) - len(used)

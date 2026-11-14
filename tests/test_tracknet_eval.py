@@ -77,3 +77,28 @@ def test_game_offsets_are_subtracted_from_the_labels():
         lab = load_labels(p, (1.5, 0.5))
     assert np.allclose(lab.xy[0], [98.5, 199.5]) and not lab.visible[1]
     assert all(0.5 <= dx <= 2.0 and 0.5 <= dy <= 2.0 for dx, dy in GAME_LABEL_OFFSET_PX.values())
+
+
+def test_matching_takes_the_closest_pairs_first_not_the_references_in_order() -> None:
+    import numpy as np
+
+    from courtvision.eval.tracknet import Contact, match
+
+    refs = [Contact(10.0, np.array([0.0, 0.0]), True), Contact(12.0, np.array([0.0, 0.0]), True)]
+    bounces = [(11.5, np.array([0.0, 0.0]), "IN"), (8.0, np.array([0.0, 0.0]), "IN")]
+    m, false_alarms = match(refs, bounces, [None] * 20)
+    # In reference order, 10 would take 11.5 and leave 12 unmatched (8 is 4 frames from it).
+    assert [x.sys_frame for x in m] == [8.0, 11.5] and false_alarms == 0
+
+
+def test_a_contact_s_track_lines_stop_at_the_neighbouring_label() -> None:
+    import numpy as np
+
+    from courtvision.eval.tracknet import Labels, contacts
+
+    n = 40
+    xy = np.array([[10.0 * i, 100.0] for i in range(n)])
+    st = np.zeros(n, int)
+    st[20], st[21] = 2, 2  # one bounce labelled on two adjacent frames
+    c = contacts(Labels(np.ones(n, bool), xy, st))
+    assert [round(x.frame) for x in c] == [20, 21]  # the second does not borrow the first's track line
