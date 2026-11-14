@@ -172,7 +172,9 @@ promo/             HyperFrames promo film (footage not included)
   (*Sekme Noktasını İşaretle*) measures it on your own footage.
 - About a quarter of first bounces are still missed on unseen matches, mostly where stroke segmentation
   goes wrong. A learned stroke detector and a near-player rule were tried and rejected because they did
-  not hold up on the held-out games.
+  not hold up on the held-out games; refining the timing of rally hits made the hits more accurate but lost
+  first bounces on the development games it was checked on, so it was dropped too
+  ([details](docs/EVAL_TRACKNET.md)).
 - Serve detection rests on few real serves; serves struck before a camera cut cannot be recovered.
 - Lens distortion is not modelled; it is carried as uncertainty (max(court-line RMSE, 0.5 px) per call).
 - About 2.7× slower than real time on an M4 for 720p30 (90 s: 246 s without HUD rendering) and about 6× for
