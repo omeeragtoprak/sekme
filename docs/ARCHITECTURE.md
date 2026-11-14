@@ -81,6 +81,15 @@ is NumPy's per-call overhead on such small arrays, not arithmetic. Fewer RK4 ste
 compiled code, which means a new dependency. Nothing was changed; this is the reference for the six-video
 test's cached variant runs (five per video).
 
+**Perception on 1080p60 (measured 2026-11-14, first 600 frames of the 2025 final clip, MPS).** 67 ms per frame:
+the ball network 31.7 ms (one inference per frame on a t, t+2, t+4 window), the person network (YOLO26-s at
+1280 px, tracked) 34.5 ms, decoding 0.7 ms, cut detection 0.1 ms; the court calibrator's worker thread never held
+the loop up. Both networks are bound by GPU arithmetic: batching 2-8 ball windows per call gives bit-identical
+heatmaps but only about 5 % less time per window, and PyTorch's MPS backend runs one stream, so running the two
+networks in separate threads would not overlap their GPU work. Faster perception would mean fewer inferences
+(e.g. every second window at 60 fps) or smaller inputs, which change the detections and would need their own
+rule and test; nothing was changed.
+
 **The fits in worker processes (2026-11-14).** The flights of a run are planned in order and then fitted
 independently of each other, so `build_flights` can hand the fits to a process pool (`--fit-workers N` or
 `SEKME_FIT_WORKERS`; workers get the track, calibration and players once). On the same clip, cached detections,
