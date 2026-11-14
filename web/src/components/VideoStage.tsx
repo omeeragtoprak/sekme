@@ -69,6 +69,8 @@ type Props = {
   currentFrame: number;
   selectedFlightId: number | null;
   onFrame: (frame: number) => void;
+  /** False while another page (Analysis) covers the stage: its keyboard shortcuts are off then. */
+  active?: boolean;
   /** Ground-truth labelling: clicks on the video report the frame and the pixel. */
   labelMode?: boolean;
   onLabel?: (frame: number, px: [number, number]) => void;
@@ -286,6 +288,7 @@ export default function VideoStage({
   currentFrame,
   selectedFlightId,
   onFrame,
+  active = true,
   labelMode = false,
   onLabel,
   onCancelLabel,
@@ -467,6 +470,7 @@ export default function VideoStage({
 
   // Keyboard: ← / → step one frame (⇧ ten), space toggles play/pause, Esc leaves labelling.
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
       if (isTypingTarget(e.target)) return;
@@ -489,7 +493,7 @@ export default function VideoStage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, togglePlay, labelMode, onCancelLabel]);
+  }, [active, step, togglePlay, labelMode, onCancelLabel]);
 
   /** Video pixel under a pointer event on the stage. */
   const videoPx = (e: { clientX: number; clientY: number; currentTarget: Element }): [number, number, number, number] => {

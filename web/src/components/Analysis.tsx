@@ -509,8 +509,8 @@ function ServeTable({ serves, report, onOpen }: { serves: Flight[]; report: Repo
       </thead>
       <tbody>
         {serves.map((f) => {
-          const err =
-            f.board_speed_kmh && f.hit_speed_kmh ? (100 * (f.hit_speed_kmh - f.board_speed_kmh)) / f.board_speed_kmh : null;
+          const sp = trustedSpeed(f); // no difference from a rejected fit
+          const err = f.board_speed_kmh && sp ? (100 * (sp - f.board_speed_kmh)) / f.board_speed_kmh : null;
           return (
             <tr key={f.id} onClick={() => onOpen(f.id)} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onOpen(f.id)}>
               <th scope="row">{f.id + 1}</th>

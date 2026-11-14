@@ -64,6 +64,11 @@ function InspectorImpl(p: Props) {
     [p.report.flights, p.selectedFlightId],
   );
 
+  // A labelling error is shown on the shot tab: bring it forward so the click does not seem ignored.
+  useEffect(() => {
+    if (p.labelError) setTab("shot");
+  }, [p.labelError]);
+
   // Choosing a shot while the session facts are showing brings its details forward.
   useEffect(() => {
     if (p.selectedFlightId !== null) setTab((t) => (t === "session" ? "shot" : t));
@@ -176,7 +181,9 @@ function ShotPane({ runId, report, flight: f, reviews, reviewsState, onReviewPos
   const route = `${hitterLabel(f.hitter_name, report.players[f.hitter].label)} → ${halfLabel(f.receiver)}`;
   const unreliable = f.rejected ? "güvenilmez" : null;
   const radarErr =
-    f.board_speed_kmh && f.hit_speed_kmh ? (100 * (f.hit_speed_kmh - f.board_speed_kmh)) / f.board_speed_kmh : null;
+    !f.rejected && f.board_speed_kmh && f.hit_speed_kmh
+      ? (100 * (f.hit_speed_kmh - f.board_speed_kmh)) / f.board_speed_kmh
+      : null;
   const bounceFrame = f.bounce?.frame ?? f.bounce_frame;
 
   return (

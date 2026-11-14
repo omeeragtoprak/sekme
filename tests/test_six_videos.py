@@ -140,3 +140,116 @@ def test_score_takes_only_serve_label_files_as_videos(tmp_path: Path) -> None:
         (tmp_path / f"m2025_final{suffix}.json").write_text("{}")
     (tmp_path / "w2024_sf.json").write_text("{}")
     assert eval_six_videos.label_names(tmp_path) == ["m2025_final", "w2024_sf"]
+
+
+def test_inclusive_thresholds_hold_exactly_at_the_boundary() -> None:
+    # 30 labelled serves, matched 4 -> 7: exactly +10 points (float subtraction gives 9.999999999999998).
+    vids = []
+    for v in range(3):
+        labels = [_label(1000 * k + 100) for k in range(10)]
+        found_d, found_s = (2, 3) if v == 0 else (1, 2)
+        d = [_serve(k, 1000 * k + 99, 1000 * k + 100.5, bounce=1000 * k + 130) for k in range(found_d)]
+        s = [_serve(k, 1000 * k + 99, 1000 * k + 100.5, bounce=1000 * k + 130) for k in range(found_s)]
+        vids.append((FPS, labels, {"video": {"fps": FPS}, "flights": d}, {"video": {"fps": FPS}, "flights": s}))
+    v = fps_rule(vids)
+    assert v.numbers["recall_default"] * 30 / 100 == 4 and v.criteria["recall +10 points"] is True
+
+
+def test_player_coverage_boundary_is_exact() -> None:
+    from courtvision.eval.six_videos import player_rule
+
+    n = 120  # near present 120, found 5 -> 11: +5 points exactly (float gives 4.999...)
+    labels = [{"frame": i, "main": True, "near": [500.0, 900.0], "far": None} for i in range(n)]
+    on_near = [480.0, 700.0, 520.0, 900.0]
+    a = _frames(n, lambda i: on_near if i < 5 else None, lambda i: None)
+    b = _frames(n, lambda i: on_near if i < 11 else None, lambda i: None)
+    v = player_rule([(labels, [], a, b, 1080)])
+    assert v.criteria["near coverage +5 points"] is True
+
+
+def test_a_flip_is_not_hidden_by_one_to_one_pairing() -> None:
+    a = _report([_serve(0, 0, 10.0, verdict="IN", bounce=40.0)])
+    b = _report([_serve(0, 0, 10.0, verdict="IN", bounce=39.0), _serve(1, 0, 10.0, verdict="OUT", bounce=41.0)])
+    assert decisive_flips(a, b) == [(40.0, "IN", "OUT")]
+
+
+def test_labels_are_validated() -> None:
+    import pytest
+
+    from courtvision.eval.six_videos import check_player_labels, check_serve_labels
+
+    check_serve_labels([_label(100), _label(200, mph=None)])
+    for bad in ({"lo": 5, "hi": 4, "side": "near", "radar": None}, {"lo": 1, "hi": 2, "side": "left", "radar": None},
+                {"lo": 1, "hi": 2, "side": "near"}, {"lo": 1, "hi": 2, "side": "near", "radar": {"value": 120}}):
+        with pytest.raises(ValueError):
+            check_serve_labels([bad])
+    check_player_labels([{"frame": 3, "main": True, "near": [1.0, 2.0], "far": None}])
+    for bad in ({"frame": 3, "near": None, "far": None}, {"frame": 3, "main": True, "near": [1.0], "far": None},
+                {"frame": -1, "main": False, "near": None, "far": None}):
+        with pytest.raises(ValueError):
+            check_player_labels([bad])
+    with pytest.raises(ValueError):  # a frame labelled twice
+        check_player_labels([{"frame": 3, "main": False, "near": None, "far": None}] * 2)
+
+
+def test_reported_call_changes_and_speeds() -> None:
+    from courtvision.eval.six_videos import call_changes, speed_report
+
+    def call(v: str, x: float, sig: float, p: float) -> dict:
+        return {"verdict": v, "x": x, "y": 10.0, "sigma_m": sig, "p_in": p}
+
+    a = _report([_serve(0, 0, 10.0, bounce=40.0), _serve(1, 200, 210.0, bounce=240.0)])
+    b = _report([_serve(0, 0, 10.0, bounce=41.0), _serve(1, 200, 210.0, verdict="REVIEW", bounce=240.0),
+                 _serve(2, 400, 410.0, bounce=440.0)])
+    for f, c in zip(a["flights"] + b["flights"], [call("IN", 1.0, 0.02, 1.0), call("IN", 2.0, 0.02, 0.9),
+                                                  call("IN", 1.1, 0.03, 1.0), call("REVIEW", 2.0, 0.02, 0.5),
+                                                  call("IN", 3.0, 0.02, 1.0)], strict=True):
+        f["call"] = c
+    cc = call_changes([(a, b)])
+    assert (cc["calls_a"], cc["calls_b"], cc["only_a"], cc["only_b"], cc["review_changes"]) == (2, 3, 0, 1, 1)
+    assert cc["verdict_changes"]["serve"] == [(240.0, "IN", "REVIEW")]
+    assert abs(cc["paired"]["serve"]["shift_cm"]["max"] - 10.0) < 1e-9
+    sp = speed_report([([_label(8, mph=100.0), _label(208, mph=120.0)], a)])
+    assert sp["labelled_board"]["n"] == 2 and sp["board_115mph_up"]["n"] == 1 and sp["board_below_100mph"]["n"] == 0
+
+
+def _script():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import eval_six_videos
+
+    return eval_six_videos
+
+
+def test_score_refuses_anything_but_the_six_and_an_existing_result(tmp_path: Path) -> None:
+    import pytest
+
+    e = _script()
+    assert len(e.NAMES) == 6
+    for n in e.NAMES[:5]:
+        (tmp_path / f"{n}.json").write_text('{"serves": []}')
+    with pytest.raises(SystemExit, match="exactly the six"):
+        e.score(tmp_path, tmp_path / "out.txt")
+    (tmp_path / f"{e.NAMES[5]}.json").write_text('{"serves": []}')
+    (tmp_path / "out.txt").write_text("{}")
+    with pytest.raises(SystemExit, match="scored once"):
+        e.score(tmp_path, tmp_path / "out.txt")
+
+
+def test_provenance_catches_wrong_flags_video_and_models() -> None:
+    e = _script()
+    models = {"ball": {"sha256": "b4"}, "court": {"sha256": "c"}}
+
+    def rep(kind: str) -> dict:
+        return {"candidates": {f: True for f in e.FLAGS[kind]}, "video": {"sha256": "v"}, "models": models}
+
+    runs = {k: rep(k) for k in e.KINDS}
+    assert e.check_provenance("x", runs, {"x": {"sha256": "v"}}, "b4") == []
+    runs["scaled"] = rep("default")  # a run made without its flag
+    runs["players"] = {**rep("players"), "video": {"sha256": "other"}}
+    runs["bridge"] = {**rep("bridge"), "models": {"ball": {"sha256": "b3"}, "court": {"sha256": "c"}}}
+    problems = e.check_provenance("x", runs, {"x": {"sha256": "v"}}, "b4")
+    assert any("x/scaled: made with []" in p for p in problems)
+    assert any("x/players: video" in p for p in problems)
+    assert any("x/bridge: models" in p for p in problems)
+    unlisted = e.check_provenance("x", {k: rep(k) for k in e.KINDS}, {}, "b4")
+    assert unlisted[0] == "x: no SHA-256 in manifest.json" and len(unlisted) == 1 + len(e.KINDS)

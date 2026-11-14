@@ -42,12 +42,14 @@ function SidebarImpl({ report, reviews, selectedFlightId, onSelect, health }: Pr
     return s;
   }, [reviews]);
 
-  // A shot selected elsewhere (timeline, court) must never be hidden by the filter.
+  // A shot selected elsewhere (timeline, court) must never be hidden by the filter. Only a new selection
+  // resets it: a tile the reviewer chooses afterwards stays chosen even if it hides the selected shot.
   useEffect(() => {
     if (selectedFlightId === null) return;
     const f = flights.find((x) => x.id === selectedFlightId);
-    if (f && !active.test(f)) setFilter("all");
-  }, [selectedFlightId, flights, active]);
+    if (!f) return;
+    setFilter((cur) => ((cur === "all" ? ALL : (TILES.find((t) => t.key === cur) ?? ALL)).test(f) ? cur : "all"));
+  }, [selectedFlightId, flights]);
 
   useEffect(() => {
     if (selectedFlightId === null) return;

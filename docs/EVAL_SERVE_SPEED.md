@@ -218,3 +218,37 @@ Otherwise it is rejected and its code removed. Reported, not used: ball detectio
 REVIEW changes, bounce shifts, and the speed pairs. Still counted in frames after the change: the serve
 contact search windows (`b − 2 … b + 3`, `refine_contact`, `contact_in_gap`) and the 3-detection minimum
 of a toss run; at 60 fps they cover half the time.
+
+## Scoring code corrected before any download (2026-11-14, after an independent review of the code)
+
+A review of the scoring code against this plan (`src/courtvision/eval/six_videos.py`,
+`scripts/eval_six_videos.py`), made before anything was downloaded, found places where the code did not do
+what the plan says. Corrected, none of the rules changed:
+
+- **"At least" and "no more than" hold at their boundary.** The percentages of counts were subtracted in
+  floating point, so 4 → 7 found serves of 30 gave a rise of 9.999… points and failed "at least 10"; they
+  are now compared exactly (fractions of counts), as are the two-thirds criteria.
+- **A partial set is refused**, as written: `score` needs the serve labels of exactly the six named videos,
+  and every run of each.
+- **Every run is checked to be what it claims:** made with exactly its variant's flags (the report records
+  them), from the downloaded file (its SHA-256 against the download manifest), with the same models in all
+  runs and ball v4 (`models/sekme_ball.pt`). Runs are made only from committed analysis code, and the commit
+  is taken before the run starts (a run during which the code changes is discarded). The scorer itself is
+  not part of the analysis, so a change to it does not make the runs stale; `score` refuses uncommitted
+  changes to either, and an existing result file (the test is scored once).
+- **Frame lists:** an existing list is never overwritten; at scoring, the presence list must be the one drawn
+  for the video's frame count as the analysis decoded it, and the disagreement list the one drawn from the
+  runs. Labels must have every field (a missing "main camera" or player field is an error, not a default).
+- **Decisive flips:** every pair of bounces within 2 frames counts, not only a one-to-one pairing, which
+  could pair a bounce with the agreeing one of two neighbours and hide the opposite call.
+
+Clarified, as the code already did it: *wrong selections (share of player-frames)* counts two player-frames
+per labelled main-camera frame (near and far), whether or not the player is in view, since tracking a player
+labelled out of view is a wrong selection too.
+
+The items "reported, not used" were not produced; they now are (`reported_not_used` in the result file),
+including a run with the toss bridge and the pin (`bridge_pin`), which "the same with the toss bridge" needs.
+Variant runs drop their copy of the perception cache once made (it stays in the default run), for the disk.
+
+Not changed, noted: s = round(fps / 30) is already 2 from 45 fps, so "s = 1 below 50 fps" above is only
+true below 45 fps; the rule keeps videos of 50 fps and more, and all six are 60 fps.

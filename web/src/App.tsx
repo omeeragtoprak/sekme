@@ -219,7 +219,10 @@ export default function App() {
     setServeSummary(null);
     setServeError(null);
     api.serveSummary(runId, ctrl.signal).then(setServeSummary, () => undefined);
-    return () => ctrl.abort();
+    return () => {
+      ctrl.abort();
+      reviewsCtrl.current?.abort(); // a history reload for the previous run must not land in this one
+    };
   }, [runId, reloadKey]);
 
   const reviewsCtrl = useRef<AbortController | null>(null);
@@ -228,10 +231,11 @@ export default function App() {
     reviewsCtrl.current?.abort();
     const ctrl = new AbortController();
     reviewsCtrl.current = ctrl;
+    const still = () => currentRunId.current === runId;
     api.reviews(runId, ctrl.signal).then(
-      (list) => setReviews({ status: "ready", data: Array.isArray(list) ? list : [] }),
+      (list) => still() && setReviews({ status: "ready", data: Array.isArray(list) ? list : [] }),
       (err: unknown) => {
-        if (!isAbort(err)) setReviews({ status: "error", error: errorText(err) });
+        if (!isAbort(err) && still()) setReviews({ status: "error", error: errorText(err) });
       },
     );
   }, [runId]);
@@ -240,13 +244,15 @@ export default function App() {
 
   const onReviewPosted = useCallback(
     (r: Review) => {
+      // A review posted for a run the reviewer has since left belongs to that run, not this one.
+      if (currentRunId.current !== runId) return;
       // Show the new review immediately, then re-read the authoritative history from GET /reviews.
       setReviews((prev) =>
         prev.status === "ready" ? { status: "ready", data: [...prev.data.filter((x) => x.id !== r.id), r] } : prev,
       );
       reloadReviews();
     },
-    [reloadReviews],
+    [reloadReviews, runId],
   );
 
   const reportData = report.status === "ready" ? report.data : null;
@@ -298,30 +304,42 @@ export default function App() {
     [onSelectFlight, view, media, onViewChange],
   );
   const onCancelLabel = useCallback(() => setLabelingId(null), []);
+  // One request at a time: a double click must not save two labels in the append-only log.
+  const labelPosting = useRef(false);
   const onLabel = useCallback(
     (frame: number, px: [number, number]) => {
-      if (!runId || labelingId === null) return;
+      if (!runId || labelingId === null || labelPosting.current) return;
       let labeler = "";
       try {
         labeler = window.localStorage.getItem("courtvision.reviewer")?.trim() ?? "";
       } catch {
         /* storage unavailable */
       }
-      api.postLabel(runId, { flight_id: labelingId, frame, px, labeler: labeler || "Hakem", note: "" }).then(
-        (rec) => {
-          setLabels((prev) => [...prev, rec]);
-          setLabelingId(null);
-          api.labelSummary(runId).then(setLabelSummary, () => undefined);
-        },
-        (err: unknown) => setLabelError(errorText(err)),
-      );
+      labelPosting.current = true;
+      setLabelError(null);
+      const still = () => currentRunId.current === runId;
+      api
+        .postLabel(runId, { flight_id: labelingId, frame, px, labeler: labeler || "Hakem", note: "" })
+        .then(
+          (rec) => {
+            if (!still()) return;
+            setLabels((prev) => [...prev, rec]);
+            setLabelingId(null);
+            api.labelSummary(runId).then((s) => still() && setLabelSummary(s), () => undefined);
+          },
+          (err: unknown) => still() && setLabelError(errorText(err)),
+        )
+        .finally(() => {
+          labelPosting.current = false;
+        });
     },
     [runId, labelingId],
   );
 
+  const servePosting = useRef(false);
   const postServeLabel = useCallback(
     (make: (labeler: string) => ServeLabelIn) => {
-      if (!runId) return;
+      if (!runId || servePosting.current) return; // a double click would get a 409 for its own mark
       let labeler = "";
       try {
         labeler = window.localStorage.getItem("courtvision.reviewer")?.trim() ?? "";
@@ -331,14 +349,21 @@ export default function App() {
       setServeError(null);
       // A reply that lands after the reviewer switched runs must not overwrite the new run's panel.
       const still = () => currentRunId.current === runId;
-      api.postServeLabel(runId, make(labeler || "Hakem")).then(
-        () =>
-          api.serveSummary(runId).then(
-            (s) => still() && setServeSummary(s),
-            () => undefined,
-          ),
-        (err: unknown) => still() && setServeError(errorText(err)),
-      );
+      servePosting.current = true;
+      api
+        .postServeLabel(runId, make(labeler || "Hakem"))
+        .then(
+          () =>
+            api.serveSummary(runId).then(
+              (s) => still() && setServeSummary(s),
+              (err: unknown) =>
+                still() && setServeError(`Kaydedildi, ama liste yenilenemedi (${errorText(err)}); sayfayı yenileyin.`),
+            ),
+          (err: unknown) => still() && setServeError(errorText(err)),
+        )
+        .finally(() => {
+          servePosting.current = false;
+        });
     },
     [runId],
   );
@@ -476,6 +501,7 @@ export default function App() {
               currentFrame={currentFrame}
               selectedFlightId={selectedFlightId}
               onFrame={setCurrentFrame}
+              active={mode === "review"}
               labelMode={labelingId !== null && labelingId === selectedFlightId}
               onLabel={onLabel}
               onCancelLabel={onCancelLabel}
