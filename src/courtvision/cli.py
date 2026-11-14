@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -32,6 +33,8 @@ def _analyze(args: argparse.Namespace) -> int:
         if key not in cfg.models or not path:
             raise SystemExit(f"--model expects KEY=PATH with KEY in {sorted(cfg.models)}, got {item!r}")
         cfg.models[key] = str(Path(path).resolve())
+    if args.fit_workers is not None:
+        os.environ["SEKME_FIT_WORKERS"] = str(max(1, args.fit_workers))
     report = analyze(args.video, out, cfg, progress)
     print(file=sys.stderr)
     cal = report["calibration"]
@@ -105,6 +108,9 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--fps-scaled-thresholds", action="store_true",
                    help="candidate: frame counts set on 30 fps video scaled by round(fps / 30) (off by default, "
                         "docs/EVAL_SERVE_SPEED.md)")
+    a.add_argument("--fit-workers", type=int, default=None, metavar="N",
+                   help="processes for the 3D flight fits (same results; default SEKME_FIT_WORKERS or 1). "
+                        "About 3x faster re-analysis of a long run with 4")
     a.add_argument("--model", action="append", default=[], metavar="KEY=PATH",
                    help="override a network checkpoint: court, ball, players or pose (repeatable)")
     a.set_defaults(fn=_analyze)

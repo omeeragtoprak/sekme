@@ -7,6 +7,9 @@ the gated image-kink bounce. The call adds the calibration uncertainty to the fi
 
 from __future__ import annotations
 
+import multiprocessing
+import os
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
 
 import numpy as np
@@ -239,14 +242,18 @@ def calibration_cov(cal: FrameCalibration, xy: np.ndarray) -> np.ndarray:
 def build_flights(ball: BallTrack, hits: list[Hit], calib: list[FrameCalibration], fps: float,
                   players: dict[str, PlayerTrack], segments: list[tuple[int, int]] | None = None,
                   frame_w: int = 1920, min_points: int = 8, pixel_sigma: float = 2.5,
-                  dead_ball_s: float = 1.0, pin_serve_height: bool = False) -> list[Flight]:
+                  dead_ball_s: float = 1.0, pin_serve_height: bool = False,
+                  workers: int | None = None) -> list[Flight]:
     """Flights between hits inside measurable segments (no flight crosses a cut or an uncalibrated span).
 
     A serve's toss starts a new point: the flight before it ends with the point (no receiver
     evidence), and the toss itself is not a flight.
+
+    The flights are planned in order and fitted independently of each other, so on a long run the fits can run
+    in a process pool (`workers`, default `fit_workers()`); the result is the same list as fitting them in turn.
     """
     segs = segments if segments is not None else [(0, len(ball.xy))]
-    flights: list[Flight] = []
+    tasks: list[dict] = []
     for S, E in segs:
         starts = sorted({h.toss_start for h in hits if h.serve and h.toss_start is not None and S < h.toss_start < E})
         # The previous point ends before the dead-ball window (only the ball held by the server is seen there).
@@ -268,13 +275,46 @@ def build_flights(ball: BallTrack, hits: list[Hit], calib: list[FrameCalibration
                                              strict=True):
                 if e - s < min_points:
                     continue
-                fl = _fit_one(ball, calib, fps, players, s, e, opener.side if opener else None, ender, S, frame_w,
-                              min_points, pixel_sigma, dead_ball_s, serve=bool(opener and opener.serve),
-                              contact_px=opener.px if opener is not None else None,
-                              contact_sub=opener.contact_sub if opener is not None else None,
-                              pin_serve_height=pin_serve_height)
-                flights.append(fl)
-    return flights
+                tasks.append(dict(s=s, e=e, hitter=opener.side if opener else None, ender=ender, seg_start=S,
+                                  frame_w=frame_w, min_points=min_points, pixel_sigma=pixel_sigma,
+                                  dead_ball_s=dead_ball_s, serve=bool(opener and opener.serve),
+                                  contact_px=opener.px if opener is not None else None,
+                                  contact_sub=opener.contact_sub if opener is not None else None,
+                                  pin_serve_height=pin_serve_height))
+    n = min(fit_workers() if workers is None else workers, len(tasks))
+    if n <= 1 or len(tasks) < MIN_PARALLEL_FITS:
+        return [_fit_one(ball, calib, fps, players, **t) for t in tasks]
+    ctx = multiprocessing.get_context("spawn")  # fork is not safe once OpenCV and torch are loaded (macOS)
+    with ProcessPoolExecutor(max_workers=n, mp_context=ctx, initializer=_init_fit_worker,
+                             initargs=((ball, calib, fps, players),)) as pool:
+        try:
+            return list(pool.map(_fit_task, tasks))
+        except BaseException:
+            pool.shutdown(cancel_futures=True)  # a failed fit (or Ctrl-C) does not wait for the queued ones
+            raise
+
+
+MIN_PARALLEL_FITS = 24  # below this, starting the worker processes (about a second each) costs more than it saves
+_WORKER: tuple = ()
+
+
+def fit_workers() -> int:
+    """Processes for the 3D fits: SEKME_FIT_WORKERS (default 1, in turn). Opt-in on purpose: the workers import
+    this code afresh, so a script that patches it at run time (an experiment) must stay at 1 to keep its patch."""
+    try:
+        return max(1, int(os.environ.get("SEKME_FIT_WORKERS") or 1))
+    except ValueError:  # a typo must not fail an analysis at its end, after the detection work
+        return 1
+
+
+def _init_fit_worker(state: tuple) -> None:
+    global _WORKER
+    _WORKER = state
+
+
+def _fit_task(task: dict) -> Flight:
+    ball, calib, fps, players = _WORKER
+    return _fit_one(ball, calib, fps, players, **task)
 
 
 def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players: dict[str, PlayerTrack],

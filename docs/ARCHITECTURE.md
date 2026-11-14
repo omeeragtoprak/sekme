@@ -81,6 +81,14 @@ is NumPy's per-call overhead on such small arrays, not arithmetic. Fewer RK4 ste
 compiled code, which means a new dependency. Nothing was changed; this is the reference for the six-video
 test's cached variant runs (five per video).
 
+**The fits in worker processes (2026-11-14).** The flights of a run are planned in order and then fitted
+independently of each other, so `build_flights` can hand the fits to a process pool (`--fit-workers N` or
+`SEKME_FIT_WORKERS`; workers get the track, calibration and players once). On the same clip, cached detections,
+no rendering or OCR: analysis 143.2 s in turn, 45.4 s with 4 workers, and the report is identical apart from its
+creation time and timings (also checked in a test, flight by flight, to the bit). It is opt-in: the workers
+import the code afresh, so a script that patches it at run time (as the development experiments do) has to stay
+at one process, and short runs (fewer than 24 fits) are fitted in turn anyway.
+
 **Review Room on a long run (measured 2026-11-14, 554 s clip, 33 209 frames, 237 shots).** Playback and frame
 steps: the timeline used to rebuild its ~600 markers on every frame (54.7 ms median per step, development
 build); it now builds them once per run, selection and zoom (3.9 ms). Opening the run takes about 2 s (warm):

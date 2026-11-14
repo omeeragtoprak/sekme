@@ -441,3 +441,65 @@ def test_the_tracker_predicts_the_next_step_of_a_constant_acceleration_track() -
     cands.append([BallCandidate(250.0, 300.0, 1.0)])
     tr = track_ball(cands, 1280)
     assert tr.xy[3, 0] == 160.0
+
+
+def test_fitting_the_flights_in_worker_processes_gives_the_same_flights(broadcast_camera, monkeypatch):
+    import courtvision.events.flights as flights_mod
+    from courtvision.sim.simulate import simulate_shot
+
+    # A two-shot rally: near player hits at frame 10, far player returns at frame k.
+    fps, n, s0 = 30.0, 150, 10
+    rng = np.random.default_rng(1)
+    a = simulate_shot(broadcast_camera, np.array([0.5, -11.0, 1.0]), np.array([-1.0, 7.0]), 110, fps=fps,
+                      pixel_noise=0.5, rng=rng, phase=0.0)
+    xy = np.full((n, 2), np.nan)
+    k = s0 + len(a.pixels)
+    xy[s0:k] = a.pixels
+    b = simulate_shot(broadcast_camera, np.array([-1.0, 11.0, 1.0]), np.array([1.5, -6.0]), 100, fps=fps,
+                      pixel_noise=0.5, rng=rng, phase=0.0)
+    m = min(len(b.pixels), n - k)
+    xy[k:k + m] = b.pixels[:m]
+    src = np.where(np.isfinite(xy[:, 0]), 1, 0)
+    ball = BallTrack(xy, src.astype(float), src)
+    H = broadcast_camera.ground_homography()
+    calib = [FrameCalibration(True, H, np.linalg.inv(H), broadcast_camera, 1.0, 0.3) for _ in range(n)]
+    players = {side: PlayerTrack(side, np.tile(box, (n, 1)), np.tile(feet, (n, 1))) for side, box, feet in
+               (("near", [900.0, 700.0, 960.0, 900.0], [0.5, -11.8]),
+                ("far", [900.0, 100.0, 930.0, 170.0], [-1.0, 11.8]))}
+    hits = [Hit(s0, "near", xy[s0].copy(), True), Hit(k, "far", xy[k].copy(), True)]
+
+    def key(fl):
+        fit = fl.fit
+        return (fl.start_frame, fl.end_frame, fl.hitter, fl.kind, fl.bounce_frame, fl.rejected, fl.notes,
+                None if fl.call is None else (fl.call.verdict, fl.call.p_in, fl.call.margin_m),
+                None if fit is None else (fit.params.tobytes(), fit.cov.tobytes(), fit.rms_px))
+
+    alone = build_flights(ball, hits, calib, fps, players, [(0, n)], workers=1)
+    monkeypatch.setattr(flights_mod, "MIN_PARALLEL_FITS", 2)  # a pool even for these few flights
+    pooled = build_flights(ball, hits, calib, fps, players, [(0, n)], workers=2)
+    assert len(alone) >= 2 and any(fl.fit is not None for fl in alone)
+    assert [key(f) for f in pooled] == [key(f) for f in alone]
+
+
+def test_fit_workers_setting_and_the_in_turn_fallback(monkeypatch):
+    import courtvision.events.flights as flights_mod
+
+    for value, expect in ((None, 1), ("3", 3), ("0", 1), ("four", 1)):
+        if value is None:
+            monkeypatch.delenv("SEKME_FIT_WORKERS", raising=False)
+        else:
+            monkeypatch.setenv("SEKME_FIT_WORKERS", value)
+        assert flights_mod.fit_workers() == expect
+
+    def no_pool(*a, **k):
+        raise AssertionError("a pool was started for a short run")
+
+    # Fewer fits than MIN_PARALLEL_FITS are fitted in turn even when workers are asked for.
+    monkeypatch.setattr(flights_mod, "ProcessPoolExecutor", no_pool)
+    n = 60
+    xy = np.full((n, 2), np.nan)
+    xy[5:50] = np.column_stack([np.linspace(900, 1000, 45), np.linspace(300, 700, 45)])
+    src = np.where(np.isfinite(xy[:, 0]), 1, 0)
+    flights = build_flights(BallTrack(xy, src.astype(float), src), [], _calib([False] * n), FPS, {}, [(0, n)],
+                            workers=4)
+    assert len(flights) == 1
