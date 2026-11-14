@@ -31,6 +31,9 @@ function fmtTick(s: number, step: number): string {
   return `${m}:${sec}`;
 }
 
+// Marker clicks must not start a scrub on the track underneath.
+const stopPointer = (e: ReactPointerEvent) => e.stopPropagation();
+
 function TimelineImpl({ report, calibValid, currentFrame, selectedFlightId, onSeek, onSelectFlight }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -69,6 +72,73 @@ function TimelineImpl({ report, calibValid, currentFrame, selectedFlightId, onSe
 
   const cuts = useMemo(() => report.calibration.shot_cuts.filter((f) => f > 0), [report.calibration.shot_cuts]);
 
+  // The markers (uncalibrated runs, cuts, flights, hits, bounces: hundreds of elements on a long clip) do not
+  // depend on the current frame. Built once per run, selection and zoom, so a playback frame re-renders only the
+  // playhead instead of every marker (it took ~140 ms per frame on the 554 s clip, development build).
+  const markers = useMemo(
+    () => (
+      <>
+              {uncalibrated.map(([a, b]) => (
+                <div
+                  key={`u${a}`}
+                  className="tl-uncal"
+                  style={{ left: `${pct(a)}%`, width: `${Math.max(0.15, pct(b + 1) - pct(a))}%` }}
+                  title={`${a}–${b}. kareler kalibre değil (kort katmanı ve karar yok)`}
+                />
+              ))}
+              {cuts.map((f) => (
+                <div key={`c${f}`} className="tl-cut" style={{ left: `${pct(f)}%` }} title={`${f}. karede kamera geçişi`} />
+              ))}
+              {report.flights.map((f, i) => (
+                <div
+                  key={`f${f.id}`}
+                  className={`tl-flight ${i % 2 ? "is-odd" : ""} ${f.id === selectedFlightId ? "is-selected" : ""}`}
+                  style={{ left: `${pct(f.start_frame)}%`, width: `${Math.max(0, pct(f.end_frame) - pct(f.start_frame))}%` }}
+                />
+              ))}
+              {report.hits.map((h, i) => {
+                const who = playerName(report.players[h.side].label);
+                return (
+                  <button
+                    key={`h${i}`}
+                    type="button"
+                    className={`tl-hit tl-hit--${h.side}`}
+                    style={{ left: `${pct(h.frame)}%` }}
+                    onPointerDown={stopPointer}
+                    onClick={() => onSeek(h.frame)}
+                    aria-label={`${who} vuruşu, ${fmtClock(h.t)}, kare ${h.frame}`}
+                    title={`${h.serve ? "Servis" : "Vuruş"} · ${who} (${SIDE_LABEL[h.side]}) · kare ${h.frame}${h.next_to_player ? "" : " · oyuncunun yanında değil"}`}
+                  />
+                );
+              })}
+              {report.flights.map((f) => {
+                const bf = bounceFrameOf(f);
+                const raw = bounceFrameRaw(f);
+                if (bf === null || raw === null) return null;
+                const label = f.call ? `${verdictLabel(f.call.verdict)} · ${fmtProb(f.call.p_in)}` : "karar yok";
+                return (
+                  <button
+                    key={`b${f.id}`}
+                    type="button"
+                    className={`tl-bounce ${f.call ? "" : "tl-bounce--nocall"} ${f.id === selectedFlightId ? "is-selected" : ""}`}
+                    style={{ left: `${pct(raw)}%`, "--c": verdictColor(f.call?.verdict) } as CSSProperties}
+                    onPointerDown={stopPointer}
+                    onClick={() => {
+                      onSelectFlight(f.id);
+                      onSeek(bf);
+                    }}
+                    aria-label={`Vuruş ${f.id + 1} sekmesi: ${label}, kare ${bf}`}
+                    title={`Vuruş ${f.id + 1} sekmesi · ${label} · kare ${bf}`}
+                  />
+                );
+              })}
+      </>
+    ),
+    // pct() depends only on fps and duration, which come with the report.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [report, uncalibrated, cuts, selectedFlightId, onSeek, onSelectFlight],
+  );
+
   // Keep the playhead visible when zoomed in (unless the user is scrubbing).
   useEffect(() => {
     const sc = scrollRef.current;
@@ -106,7 +176,6 @@ function TimelineImpl({ report, calibValid, currentFrame, selectedFlightId, onSe
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
-  const stopPointer = (e: ReactPointerEvent) => e.stopPropagation();
 
   return (
     <div className={`timeline ${dense ? "timeline--dense" : ""}`}>
@@ -141,60 +210,7 @@ function TimelineImpl({ report, calibValid, currentFrame, selectedFlightId, onSe
             aria-valuetext={`kare ${currentFrame}, ${fmtClock(currentFrame / fps)}`}
           >
             <div className="tl-mid" />
-            {uncalibrated.map(([a, b]) => (
-              <div
-                key={`u${a}`}
-                className="tl-uncal"
-                style={{ left: `${pct(a)}%`, width: `${Math.max(0.15, pct(b + 1) - pct(a))}%` }}
-                title={`${a}–${b}. kareler kalibre değil (kort katmanı ve karar yok)`}
-              />
-            ))}
-            {cuts.map((f) => (
-              <div key={`c${f}`} className="tl-cut" style={{ left: `${pct(f)}%` }} title={`${f}. karede kamera geçişi`} />
-            ))}
-            {report.flights.map((f, i) => (
-              <div
-                key={`f${f.id}`}
-                className={`tl-flight ${i % 2 ? "is-odd" : ""} ${f.id === selectedFlightId ? "is-selected" : ""}`}
-                style={{ left: `${pct(f.start_frame)}%`, width: `${Math.max(0, pct(f.end_frame) - pct(f.start_frame))}%` }}
-              />
-            ))}
-            {report.hits.map((h, i) => {
-              const who = playerName(report.players[h.side].label);
-              return (
-                <button
-                  key={`h${i}`}
-                  type="button"
-                  className={`tl-hit tl-hit--${h.side}`}
-                  style={{ left: `${pct(h.frame)}%` }}
-                  onPointerDown={stopPointer}
-                  onClick={() => onSeek(h.frame)}
-                  aria-label={`${who} vuruşu, ${fmtClock(h.t)}, kare ${h.frame}`}
-                  title={`${h.serve ? "Servis" : "Vuruş"} · ${who} (${SIDE_LABEL[h.side]}) · kare ${h.frame}${h.next_to_player ? "" : " · oyuncunun yanında değil"}`}
-                />
-              );
-            })}
-            {report.flights.map((f) => {
-              const bf = bounceFrameOf(f);
-              const raw = bounceFrameRaw(f);
-              if (bf === null || raw === null) return null;
-              const label = f.call ? `${verdictLabel(f.call.verdict)} · ${fmtProb(f.call.p_in)}` : "karar yok";
-              return (
-                <button
-                  key={`b${f.id}`}
-                  type="button"
-                  className={`tl-bounce ${f.call ? "" : "tl-bounce--nocall"} ${f.id === selectedFlightId ? "is-selected" : ""}`}
-                  style={{ left: `${pct(raw)}%`, "--c": verdictColor(f.call?.verdict) } as CSSProperties}
-                  onPointerDown={stopPointer}
-                  onClick={() => {
-                    onSelectFlight(f.id);
-                    onSeek(bf);
-                  }}
-                  aria-label={`Vuruş ${f.id + 1} sekmesi: ${label}, kare ${bf}`}
-                  title={`Vuruş ${f.id + 1} sekmesi · ${label} · kare ${bf}`}
-                />
-              );
-            })}
+            {markers}
             <div className="tl-playhead" style={{ left: `${pct(currentFrame)}%` }} />
           </div>
           <div className="tl-ticks num" aria-hidden="true">
