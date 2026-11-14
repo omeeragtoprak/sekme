@@ -47,15 +47,24 @@ def bias(pred: list, truth: list, within: float = 10.0) -> dict:
             "se": round(float(se.max()), 3)}
 
 
+def add_noise(frame: np.ndarray, sigma: float, seed: int) -> np.ndarray:
+    """Gaussian sensor noise of 1 sigma ``sigma`` (fraction of full scale) on a BGR frame, fixed by ``seed``."""
+    noise = np.random.default_rng(seed).normal(0.0, sigma * 255.0, frame.shape)
+    return np.clip(frame.astype(np.float32) + noise, 0, 255).astype(np.uint8)
+
+
 def run(weights: str, dev: torch.device, games: range = TEST, shifts: tuple[float, ...] = (0.0,),
-        clip_dirs: list[Path] | None = None, centred_truth: bool = False) -> dict:
-    """``centred_truth``: score against the ball's image centre (label minus LABEL_OFFSET), not the label."""
+        clip_dirs: list[Path] | None = None, centred_truth: bool = False, noise_sigma: float = 0.0) -> dict:
+    """``centred_truth``: score against the ball's image centre (label minus LABEL_OFFSET), not the label.
+    ``noise_sigma``: add the same seeded Gaussian noise to every frame for every network (grainy video)."""
     off = LABEL_OFFSET if centred_truth else (0.0, 0.0)
     det = BallDetector(weights, dev, half=dev.type != "cpu")
     pred, truth, n, secs = [], [], 0, 0.0
-    for clip in clip_dirs if clip_dirs is not None else clips(games):
+    for k, clip in enumerate(clip_dirs if clip_dirs is not None else clips(games)):
         names, pts = labels(clip)
         frames = [cv2.imread(str(clip / name)) for name in names]
+        if noise_sigma > 0:
+            frames = [add_noise(f, noise_sigma, 1000 * k + i) for i, f in enumerate(frames)]
         det.start((SRC_W, SRC_H))
         t0 = time.perf_counter()
         for i, f in enumerate(frames):
@@ -70,7 +79,7 @@ def run(weights: str, dev: torch.device, games: range = TEST, shifts: tuple[floa
             truth.append(None if p is None else (p[0] * SRC_W / IN_W - off[0], p[1] * SRC_H / IN_H - off[1]))
     truth_name = f"image centre (label - {off[0]:g}, {off[1]:g} px)" if centred_truth else "label"
     out = {"arch": det.arch, "truth": truth_name, "frames": n, "ms_per_frame": round(1000 * secs / n, 1),
-           "bias_px": bias(pred, truth)}
+           "bias_px": bias(pred, truth), "noise_sigma": noise_sigma}
     for sh in shifts:  # a constant shift of the decoded position, to compare pixel conventions
         moved = [None if p is None else (p[0] + sh, p[1] + sh) for p in pred]
         out[f"shift {sh:g}px" if len(shifts) > 1 else "scores"] = detection_scores(moved, truth)
@@ -84,11 +93,13 @@ def main() -> None:
     ap.add_argument("--shifts", nargs="*", type=float, default=[0.0])
     ap.add_argument("--selection", action="store_true", help="every fifth clip of games 1-7 instead of --games")
     ap.add_argument("--centred-truth", action="store_true", help="score against label minus LABEL_OFFSET")
+    ap.add_argument("--noise-sigma", type=float, default=0.0,
+                    help="add seeded Gaussian noise (1 sigma as a fraction of full scale) to every frame")
     args = ap.parse_args()
     dev = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     for w in args.weights:
         res = run(w, dev, range(args.games[0], args.games[1] + 1), tuple(args.shifts),
-                  selection_clips() if args.selection else None, args.centred_truth)
+                  selection_clips() if args.selection else None, args.centred_truth, args.noise_sigma)
         print(Path(w).name, json.dumps(res), flush=True)
 
 
