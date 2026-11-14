@@ -49,6 +49,7 @@ from courtvision.eval.provenance import (  # noqa: E402
     analysis_code,
     clean,
     code_unchanged_since,
+    git,
     head_sha,
     same_code,
     sha256_file,
@@ -72,6 +73,7 @@ SAMPLES = {
 TEST = "test4"
 TEST_BASELINE_RUNS = "runs_spot"
 LEDGER = ROOT / "results" / "spot_test_candidates.json"  # committed; at most two candidates ever
+TEST_RESULTS = ROOT / "results" / "spot"  # test results, committed: a result in the history marks its slot used
 MAX_CANDIDATES = 2
 VIDEO_MANIFEST = DATA / "videos_manifest.json"
 VIDEO_HEIGHT = 720
@@ -119,8 +121,9 @@ def analyse_candidate(clip_path: Path, base: Path, run: Path, flags: list[str]) 
     """A candidate on the baseline's cached detections of the same clip file: the two runs differ only by
     the candidate's code path, and no second GPU pass is needed."""
     run.mkdir(parents=True, exist_ok=True)
-    if not (base / "perception.pkl").exists():
-        (run / "FAILED.txt").write_text("baseline analysis failed: no cached perception")
+    if (base / "FAILED.txt").exists() or not (base / "perception.pkl").exists():
+        # The baseline counts as a clip with no events; a candidate on its cache would not be comparable.
+        (run / "FAILED.txt").write_text("baseline analysis failed on this clip")
         (run / "code_sha.txt").write_text(head_sha())
         return
     for f in ("perception.pkl", "pose.pkl"):
@@ -207,6 +210,8 @@ def ledger() -> list[dict]:
     if sorted(e["slot"] for e in entries) != list(range(1, len(entries) + 1)):
         raise SystemExit("ledger slots must be 1, 2")
     for e in entries:
+        if not e["flags"]:
+            raise SystemExit(f"ledger slot {e['slot']} has no flags: it would be the baseline again")
         check_flags(e["flags"])
     return entries
 
@@ -219,19 +224,51 @@ def candidate(slot: int) -> list[str]:
     return list(e["flags"])
 
 
-def record_video(m: str, src: Path) -> None:
+def test_result(slot: int | None) -> Path:
+    return TEST_RESULTS / (f"results_{TEST}_slot{slot}.json" if slot is not None else f"results_{TEST}_baseline.json")
+
+
+def used(path: Path) -> bool:
+    """A test result exists or ever existed in the history: that pass on the test matches is spent."""
+    if path.exists():
+        return True
+    if not path.resolve().is_relative_to(ROOT):  # outside the repository: no history to look in
+        return False
+    r = git("log", "--all", "--format=%h", "--", _rel(path))
+    if r.returncode != 0:
+        raise SystemExit(f"git log failed: {r.stderr.strip()}")
+    return bool(r.stdout.strip())
+
+
+def check_sample(name: str, sample: dict) -> None:
+    """The sample file is still the plan's (a hand edit would quietly change the test)."""
+    spec = SAMPLES[name]
+    counts = {m: sum(match_name(c["video"]) == m for c in sample["clips"]) for m in spec["matches"]}
+    if sorted(sample["matches"]) != sorted(spec["matches"]) or counts != spec["matches"] \
+            or len(sample["clips"]) != sum(spec["matches"].values()):
+        raise SystemExit(f"sample_{name}.json is not the plan's sample (matches or clip counts differ)")
+
+
+def record_video(m: str, src: Path, runs_dirs: list[str]) -> None:
     """The match video's identity, before any clip is cut from it (the video is deleted afterwards)."""
     cap = cv2.VideoCapture(str(src))
     w, h, fps = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), cap.get(
         cv2.CAP_PROP_FPS)
+    n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
     if h != VIDEO_HEIGHT:
         raise SystemExit(f"{m}: {w}x{h}; the plan uses the {VIDEO_HEIGHT}p upload")
     man = json.loads(VIDEO_MANIFEST.read_text()) if VIDEO_MANIFEST.exists() else {}
     sha = sha256_file(src)
-    if m in man and man[m]["sha256"] != sha:
-        raise SystemExit(f"{m}: not the file recorded before ({man[m]['sha256'][:12]}): another upload")
-    man[m] = {"sha256": sha, "width": w, "height": h, "fps": fps}
+    entry = man.setdefault(m, {"width": w, "height": h, "fps": fps, "frames": n, "files": {}})
+    # A later download of the same upload may be re-encoded (another SHA-256): accepted if its size, frame rate
+    # and frame count are the first one's, since the labels number its frames the same way; each runs folder
+    # records the file it used, and a slot's baseline and candidate always use one file between them.
+    if (entry["width"], entry["height"], entry["frames"]) != (w, h, n) or not np.isclose(entry["fps"], fps):
+        raise SystemExit(f"{m}: {w}x{h}, {fps} fps, {n} frames; recorded {entry['width']}x{entry['height']}, "
+                         f"{entry['fps']} fps, {entry['frames']} frames: another upload")
+    entry["files"].setdefault(sha, [])
+    entry["files"][sha] = sorted(set(entry["files"][sha]) | set(runs_dirs))
     VIDEO_MANIFEST.write_text(json.dumps(man, indent=1))
 
 
@@ -260,9 +297,18 @@ def make_sample(name: str) -> Path:
     return path
 
 
-def check_runs(sample: dict, runs: Path, flags: list[str]) -> tuple[list[str], dict]:
+def default_models() -> dict[str, str]:
+    """SHA-256 of the committed default networks (the plan runs the default system)."""
+    from courtvision.pipeline import MODEL_FILES
+
+    return {k: sha256_file(ROOT / v) for k, v in MODEL_FILES.items() if (ROOT / v).exists()}
+
+
+def check_runs(sample: dict, runs: Path, flags: list[str], defaults: dict[str, str] | None = None
+               ) -> tuple[list[str], dict]:
     """Every clip run: made from the analysis code at HEAD, with exactly these flags, on the clip's frames, with
-    the same models as the others; every match in the video manifest at 720p."""
+    the same models as the others (the committed defaults when given); every match's video recorded at 720p, with
+    the file this runs folder used."""
     problems, models = [], {}
     want = {FLAG_KEYS[f] for f in flags}
     for c in sample["clips"]:
@@ -283,12 +329,16 @@ def check_runs(sample: dict, runs: Path, flags: list[str]) -> tuple[list[str], d
             models = m
         elif m != models:
             problems.append(f"{runs.name}/{c['video']}: other models than the first clip's")
+    if defaults is not None and models and any(models.get(k) != v for k, v in defaults.items() if k in models):
+        problems.append(f"{runs.name}: models are not the committed defaults")
     man = json.loads(VIDEO_MANIFEST.read_text()) if VIDEO_MANIFEST.exists() else {}
     for mname in sample["matches"]:
         if mname not in man:
-            problems.append(f"{mname}: no SHA-256 in {VIDEO_MANIFEST.name}")
+            problems.append(f"{mname}: not in {VIDEO_MANIFEST.name}")
         elif man[mname]["height"] != VIDEO_HEIGHT:
             problems.append(f"{mname}: {man[mname]['height']}p, not {VIDEO_HEIGHT}p")
+        elif sum(runs.name in d for d in man[mname]["files"].values()) != 1:
+            problems.append(f"{mname}: {runs.name} is not recorded with exactly one video file")
     return problems, models
 
 
@@ -387,9 +437,13 @@ def main() -> None:
         cand_dir = (args.candidate_runs_dir or f"{base_dir}_cand") if flags else None
     sample_path = DATA / f"sample_{args.name}.json"
     sample = json.loads(sample_path.read_text())
+    check_sample(args.name, sample)
     runs, cand_runs = DATA / base_dir, (DATA / cand_dir if cand_dir else None)
+    out = test_result(args.slot) if test else DATA / f"results_{args.name}_{base_dir}.json"
 
     if args.cmd == "run":  # one clip analysed at a time: one GPU job
+        if test and used(out):
+            raise SystemExit(f"{_rel(out)} exists or existed: this pass on the test matches is spent")
         _CODE[:] = analysis_code()
         if not clean(_CODE):
             raise SystemExit("the analysis code has uncommitted changes: commit them first (runs must name their code)")
@@ -398,7 +452,7 @@ def main() -> None:
             if not src.exists():
                 print(f"{m}: no video yet, skipped", flush=True)
                 continue
-            record_video(m, src)
+            record_video(m, src, [d.name for d in (runs, cand_runs) if d is not None])
             clips = [c for c in sample["clips"] if match_name(c["video"]) == m]
             run_match(src, clips, runs, DATA / "clips_tmp", args.keep_clips, (cand_runs, flags) if cand_runs else None)
             failed = sum((runs / c["video"] / "FAILED.txt").exists() for c in clips)
@@ -409,14 +463,13 @@ def main() -> None:
                 src.unlink()
         return
 
-    # score
-    out = DATA / (f"results_{args.name}_{base_dir}.json" if cand_dir is None or not test
-                  else f"results_{args.name}_slot{args.slot}.json")
-    if test and out.exists():
-        raise SystemExit(f"{out.name} exists: a test result is written once")
+    # score: everything is checked before any number is shown
+    if test and used(out):
+        raise SystemExit(f"{_rel(out)} exists or existed: a test result is written once")
     if test and not clean(SCORER_CODE):
         raise SystemExit("uncommitted changes in src or the scorer: the result must name the code that made it")
-    results: dict = {}
+    defaults = default_models()
+    scored: dict = {}
     problems: list[str] = []
     for label, d, f in (("baseline", runs, []), ("candidate", cand_runs, flags)):
         if d is None:
@@ -424,28 +477,37 @@ def main() -> None:
         rows, missing = score_runs(sample, d)
         if missing:  # scoring a partial set would quietly change the sample
             raise SystemExit(f"{d.name}: {len(missing)} clips not run yet, e.g. {missing[:3]}")
-        pr, models = check_runs(sample, d, f)
+        pr, models = check_runs(sample, d, f, defaults)
         problems += pr
-        s, pm = report(f"{args.name} {label} ({d.name})", rows)
-        results[label] = {"runs_dir": d.name, "flags": f, "models": models, "summary": s, "per_match": pm,
-                          "clips": rows}
-    if "candidate" in results and results["candidate"]["models"] != results["baseline"]["models"]:
+        scored[label] = (d, f, models, rows)
+    if "candidate" in scored and scored["candidate"][2] != scored["baseline"][2]:
         problems.append("baseline and candidate runs used different models")
     if problems:
         if test:
             raise SystemExit("\n".join(problems[:8]))
         print(f"WARNING (dev): {len(problems)} provenance problems, e.g. {problems[:3]}")
+    results: dict = {}
+    for label, (d, f, models, rows) in scored.items():
+        s, pm = report(f"{args.name} {label} ({d.name})", rows)
+        results[label] = {"runs_dir": d.name, "flags": f, "models": models, "summary": s, "per_match": pm,
+                          "clips": rows}
     if "candidate" in results:
         b, c = results["baseline"], results["candidate"]
-        results["comparison"] = compare(b["summary"], c["summary"], b["per_match"], c["per_match"])
+        results["comparison"] = cmp = compare(b["summary"], c["summary"], b["per_match"], c["per_match"])
+        print("baseline -> candidate (points; the decision is the candidate's written rule):")
+        for scope, v in [("pooled", cmp["pooled"]), *cmp["per_match"].items()]:
+            print(f"  {scope:55s} " + "  ".join(f"{k} {x['change_points']:+.1f}" for k, x in v.items()
+                                                if isinstance(x, dict))
+                  + f"  serves matched {v['serve_matched'][0]} -> {v['serve_matched'][1]} of {v['serve_labelled']}")
     man = json.loads(VIDEO_MANIFEST.read_text()) if VIDEO_MANIFEST.exists() else {}
     results["provenance"] = {
         "code_sha": head_sha(), "sample_sha256": hashlib.sha256(sample_path.read_bytes()).hexdigest(),
         "labels_sha256": sample.get("labels_sha256"), "videos": {m: man.get(m) for m in sample["matches"]},
-        "tolerances_s": TOL_S, "tolerance_rate": "nominal (29.97 fps counted as 30)", "problems": problems}
+        "models_default": defaults, "tolerances_s": TOL_S, "tolerance_rate": "nominal (29.97 fps counted as 30)",
+        "problems": problems}
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(results))
-    print(f"-> {out}")
-
+    print(f"-> {_rel(out)}" + (" (commit it: a test result marks its pass as spent)" if test else ""))
 
 if __name__ == "__main__":
     main()

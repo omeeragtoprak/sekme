@@ -89,9 +89,11 @@ def test_every_run_is_checked_before_scoring(tmp_path: Path, monkeypatch) -> Non
         (d / "report.json").write_text(json.dumps({"candidates": {}, "video": {"n_frames": 50},
                                                    "models": {"ball": {"sha256": "b"}}}))
     problems, models = E.check_runs(sample, runs, [])
-    assert problems == ["m: no SHA-256 in man.json"] and models == {"ball": "b"}
-    (tmp_path / "man.json").write_text(json.dumps({"m": {"sha256": "v", "height": 720}}))
+    assert problems == ["m: not in man.json"] and models == {"ball": "b"}
+    man = {"m": {"width": 1280, "height": 720, "fps": 25.0, "frames": 9000, "files": {"v": ["runs"]}}}
+    (tmp_path / "man.json").write_text(json.dumps(man))
     assert E.check_runs(sample, runs, [])[0] == []
+    assert E.check_runs(sample, runs, [], {"ball": "other"})[0] == ["runs: models are not the committed defaults"]
     bad = runs / clips[1]["video"]
     (bad / "report.json").write_text(json.dumps({"candidates": {"serve_toss_bridge_s": 0.3},
                                                  "video": {"n_frames": 49}, "models": {"ball": {"sha256": "x"}}}))
@@ -103,9 +105,101 @@ def test_every_run_is_checked_before_scoring(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_the_test_matches_take_no_free_runs_dirs_or_flags(monkeypatch) -> None:
-    for argv in (["score", "--name", "test4", "--runs-dir", "x"], ["run", "--name", "test4", "--candidate-flag",
-                                                                    "toss-bridge"], ["run", "--name", "dev3",
-                                                                                     "--slot", "1"]):
+    for argv, msg in ((["score", "--name", "test4", "--runs-dir", "x"], "fixed"),
+                      (["run", "--name", "test4", "--candidate-flag", "toss-bridge"], "fixed"),
+                      (["run", "--name", "dev3", "--slot", "1"], "for the test matches"),
+                      (["run", "--name", "dev3", "--candidate-flag", "toss-brigde"], "unknown candidate flag")):
         monkeypatch.setattr(sys, "argv", ["eval_spot.py", *argv])
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit, match=msg):
             E.main()
+
+
+def _video(path: Path, n: int, size: str = "1280x720", crf: str = "30") -> None:
+    src = f"testsrc=size={size}:rate=25:duration={n / 25}"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", src, "-c:v", "libx264", "-crf", crf,
+                    "-pix_fmt", "yuv420p", str(path)], check=True)
+
+
+@pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None, reason="needs ffmpeg")
+def test_a_re_encoded_download_of_the_same_upload_is_accepted_and_another_upload_is_not(tmp_path: Path,
+                                                                                       monkeypatch) -> None:
+    monkeypatch.setattr(E, "VIDEO_MANIFEST", tmp_path / "man.json")
+    a, b, other, small = (tmp_path / f"{x}.mp4" for x in ("a", "b", "other", "small"))
+    _video(a, 50)
+    _video(b, 50, crf="20")  # the same frames, encoded again: another file
+    _video(other, 60)
+    _video(small, 50, size="640x360")
+    E.record_video("m", a, ["runs_spot"])
+    E.record_video("m", b, ["runs_spot_base_slot1", "runs_spot_cand_slot1"])
+    files = json.loads((tmp_path / "man.json").read_text())["m"]["files"]
+    assert sorted(map(sorted, files.values())) == [["runs_spot"], ["runs_spot_base_slot1", "runs_spot_cand_slot1"]]
+    with pytest.raises(SystemExit, match="another upload"):
+        E.record_video("m", other, ["runs_spot"])
+    with pytest.raises(SystemExit, match="720p"):
+        E.record_video("n", small, ["runs_spot"])
+
+
+def test_a_failed_baseline_fails_its_candidate_and_a_mid_run_code_change_records_nothing(tmp_path: Path,
+                                                                                         monkeypatch) -> None:
+    base = tmp_path / "base"
+    base.mkdir()
+    (base / "perception.pkl").write_bytes(b"cache")
+    (base / "FAILED.txt").write_text("boom")  # failed after its cache was written
+    monkeypatch.setattr(E, "analyse", lambda *a, **k: pytest.fail("the candidate must not run"))
+    E.analyse_candidate(tmp_path / "c.mp4", base, tmp_path / "cand", ["toss-bridge"])
+    assert (tmp_path / "cand" / "FAILED.txt").exists() and (tmp_path / "cand" / "code_sha.txt").exists()
+    monkeypatch.undo()
+    real = subprocess.run
+
+    def ok(cmd, *a, **k):
+        if "courtvision.cli" in cmd:
+            run = Path(cmd[cmd.index("--out") + 1])
+            run.mkdir(parents=True, exist_ok=True)
+            (run / "report.json").write_text("{}")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        return real(cmd, *a, **k)
+
+    monkeypatch.setattr(E.subprocess, "run", ok)
+    monkeypatch.setattr(E, "_CODE", ["src"])
+    monkeypatch.setattr(E, "code_unchanged_since", lambda sha, code: False)
+    with pytest.raises(SystemExit, match="changed during the run"):
+        E.analyse(tmp_path / "c.mp4", tmp_path / "r")
+    assert not (tmp_path / "r" / "report.json").exists() and not (tmp_path / "r" / "code_sha.txt").exists()
+
+
+def test_a_hand_edited_sample_and_a_spent_test_pass_are_refused(tmp_path: Path, monkeypatch) -> None:
+    sample = {"matches": sorted(E.SAMPLES["test4"]["matches"]),
+              "clips": [c for m, n in E.SAMPLES["test4"]["matches"].items() for c in _clips(m, n)]}
+    E.check_sample("test4", sample)
+    sample["clips"] = sample["clips"][:-1]
+    with pytest.raises(SystemExit, match="not the plan's sample"):
+        E.check_sample("test4", sample)
+    monkeypatch.setattr(E, "TEST_RESULTS", tmp_path)
+    assert E.used(E.test_result(1)) is False
+    E.test_result(1).write_text("{}")
+    assert E.used(E.test_result(1)) is True
+    assert E.used(Path(E.ROOT / "docs" / "EVAL_SPOT.md")) is True  # in the history
+
+
+def test_a_refused_test_score_shows_no_number(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(E, "DATA", tmp_path)
+    monkeypatch.setattr(E, "TEST_RESULTS", tmp_path / "results")
+    monkeypatch.setattr(E, "VIDEO_MANIFEST", tmp_path / "man.json")
+    monkeypatch.setattr(E, "clean", lambda paths: True)
+    monkeypatch.setattr(E, "default_models", lambda: {})
+    clips = [c for m, n in E.SAMPLES["test4"]["matches"].items() for c in _clips(m, n)]
+    (tmp_path / "sample_test4.json").write_text(json.dumps({"matches": sorted(E.SAMPLES["test4"]["matches"]),
+                                                           "clips": clips}))
+    head = E.head_sha()
+    for i, c in enumerate(clips):
+        d = tmp_path / "runs_spot" / c["video"]
+        d.mkdir(parents=True)
+        (d / "code_sha.txt").write_text(head)
+        flags = {"serve_toss_bridge_s": 0.3} if i == 5 else {}  # one clip made with a candidate's flag
+        (d / "report.json").write_text(json.dumps({"candidates": flags, "video": {"n_frames": 50}, "models": {},
+                                                   "hits": [{"frame": 10, "side": "near", "serve": False}],
+                                                   "flights": [], "calibration": {"valid_frames": 50}}))
+    monkeypatch.setattr(sys, "argv", ["eval_spot.py", "score", "--name", "test4"])
+    with pytest.raises(SystemExit, match="made with"):
+        E.main()
+    assert "recall" not in capsys.readouterr().out and not (tmp_path / "results").exists()

@@ -200,3 +200,15 @@ Corrected; no rule changed:
 For a candidate, `score --name test4 --slot N` also prints the baseline-against-candidate numbers its rule uses
 (pooled and per match, in points, with matched counts); the decision is the candidate's written rule applied to
 them.
+
+A second review of these corrections found no blocker and three gaps, closed the same day, still before any
+download: **a spent test pass cannot be repeated** (test results are written to `results/spot/` and committed; a
+result that exists or ever existed in the history marks the baseline report or that slot as spent, so deleting
+files does not free it; a slot without flags is refused); **nothing is shown before everything is checked** (a
+run that fails a check no longer prints its numbers first); **a candidate's second download is usable**
+(YouTube may serve the same upload re-encoded: a later file is accepted when its size, frame rate and frame
+count equal the first one's, every runs folder records which file it used, and a slot's baseline and candidate
+share one). Also: a baseline that failed on a clip fails its candidate there too (a candidate on a failed
+baseline's cache would not be comparable); the runs must use the committed default networks; a hand-edited
+sample file is refused; the comparison is printed. A candidate that fails on clips is scored as written (those
+clips have no events), without the stop that guards the baseline, since its failures are its own behaviour.
