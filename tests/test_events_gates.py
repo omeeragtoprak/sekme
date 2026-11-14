@@ -503,3 +503,15 @@ def test_fit_workers_setting_and_the_in_turn_fallback(monkeypatch):
     flights = build_flights(BallTrack(xy, src.astype(float), src), [], _calib([False] * n), FPS, {}, [(0, n)],
                             workers=4)
     assert len(flights) == 1
+
+
+def test_an_image_kink_drawn_across_sparse_detections_gives_no_call():
+    from courtvision.events.flights import IMAGE_BOUNCE_MAX_SPAN_S, _image_call
+
+    fl = Flight(0, 60, "near", Half.FAR)
+    idx = np.array([0, 1, 2, 20, 40, 41, 42])  # the detections around index 3 span 39 frames (1.3 s)
+    xy = np.column_stack([np.linspace(900, 1000, 7), np.linspace(300, 700, 7)])
+    out = _image_call(fl, idx, xy, 3, _calib([True] * 60), False, np.array([0.0, -11.0]), FPS)
+    assert (idx[5] - idx[1]) / FPS > IMAGE_BOUNCE_MAX_SPAN_S
+    assert out.call is None and out.bounce_2d is None
+    assert any("seyrek" in n for n in out.notes)

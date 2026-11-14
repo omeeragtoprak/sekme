@@ -186,6 +186,10 @@ IMAGE_BOUNCE_MIN_NET_M = 3.0  # kinks near the net were mostly the ball crossing
 
 
 IMAGE_BOUNCE_MAX_X_M, IMAGE_BOUNCE_MAX_Y_M = 5.5, 12.9  # court plus ~1 m
+# The four detections around the kink must be close in time: the uncertainty above only models pixel noise, so
+# a kink drawn across gaps (sparse detections, e.g. a heavily compressed video) looked precise but was not.
+# TrackNet games 1-5 image-kink calls span at most 0.13 s (docs/EVAL_TRACKNET.md, rule written first).
+IMAGE_BOUNCE_MAX_SPAN_S = 0.25
 
 
 def image_bounce(frames: np.ndarray, xy: np.ndarray, b: int, calib: list[FrameCalibration],
@@ -377,7 +381,7 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
     if not fit.success or not np.all(np.isfinite(fit.bounce_cov)):
         fl.rejected = f"3B uydurma başarısız: {fit.message}"
         fl.notes.append(fl.rejected)
-        return _image_call(fl, idx, xy, b, calib, serve, feet)
+        return _image_call(fl, idx, xy, b, calib, serve, feet, fps)
     t_hit = float(fit.anchor_times[0]) if start_anchor is not None else s / fps
     fl.contact_time = t_hit if start_anchor is not None else None
     p_hit, v_hit = fit.state_at(t_hit)
@@ -393,7 +397,7 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
     if why:
         fl.rejected = "; ".join(why)
         fl.notes.append(f"3B uydurma reddedildi: {fl.rejected}")
-        return _image_call(fl, idx, xy, b, calib, serve, feet)
+        return _image_call(fl, idx, xy, b, calib, serve, feet, fps)
     if not leading:
         fl.net_clearance_m = net_clearance(fit.params, t_hit, fit.bounce_time)
         fl.net_clearance_sd_m = net_clearance_sd(fit.params, fit.cov, t_hit, fit.bounce_time)
@@ -429,8 +433,12 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
 
 
 def _image_call(fl: Flight, idx: np.ndarray, xy: np.ndarray, b: int, calib: list[FrameCalibration], serve: bool,
-                feet: np.ndarray) -> Flight:
+                feet: np.ndarray, fps: float) -> Flight:
     """Fallback when the 3D fit is missing or not trusted: call the bounce from the image kink (wider sigma)."""
+    if 2 <= b < len(idx) - 2 and (span := (idx[b + 2] - idx[b - 2]) / fps) > IMAGE_BOUNCE_MAX_SPAN_S:
+        fl.notes.append(f"görüntüden sekme noktası güvenilmez: kırılmanın çevresindeki tespitler {num(span, 2)} sn'ye "
+                        "yayılıyor (top seyrek bulunmuş): karar yok")
+        return fl
     out = image_bounce(idx, xy, b, calib)
     if out is None:
         fl.notes.append("görüntüden sekme noktası da çıkarılamadı: karar yok")

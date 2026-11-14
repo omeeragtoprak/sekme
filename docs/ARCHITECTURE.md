@@ -305,6 +305,15 @@ not real slow motion) runs to the end: all 240 frames calibrated, ball network s
 the 30 fps excerpt's (IN, +147 cm against +146 cm). Real high-frame-rate footage has not been tested; the
 frame-count thresholds discussed above apply four times more strongly there.
 
+**Other shapes and sizes.** The same 4 s excerpt (1280 × 720, three IN calls at +1.46, +2.78, +1.09 m, 1σ 2, 14,
+9 cm): centre-cropped to 4:3 (960 × 720), every frame still calibrates (line RMSE 0.31 px) and the calls are
++1.45, +2.78, +1.10 m; scaled down to 640 × 360, the calls are +1.46, +2.74, +1.08 m with 1σ 4, 28, 16 cm, about
+twice as wide as the pixels are twice as large. Compressed harder with x264 (CRF 32, a third of the size), the
+ball is found on 107 of 119 frames and the calls stay; at CRF 40 (an eighth) it is found on 19, the flights merge
+and the image-kink fallback used to give a confident call at a point 4.7 m from the real bounce. That fallback now
+needs its detections within 0.25 s (`docs/EVAL_TRACKNET.md`, rule written first; no call changed on TrackNet or the
+broadcast runs), so that copy gets no call and the flight says why.
+
 **A fresh clone.** The weights are not in the repository. A missing checkpoint used to end in a traceback from
 hashing it, after an empty run folder had been made; `analyze` now checks the four checkpoints first and stops with
 one line naming the missing ones (`MissingModelError`; the command line exits with 2, a Review Room job shows the

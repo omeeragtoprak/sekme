@@ -365,3 +365,39 @@ hit timing did not carry over to the bounces as the association in "Open finding
 reason, not checked: moving a hit also moves where the next flight's fit starts, which can help or hurt. The change stays out of the pipeline and does not take an
 E2E-Spot slot. (Baseline note: the current code finds 221 / 323 first bounces on games 1–7 against 220 for the
 `runs_dev_base` events above; both are development numbers, and every comparison here is within one re-run.)
+
+**Correction (found 2026-11-14 evening).** "Re-run from the cached detections" above is not what happened. The
+re-run tool made the pipeline ignore the cache key by patching `perception_key`; after the cache-key change
+earlier that day (`same_perception_key`, settings in the key) that patch no longer matched the old caches, so
+both re-runs recomputed the detections on the CPU with the same networks (WASB, TCD). The recomputed detections
+differ slightly from the cached ones, which is the likely source of the 221 vs 220 above, but the baseline and
+the candidate got byte-identical detections on all 65 clips (checked), so the comparison and the rejection stand.
+The tools now patch `same_perception_key` and reuse the caches.
+
+## Image-kink bounce on sparse detections (rule written 2026-11-14, before the change is made)
+
+**Problem.** When the 3D fit of a flight is rejected, its bounce is taken from the kink of the image track
+around a detection, using two detections on each side. Nothing checks how far apart in time those four
+detections are. On a heavily compressed copy of a 4 s broadcast excerpt (x264 CRF 40, 1/8 of the original's
+size) the ball is found on 19 of 119 frames, three flights merge into one, its fit is rejected, and the image
+kink, built from detections 14 frames apart (30 fps), gives an IN call at a point 4.7 m from the real bounce
+with a stated 1σ of 8 cm. The Monte Carlo uncertainty only reflects pixel noise, not the gaps.
+
+**Change.** The four detections around the kink must lie within 0.25 s; otherwise no image bounce (no call).
+Chosen from TrackNet games 1–5, where every image-kink call spans at most 0.13 s (4 frames), with a margin.
+Before writing this rule the spans were also looked at on games 6–7 (all 0.10 s) and on the six broadcast
+runs (45 image-kink calls, at most 0.18 s), so the check below is a confirmation that nothing measured
+changes, not a blind test.
+
+**Check.** Adopted if (1) on TrackNet games 1–7, events re-run from the cached detections, every call and
+every bounce is the same as without the change; (2) on the six broadcast `_v4` runs, re-analysed from
+their cached detections, no call changes; (3) on the CRF 40 excerpt the spurious call is withdrawn.
+Otherwise the code stays as it is and the result is recorded here.
+
+**Result (2026-11-14): adopted.** (1) TrackNet games 1–7, events re-run twice from the cached detections (gate
+off and on; the caches were really reused this time, checked byte for byte): no call and no bounce changed on any
+of the 65 clips. (2) The six broadcast `_v4` runs, re-analysed twice from their cached detections: 590 flights,
+none changed. (3) The CRF 40 excerpt: the spurious call is withdrawn; its flight now reads "görüntüden sekme
+noktası güvenilmez: kırılmanın çevresindeki tespitler 2,34 sn'ye yayılıyor (top seyrek bulunmuş)". The span the
+code measures is between the fit's own detections (calibrated, inside the flight), so it can be wider than the
+spacing of all detections used to describe the problem above (0.47 s there). `IMAGE_BOUNCE_MAX_SPAN_S = 0.25`.
