@@ -89,6 +89,25 @@ times less in production); a layout pass over ~4 500 elements (~0.4 s) and a for
 much of the rest. Not changed further, since the remaining cost could not be attributed precisely; the next
 steps would be fewer elements in the shot list (rendering only the visible rows) and finding the forced reflow.
 
+**Switching runs, attributed (2026-11-14, production and profiling builds, same clip).** On this machine under
+other load, identical switches to the 554 s run took 1–6 s until the shot list was painted, so wall-clock times
+are not comparable between builds; the work was attributed with the browser's CPU profile instead. While the
+next report loads, the page shows a spinner, so every panel is unmounted and mounted again. The largest single
+part was the 3D replay: each mount created a new WebGL context, compiled its shaders, rebuilt the court and
+uploaded its texture (about 0.9 s for context and court, then about 1.4 s of first renders with the texture
+upload in one profile; GPU-bound calls stall longer while the new video starts decoding). **Changed:** the
+renderer, scene and camera are made once per page and the panel only attaches and detaches the canvas
+(`Replay3D.tsx`, `getEngine`); a lost WebGL context is detected on the next mount and replaced, a context
+restored while mounted gets the theme colour again, and the pixel ratio is read on every mount. Checked: WebGL
+contexts created over a page load and three run switches 3 → 1; after the switch no context creation, shader
+compilation, court build or texture upload appears in the profile; replay, presets and playback work after a
+switch and after a forced context loss. The forced reflow on opening came from the frame overlay reading its
+canvas's on-screen height while drawing; that height now comes from the canvas's ResizeObserver
+(`VideoStage.tsx`), and the profile of a switch shows no layout forced by script (before: about 30 ms in one
+profile, more under load). The rest of a switch is React unmounting and mounting about 4 500
+elements (shot list, timeline markers, inspector), the frame overlay and layout; keeping the panels mounted
+while the next run loads (instead of the spinner) would remove most of it and is the next step.
+
 ## Frame rates
 
 The networks and most thresholds were developed on 30 fps video (TrackNet). The ball network adapts by

@@ -308,13 +308,60 @@ function buildFlight(flight: Flight | null): FlightBuild {
   return { group, traj, speeds };
 }
 
-type Ctx = {
-  renderer: WebGLRenderer;
-  scene: Scene;
-  camera: PerspectiveCamera;
+/**
+ * The renderer, scene (lights, court, ball, shadow) and camera, made once per page. The panel is unmounted on
+ * every run switch; creating a WebGL context, compiling the shaders and uploading the textures again each time
+ * blocked the page for about a second (more while a video was starting). Only one panel uses it at a time.
+ */
+type Engine = { renderer: WebGLRenderer; scene: Scene; camera: PerspectiveCamera; ball: Mesh; shadow: Mesh };
+let engine: Engine | null = null;
+
+function getEngine(): Engine {
+  if (engine && !engine.renderer.getContext().isContextLost()) return engine;
+  if (engine) {
+    disposeObject(engine.scene);
+    engine.scene.clear();
+    engine.renderer.dispose();
+    engine = null;
+  }
+  const renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.domElement.className = "replay-gl";
+
+  const scene = new Scene();
+  scene.add(new HemisphereLight(0xdfe9ff, 0x1a2230, 1.6));
+  const sun = new DirectionalLight(0xffffff, 1.4);
+  sun.position.set(-8, 20, 10);
+  scene.add(sun);
+  scene.add(buildCourt());
+
+  const ball = new Mesh(
+    new SphereGeometry(BALL_RADIUS, 24, 16),
+    new MeshStandardMaterial({ color: 0xe4ff3c, emissive: 0x4a5a00, roughness: 0.55 }),
+  );
+  scene.add(ball);
+  const shadow = new Mesh(
+    new CircleGeometry(BALL_RADIUS * 1.1, 24),
+    new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  scene.add(shadow);
+
+  engine = { renderer, scene, camera: new PerspectiveCamera(30, 16 / 10, 0.5, 400), ball, shadow };
+  return engine;
+}
+
+// Development hot reload replaces this module: release the old context instead of leaking one per edit.
+import.meta.hot?.dispose(() => {
+  if (!engine) return;
+  disposeObject(engine.scene);
+  engine.renderer.dispose();
+  engine.renderer.forceContextLoss();
+  engine = null;
+});
+
+type Ctx = Engine & {
   controls: OrbitControls;
-  ball: Mesh;
-  shadow: Mesh;
   dirty: boolean;
   anim: { traj: TrajectorySample[] | null; speeds: number[]; t: number; T: number; playing: boolean; rate: number };
   tween: { fromPos: Vector3; toPos: Vector3; fromTarget: Vector3; start: number; dur: number } | null;
@@ -374,44 +421,23 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
     ctx.dirty = true;
   }, []);
 
-  // Mount: renderer, scene, camera, controls, render loop, resize observer.
+  // Mount: attach the page's renderer, then controls, render loop, resize observer.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    let renderer: WebGLRenderer;
+    let eng: Engine;
     try {
-      renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      eng = getEngine();
     } catch (err) {
       setGlError(err instanceof Error ? err.message : "Bu tarayıcıda WebGL kullanılamıyor.");
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const { renderer, scene, camera, ball, shadow } = eng;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2)); // the window may have moved screens
     renderer.setClearColor(sceneColor(), 1);
-    renderer.domElement.className = "replay-gl";
     host.appendChild(renderer.domElement);
-
-    const scene = new Scene();
-    scene.add(new HemisphereLight(0xdfe9ff, 0x1a2230, 1.6));
-    const sun = new DirectionalLight(0xffffff, 1.4);
-    sun.position.set(-8, 20, 10);
-    scene.add(sun);
-    scene.add(buildCourt());
-
-    const ball = new Mesh(
-      new SphereGeometry(BALL_RADIUS, 24, 16),
-      new MeshStandardMaterial({ color: 0xe4ff3c, emissive: 0x4a5a00, roughness: 0.55 }),
-    );
     ball.visible = false;
-    scene.add(ball);
-    const shadow = new Mesh(
-      new CircleGeometry(BALL_RADIUS * 1.1, 24),
-      new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
-    );
-    shadow.rotation.x = -Math.PI / 2;
     shadow.visible = false;
-    scene.add(shadow);
-
-    const camera = new PerspectiveCamera(30, 16 / 10, 0.5, 400);
     camera.position.copy(v3(...PRESETS[0].world));
     camera.lookAt(0, 0, 0);
 
@@ -468,6 +494,8 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
       ctx.dirty = true;
     };
     scheme.addEventListener("change", onScheme);
+    // A restored context starts with three's default background: apply the theme colour again.
+    el.addEventListener("webglcontextrestored", onScheme);
 
     let raf = 0;
     let last = performance.now();
@@ -507,15 +535,13 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
     return () => {
       cancelAnimationFrame(raf);
       scheme.removeEventListener("change", onScheme);
+      el.removeEventListener("webglcontextrestored", onScheme);
       ro.disconnect();
       controls.removeEventListener("change", onChange);
       el.removeEventListener("pointerdown", enableZoom);
       el.removeEventListener("pointerleave", disableZoom);
       controls.dispose();
-      disposeObject(scene);
-      scene.clear();
-      renderer.dispose();
-      renderer.forceContextLoss();
+      // The renderer, scene and compiled shaders stay for the next mount; only the canvas leaves the page.
       el.remove();
       ctxRef.current = null;
       setReady(false);

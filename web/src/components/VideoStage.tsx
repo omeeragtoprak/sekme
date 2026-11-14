@@ -102,6 +102,10 @@ type DrawInputs = {
 const SIDES: Side[] = ["near", "far"];
 const SIDE_COLOR: Record<Side, string> = { near: PALETTE.near, far: PALETTE.far };
 
+/** On-screen height of each overlay canvas, kept by its ResizeObserver: reading clientHeight while drawing
+ * forced a layout whenever the page had just changed (e.g. when a run opens). */
+const cssHeights = new WeakMap<HTMLCanvasElement, number>();
+
 function drawOverlay(canvas: HTMLCanvasElement, frame: number, inp: DrawInputs) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
@@ -112,7 +116,15 @@ function drawOverlay(canvas: HTMLCanvasElement, frame: number, inp: DrawInputs) 
   if (!inp.enabled || !fr) return;
   // Sizes below are in CSS pixels; s converts them to canvas (= video) pixels so the overlay stays
   // legible whatever the video resolution and on-screen size.
-  const cssH = canvas.clientHeight > 0 ? canvas.clientHeight : h;
+  // Before the observer's first report (it comes after the next layout, before paint, and redraws) the
+  // canvas height stands in; only without ResizeObserver is the layout read here.
+  const seen = cssHeights.get(canvas);
+  const cssH =
+    seen !== undefined && seen > 0
+      ? seen
+      : typeof ResizeObserver === "undefined" && canvas.clientHeight > 0
+        ? canvas.clientHeight
+        : h;
   const s = Math.max(0.25, h / cssH);
   const H = frame >= 0 && frame < fr.H.length ? fr.H[frame] : null;
   ctx.lineJoin = "round";
@@ -375,7 +387,11 @@ export default function VideoStage({
   useEffect(() => {
     const c = canvasRef.current;
     if (!c || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => redraw(frameRef.current));
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[entries.length - 1]?.contentRect;
+      if (r) cssHeights.set(c, r.height);
+      redraw(frameRef.current);
+    });
     ro.observe(c);
     return () => ro.disconnect();
   }, [redraw]);
