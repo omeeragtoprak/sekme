@@ -138,3 +138,26 @@ def test_the_mini_court_ellipse_follows_its_two_scales() -> None:
         poly = mini_ellipse_px(m, np.array([0.0, 5.0]), cov)
         width, height = np.ptp(poly[:, 0]), np.ptp(poly[:, 1])
         assert abs(width - 2 * k * wx * m.sx) <= 2 and abs(height - 2 * k * wy * m.sy) <= 2
+
+
+def test_irregular_frame_intervals_counts_dropped_or_stretched_frames(monkeypatch) -> None:
+    import courtvision.io.video as vid
+
+    monkeypatch.setattr(vid, "_bin", lambda name: name)
+
+    def count(times: list) -> int:
+        out = "\n".join(str(t) for t in times) + "\n"
+        monkeypatch.setattr(vid.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, out, ""))
+        return vid.irregular_frame_intervals("x.mp4")
+
+    even = [i / 30 for i in range(90)]
+    assert count(even) == 0
+    assert count(even[:40] + even[41:]) == 1  # one dropped frame: one interval twice as long
+    assert count(even[:10] + ["N/A"] + even[10:]) == 0  # a packet without a timestamp is skipped
+    assert count([0.0]) == 0
+
+    def missing(name: str) -> str:
+        raise RuntimeError("ffprobe not found on PATH")
+
+    monkeypatch.setattr(vid, "_bin", missing)  # CI has no ffprobe: no warning rather than a failure
+    assert vid.irregular_frame_intervals("x.mp4") == 0

@@ -205,6 +205,9 @@ promo/             HyperFrames promo film (footage not included)
   footage.
 - Ball footprint is a fixed 2 cm half-length; point/score inference from play is not implemented (the
   score is read from the broadcast).
+- Times are taken from frame numbers, assuming a constant frame rate. A video with irregular frame timestamps
+  (a phone dropping frames) gets a warning in its report; phone videos stored sideways with a rotation tag are
+  analysed upright.
 
 ## License
 

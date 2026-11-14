@@ -37,6 +37,9 @@ def _analyze(args: argparse.Namespace) -> int:
         os.environ["SEKME_FIT_WORKERS"] = str(max(1, args.fit_workers))
     report = analyze(args.video, out, cfg, progress)
     print(file=sys.stderr)
+    if report["video"].get("irregular_frame_intervals"):
+        print(f"uyarı: değişken kare hızı ({report['video']['irregular_frame_intervals']} düzensiz kare aralığı); "
+              "hızlar ve işaretler kayabilir", file=sys.stderr)
     cal = report["calibration"]
     print(f"calibrated frames {cal['valid_frames']}/{cal['total_frames']}, line rmse {cal['line_rmse_px_median']} px")
     for f in report["flights"]:

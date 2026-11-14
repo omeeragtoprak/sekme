@@ -33,7 +33,7 @@ from courtvision.events.hits import detect_hits_in_segments
 from courtvision.events.serves import detect_serves, merge_serves
 from courtvision.events.strokes import classify, serve_hand, vote_hand
 from courtvision.geometry.court import CourtModel
-from courtvision.io.video import VideoWriter, iter_frames, link_source, probe
+from courtvision.io.video import VideoWriter, irregular_frame_intervals, iter_frames, link_source, probe
 from courtvision.perception.ball import BallDetector, ball_arch, drop_court_fixed, track_ball
 from courtvision.perception.court import (
     CourtCalibrator,
@@ -135,6 +135,12 @@ def _model_card(key: str, path: str) -> dict:
         card = {**card, **{k: ckpt[k] for k in ("trained_on", "selected_on", "epoch") if k in ckpt}}
     return {**card, "file": f"models/{Path(path).name}", "sha256": _sha256(path)}
 
+
+# Added to a report's limitations when the video's frame timestamps are not evenly spaced (the pipeline takes a
+# frame's time as its index divided by the frame rate).
+VFR_NOTE = ("Videonun kare hızı değişken: {n} kare aralığı ortancadan %25'ten fazla sapıyor (ör. telefonun "
+            "düşürdüğü kareler). Zamanlar kare sırasından hesaplandığı için bu aralıkların çevresindeki hızlar ve "
+            "video üstündeki işaretler kayabilir.")
 
 LIMITATIONS = [
     "Tek yayın kamerası: sekme konumlarında santimetre ile desimetre arası belirsizlik var; her karar içeride olma "
@@ -407,12 +413,14 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
 
     valid = [c for c in calib if c.valid]
     cams = [c.camera for c in valid if c.camera is not None]
+    irregular = irregular_frame_intervals(video)
     report = {
         "schema": "courtvision.report/1",
         "version": __version__,
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
         "video": {"file": Path(video).name, "width": info.width, "height": info.height, "fps": info.fps,
-                  "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": video_sha},
+                  "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": video_sha,
+                  "irregular_frame_intervals": irregular},
         "models": {k: _model_card(k, v) for k, v in cfg.models.items()},
         "candidates": {k: v for k, v in (("serve_toss_bridge_s", cfg.serve_toss_bridge_s),
                                          ("pin_serve_height", cfg.pin_serve_height),
@@ -443,7 +451,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "flights": [_flight_json(i, fl, info.fps) for i, fl in enumerate(flights)],
         "broadcast": broadcast,
         "timings_s": {k: round(v, 2) for k, v in timings.items()},
-        "limitations": LIMITATIONS,
+        "limitations": LIMITATIONS + ([VFR_NOTE.format(n=irregular)] if irregular else []),
     }
     _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
     t4 = time.time()

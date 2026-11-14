@@ -272,3 +272,12 @@ tag); the same excerpt then gives the original's calls (margins +1.46, +2.78, +1
 ten broadcast clips have no rotation and probe exactly as before. Every OpenCV capture now asks for upright
 frames explicitly (`open_video`; the default depends on the build), and perception stops with a clear message
 if the first decoded frame does not have the probed size.
+
+**Variable frame rate (2026-11-14).** The pipeline takes a frame's time as its index divided by the frame rate.
+Phones can drop or stretch frames (variable frame rate); then speeds around those frames and the marks drawn on
+the video drift. The ten broadcast clips are perfectly even (every interval within 0.1 % of the median, from
+the packet timestamps); a re-encoded excerpt with three dropped frames shows three intervals of twice the median.
+Each report now counts the intervals more than 25 % off the median (`video.irregular_frame_intervals`, read with
+ffprobe in well under a second) and, when there are any, adds a limitation in Turkish that the Review Room shows
+and the command line repeats as a warning. Using the real timestamps throughout would be the fix; it touches
+every time computation and is not done.
