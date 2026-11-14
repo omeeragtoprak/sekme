@@ -319,3 +319,42 @@ def test_a_bridged_toss_that_drifts_sideways_is_still_a_toss_and_its_apex_is_not
     assert len(old) == 2 and old[0].frame < 31  # the apex split, a false serve
     new = detect_serves(ball, _players(n), 60.0, [(0, n)], bridge_s=0.3)
     assert len(new) == 1 and new[0].side == "far" and 65 <= new[0].frame <= 68
+
+
+def test_the_pin_candidate_narrows_only_the_serve_anchor_to_the_measured_contact_height(broadcast_camera,
+                                                                                       monkeypatch):
+    import courtvision.events.flights as flights_mod
+    from courtvision.sim.simulate import simulate_shot
+
+    fps, n, s0 = 60.0, 120, 10
+    shot = simulate_shot(broadcast_camera, np.array([0.5, -11.8, 2.95]), np.array([-1.0, 5.5]), 190, fps=fps,
+                         pixel_noise=0.0, rng=np.random.default_rng(0), phase=0.0)  # first frame = contact
+    xy = np.full((n, 2), np.nan)
+    m = min(len(shot.pixels), n - s0)
+    xy[s0:s0 + m] = shot.pixels[:m]
+    src = np.where(np.isfinite(xy[:, 0]), 1, 0)
+    ball = BallTrack(xy, src.astype(float), src)
+    H = broadcast_camera.ground_homography()
+    calib = [FrameCalibration(True, H, np.linalg.inv(H), broadcast_camera, 1.0, 0.3) for _ in range(n)]
+    players = {side: PlayerTrack(side, np.tile(box, (n, 1)), np.tile(feet, (n, 1))) for side, box, feet in
+               (("near", [900.0, 700.0, 960.0, 900.0], [0.5, -11.8]),
+                ("far", [900.0, 100.0, 930.0, 170.0], [0.0, 12.0]))}
+    serve = Hit(s0, "near", xy[s0].copy(), True, serve=True, toss_start=s0 - 5)
+
+    class SeenError(Exception):
+        pass
+
+    def capture(*args, anchors=(), **kwargs):
+        raise SeenError(anchors)
+
+    monkeypatch.setattr(flights_mod, "fit_flight", capture)
+    got = {}
+    for pin in (False, True):
+        with pytest.raises(SeenError) as exc:
+            build_flights(ball, [serve], calib, fps, players, [(0, n)], pin_serve_height=pin)
+        got[pin] = exc.value.args[0][0]
+    h = 0.5 * (got[False].z_min + got[False].z_max)
+    assert abs(h - 2.95) < 0.05  # measured on the camera ray above the server
+    assert (got[False].z_max - got[False].z_min, got[False].z_scale) == pytest.approx((0.6, 0.1))
+    assert (got[True].z_max - got[True].z_min, got[True].z_scale) == pytest.approx((0.1, 0.01))
+    assert 0.5 * (got[True].z_min + got[True].z_max) == pytest.approx(h)

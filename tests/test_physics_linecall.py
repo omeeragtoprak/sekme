@@ -57,3 +57,25 @@ def test_line_call_verdicts() -> None:
     close = call_bounce(np.array([SINGLES_HALF_WIDTH + 0.03, 6.0]), tight, zone)
     assert close.verdict == "REVIEW" and 0.05 < close.p_in < 0.95
     assert close.line == "right singles sideline" and close.sigma_m == pytest.approx(0.03)
+
+
+def test_a_pinned_serve_contact_height_holds_where_the_soft_band_lets_the_fit_drift(broadcast_camera) -> None:
+    """Candidate --pin-serve-height: the anchor's height band is enforced, not just preferred.
+
+    The simulated serve is struck at 2.95 m but the anchor says 2.5 m. With the default band (+-0.3 m, 0.1 m
+    hinge) the pixels pull the fit past the band's edge; pinned (+-0.05 m, 0.01 m hinge) it stays. The pin is
+    only as good as the measured height: here it is wrong on purpose, and the speed suffers (~180 vs 190).
+    """
+    from courtvision.physics.flight import Anchor
+    rng = np.random.default_rng(1)
+    shot = simulate_shot(broadcast_camera, np.array([0.5, -11.8, 2.95]), np.array([-1.0, 5.5]), 190, spin_rpm=1500,
+                         fps=60.0, pixel_noise=1.0, rng=rng)
+    z = {}
+    for name, (lo, hi, scale) in {"band": (2.2, 2.8, 0.1), "pin": (2.45, 2.55, 0.01)}.items():
+        a = Anchor(t=shot.times[0], xy=np.array([0.5, -11.8]), t_sigma=1 / 60, sigma_x=0.5, sigma_y=0.5,
+                   z_min=lo, z_max=hi, z_scale=scale)
+        fit = fit_flight(shot.times, shot.pixels, [broadcast_camera] * len(shot.times), shot.bounce_time,
+                         pixel_sigma=2.5, anchors=(a,))
+        assert fit.success
+        z[name] = fit.state_at(float(fit.anchor_times[0]))[0][2]
+    assert z["band"] > 2.8 and abs(z["pin"] - 2.5) < 0.06

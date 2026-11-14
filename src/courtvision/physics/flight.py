@@ -154,6 +154,7 @@ class Anchor:
     sigma_y: float = 1.3  # depth: reach plus contact in front of/behind the body
     z_min: float = 0.25
     z_max: float = 3.3
+    z_scale: float = 0.1  # metres outside [z_min, z_max] that count as one sigma
 
 
 SPIN_PRIOR_SIGMA = 0.5
@@ -180,7 +181,7 @@ def _residuals_batch(P: np.ndarray, times: np.ndarray, obs: np.ndarray, KR: np.n
         pa = pos[:, len(times) + j]
         ta = P[:, 11 + j]
         extra += [(ta - a.t) / a.t_sigma, (pa[:, 0] - a.xy[0]) / a.sigma_x, (pa[:, 1] - a.xy[1]) / a.sigma_y,
-                  (np.maximum(a.z_min - pa[:, 2], 0.0) + np.maximum(pa[:, 2] - a.z_max, 0.0)) / 0.1]
+                  (np.maximum(a.z_min - pa[:, 2], 0.0) + np.maximum(pa[:, 2] - a.z_max, 0.0)) / a.z_scale]
     extra += [P[:, 9] / SPIN_PRIOR_SIGMA, P[:, 10] / SPIN_PRIOR_SIGMA]
     return np.concatenate([res, np.stack(extra, axis=1) * pixel_sigma], axis=1)
 

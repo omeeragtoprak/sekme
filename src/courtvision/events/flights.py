@@ -118,6 +118,11 @@ def measurable_segments(calib: list[FrameCalibration], cuts: list[int], min_len:
 
 # A serve contact ~0.5 m in front of the feet moves along the camera ray by ~0.1-0.2 m in height.
 SERVE_CONTACT_TOL_M = 0.3
+# Candidate, off by default (docs/EVAL_SERVE_SPEED.md): pin the fit to the measured serve contact height.
+# With +-0.3 m and a 0.1 m hinge the fit drifts up to 0.9 m away from it, and the serve speed follows the
+# drift (US Open 2025 final, development: +26 % per metre on 15 near-side serves).
+SERVE_PIN_TOL_M = 0.05
+SERVE_PIN_SCALE_M = 0.01
 
 
 # The serve contact is seen (end of the toss): it lies within +-1 frame of the detected frame, a uniform
@@ -234,7 +239,7 @@ def calibration_cov(cal: FrameCalibration, xy: np.ndarray) -> np.ndarray:
 def build_flights(ball: BallTrack, hits: list[Hit], calib: list[FrameCalibration], fps: float,
                   players: dict[str, PlayerTrack], segments: list[tuple[int, int]] | None = None,
                   frame_w: int = 1920, min_points: int = 8, pixel_sigma: float = 2.5,
-                  dead_ball_s: float = 1.0) -> list[Flight]:
+                  dead_ball_s: float = 1.0, pin_serve_height: bool = False) -> list[Flight]:
     """Flights between hits inside measurable segments (no flight crosses a cut or an uncalibrated span).
 
     A serve's toss starts a new point: the flight before it ends with the point (no receiver
@@ -266,7 +271,8 @@ def build_flights(ball: BallTrack, hits: list[Hit], calib: list[FrameCalibration
                 fl = _fit_one(ball, calib, fps, players, s, e, opener.side if opener else None, ender, S, frame_w,
                               min_points, pixel_sigma, dead_ball_s, serve=bool(opener and opener.serve),
                               contact_px=opener.px if opener is not None else None,
-                              contact_sub=opener.contact_sub if opener is not None else None)
+                              contact_sub=opener.contact_sub if opener is not None else None,
+                              pin_serve_height=pin_serve_height)
                 flights.append(fl)
     return flights
 
@@ -274,7 +280,8 @@ def build_flights(ball: BallTrack, hits: list[Hit], calib: list[FrameCalibration
 def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players: dict[str, PlayerTrack],
              s: int, e: int, hitter: str | None, ender: str | None, seg_start: int, frame_w: int,
              min_points: int, pixel_sigma: float, dead_ball_s: float, serve: bool = False,
-             contact_px: np.ndarray | None = None, contact_sub: float | None = None) -> Flight:
+             contact_px: np.ndarray | None = None, contact_sub: float | None = None,
+             pin_serve_height: bool = False) -> Flight:
     leading = hitter is None
     if hitter is None:  # leading flight: infer the hitter from the travel direction
         ys = ball.xy[s:e, 1]
@@ -317,9 +324,10 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
         h_contact = cam.height_above(px_contact, feet)
         t_c, t_sd = (start_anchor.t, SERVE_T_SIGMA_FRAMES) if contact_sub is None else (contact_sub / fps,
                                                                                        GAP_T_SIGMA_FRAMES)
+        tol, z_scale = (SERVE_PIN_TOL_M, SERVE_PIN_SCALE_M) if pin_serve_height else (SERVE_CONTACT_TOL_M, 0.1)
         start_anchor = replace(start_anchor, t=t_c, t_sigma=t_sd / fps, sigma_x=SERVE_XY_SIGMA_M,
-                               sigma_y=SERVE_XY_SIGMA_M, z_min=h_contact - SERVE_CONTACT_TOL_M,
-                               z_max=h_contact + SERVE_CONTACT_TOL_M)
+                               sigma_y=SERVE_XY_SIGMA_M, z_min=h_contact - tol, z_max=h_contact + tol,
+                               z_scale=z_scale)
     if start_anchor is not None:
         anchors.append(start_anchor)
     if ender is not None and (a := _anchor(players, ender, e, fps)) is not None:

@@ -125,7 +125,9 @@ change is timed to ≤ 4 s). With the current defaults (ball v4): 5 serves, +5.2
 +11.7 % → mean +4.0 % (SE 2.9), mean |error| 6.0 % (ball v3: 6.7 %). The largest error is a fast 60 fps
 serve whose contact v4 used to put ten frames early (−16.5 %); with the contact now found inside the
 detection gap it is timed correctly and measured 11.7 % fast. Five serves are too few for a bias claim
-either way. **Serve contact timing** was tested separately, on 554 s of unused footage against 23 serve
+either way. On development data most of the remaining serve-speed error follows the fit drifting away
+from the measured contact height; a candidate that pins it (`--pin-serve-height`, off by default) waits
+for its test on unused footage ([EVAL_SERVE_SPEED.md](docs/EVAL_SERVE_SPEED.md)). **Serve contact timing** was tested separately, on 554 s of unused footage against 23 serve
 contacts bracketed by eye: every serve the pipeline found has its contact within 2 frames at 60 fps
 ([EVAL_SERVE_CONTACT.md](docs/EVAL_SERVE_CONTACT.md)).
 

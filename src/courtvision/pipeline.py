@@ -150,6 +150,7 @@ class PipelineConfig:
     player_imgsz: int = 1280
     ball_stride: int = 0  # frames between the ball network's three inputs; 0: match its 30 fps training video
     serve_toss_bridge_s: float = 0.0  # candidate, off by default (docs/EVAL_SPOT.md): 0.3 bridges a missed toss apex
+    pin_serve_height: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md)
     models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
@@ -346,7 +347,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     hits = detect_hits_in_segments(ball, players, info.fps, info.height, segments)
     hits = merge_serves(hits, detect_serves(ball, players, info.fps, segments, bridge_s=cfg.serve_toss_bridge_s),
                         info.fps)
-    flights = build_flights(ball, hits, calib, info.fps, players, segments, frame_w=info.width)
+    flights = build_flights(ball, hits, calib, info.fps, players, segments, frame_w=info.width,
+                            pin_serve_height=cfg.pin_serve_height)
     timings["analysis_s"] = time.time() - t1
 
     t3 = time.time()
@@ -370,7 +372,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "video": {"file": Path(video).name, "width": info.width, "height": info.height, "fps": info.fps,
                   "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": video_sha},
         "models": {k: _model_card(k, v) for k, v in cfg.models.items()},
-        "candidates": {"serve_toss_bridge_s": cfg.serve_toss_bridge_s} if cfg.serve_toss_bridge_s else {},
+        "candidates": {k: v for k, v in (("serve_toss_bridge_s", cfg.serve_toss_bridge_s),
+                                         ("pin_serve_height", cfg.pin_serve_height)) if v},
         "calibration": {
             "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts,
             "line_support_median": _f(np.median([c.support for c in valid]) if valid else None),
