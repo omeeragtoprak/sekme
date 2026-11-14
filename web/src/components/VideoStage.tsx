@@ -573,6 +573,14 @@ export default function VideoStage({
   // A rendered view has the system's marks burned in: clicks are taken on the raw video only.
   const canLabel = labelMode && tab === "source";
   const ar = dims.w / dims.h;
+  // The video's own timing limits what the marks can show (the report's first limitations say why).
+  const irregular = report.video.irregular_frame_intervals ?? 0;
+  const timingWarning =
+    report.video.fps > 0 && report.video.fps < 24
+      ? `Düşük kare hızı (${Math.round(report.video.fps)} fps) · sekme derinliği güvenilmez`
+      : irregular > 0
+        ? "Değişken kare hızı · işaretler kayabilir"
+        : null;
   const t = currentFrame / fps;
 
   if (!tab) {
@@ -701,6 +709,12 @@ export default function VideoStage({
             <span className="badge badge--warn glass-clear">
               <span className="badge-dot" aria-hidden="true" />
               Bu kare kalibre değil · kort ve sekme gösterilmiyor
+            </span>
+          )}
+          {timingWarning && (
+            <span className="badge badge--warn glass-clear" title="Ayrıntı: Oturum sekmesindeki sınırlamalar">
+              <span className="badge-dot" aria-hidden="true" />
+              {timingWarning}
             </span>
           )}
         </div>

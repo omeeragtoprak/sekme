@@ -470,7 +470,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "flights": [_flight_json(i, fl, info.fps) for i, fl in enumerate(flights)],
         "broadcast": broadcast,
         "timings_s": {k: round(v, 2) for k, v in timings.items()},
-        "limitations": LIMITATIONS + video_notes(info.fps, irregular),
+        "limitations": video_notes(info.fps, irregular) + LIMITATIONS,  # this video's own first
     }
     _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
     t4 = time.time()
