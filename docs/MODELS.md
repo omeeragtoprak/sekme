@@ -153,7 +153,8 @@ Measuring the mean detection − label offset (`eval_ball.py`, `bias_px`) on the
 (dx, dy) = (−1.30, +0.62) px for v1 and (−1.37, +0.78) px for v2 (1280×720, SE 0.03): far beyond what
 the blur defect could cause, and in v1 too, which has no blur. A check that uses no network
 (`scripts/label_offset.py`: the moving ball isolated by frame differencing, its centroid within 8 px
-of the label) shows where it comes from: **the TrackNet labels sit (+1.53, +1.39) px from the ball's
+of the label; frames where the ball moved under 16 px over either 3-frame leg are skipped, so the sample
+leans to faster balls) shows where it comes from: **the TrackNet labels sit (+1.53, +1.39) px from the ball's
 centre in the image** (medians +1.56, +1.53; n = 1 970; the same with unweighted masks, so lighting
 does not drive it). An independent review then showed it has two parts: a constant, and a term
 proportional to the ball's speed: on most games the labels lead the ball's image by 0.1–0.19 frame

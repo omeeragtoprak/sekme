@@ -8,7 +8,8 @@ For a labelled frame t, the moving ball shows in both |f_t - f_(t-3)| and |f_t -
 t-3 or t+3 shows in only one of them, so their per-pixel minimum isolates the ball at t. Its centroid within
 8 px of the label (pixels above 40 % of the window's peak; intensity-weighted, and unweighted as a check that
 lighting does not drive it) is compared with the label, in 1280x720 index coordinates. Frames where the ball
-moved less than 16 px between t-3 and t+3 are skipped (it would overlap itself).
+moved less than 16 px over either leg (t-3 to t, or t to t+3) are skipped (it would overlap itself in that
+difference), which keeps somewhat faster balls than a test on t-3 to t+3 alone would.
 
 The offset depends on the ball's speed (labels can lead or trail the ball in the image), so each axis is also
 fitted as offset = constant + slope * velocity (velocity from the labels at t-3 and t+3, px per frame). Only the

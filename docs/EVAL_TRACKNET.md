@@ -191,7 +191,9 @@ logic; a fix there would have to be checked on new data, since games 8–10 have
 **Finding (games 1–7, WASB detections).** The reported uncertainty was over-confident across the court:
 75 % of bounces inside their 95 % ellipse against the per-game centred reference (1 px label noise,
 which a three-cornered-hat estimate on games 8–10 confirms: label noise 0.9 / 1.1 px in x / y, our
-ball network's 0.34 / 0.39 px). Lateral |z| had a median of 1.11 (0.67 if calibrated). Cause: the 3D fit
+ball network's 0.34 / 0.39 px; that estimate pairs each label with the detection nearest to it and drops pairs
+over 10 px apart, which correlates the two errors and trims the tails, so the split between label and
+detection noise is approximate — noted after a later code review, not re-measured). Lateral |z| had a median of 1.11 (0.67 if calibrated). Cause: the 3D fit
 works with the pinhole camera recovered from the homography (square pixels, principal point at the
 image centre), and on six of the seven games that camera puts ground points 2–6 cm (median, centre
 line) away from where the homography — which locates the painted lines — puts them. The reference uses
