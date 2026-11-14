@@ -33,7 +33,7 @@ def _make_run(root: Path, run_id: str = "clip1") -> Path:
 def client(tmp_path: Path) -> TestClient:
     _make_run(tmp_path / "runs")
     (tmp_path / "secret.json").write_text("{}")
-    return TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"))
+    return TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
 
 
 def test_runs_listing_reports_honest_calibration_ratio(client: TestClient) -> None:
@@ -82,7 +82,7 @@ def test_upload_job_runs_analysis_and_validates_type(tmp_path: Path) -> None:
         _make_run(out.parent, out.name)
 
     app = create_app(tmp_path / "runs", uploads_dir=tmp_path / "up", web_dist=tmp_path / "x", analyze_fn=fake_analyze)
-    c = TestClient(app)
+    c = TestClient(app, base_url="http://127.0.0.1")
     assert c.post("/api/jobs", files={"file": ("evil.sh", b"#!/bin/sh", "text/plain")}).status_code == 415
     r = c.post("/api/jobs", files={"file": ("../My Match!.mp4", b"\x00" * 1000, "video/mp4")})
     assert r.status_code == 202
@@ -104,7 +104,7 @@ def test_web_index_is_revalidated_but_bundles_are_cacheable(tmp_path: Path) -> N
     (dist / "assets").mkdir(parents=True)
     (dist / "index.html").write_text('<script src="/assets/index-abc.js"></script>')
     (dist / "assets" / "index-abc.js").write_text("console.log(1)")
-    c = TestClient(create_app(tmp_path / "runs", web_dist=dist))
+    c = TestClient(create_app(tmp_path / "runs", web_dist=dist), base_url="http://127.0.0.1")
     assert c.get("/").headers.get("cache-control") == "no-cache"
     assert "cache-control" not in c.get("/assets/index-abc.js").headers
 
@@ -115,7 +115,7 @@ def test_a_ground_truth_label_is_judged_with_the_systems_rule(tmp_path: Path) ->
     d = _make_run(tmp_path / "runs")
     H = [50.0, 0.0, 640.0, 0.0, -50.0, 700.0, 0.0, 0.0, 1.0]  # 2 cm per pixel, far baseline near the top
     (d / "frames.json").write_text(json.dumps({"fps": 30, "n": 3, "H": [None, H, H]}))
-    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"))
+    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
     out = c.post("/api/runs/clip1/labels", json={"flight_id": 1, "frame": 1, "px": [640, 100], "labeler": "Ayşe"})
     assert out.status_code == 201
     rec = out.json()
@@ -139,5 +139,73 @@ def test_a_report_without_frames_is_an_evaluation_output_and_is_not_listed(tmp_p
     d = tmp_path / "runs" / "clip1_variant"  # e.g. a candidate's report kept for a comparison
     d.mkdir()
     (d / "report.json").write_text((tmp_path / "runs" / "clip1" / "report.json").read_text())
-    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"))
+    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
     assert [r["id"] for r in c.get("/api/runs").json()] == ["clip1"]
+
+
+def test_only_local_hosts_and_same_origin_writes_are_served(tmp_path: Path) -> None:
+    _make_run(tmp_path / "runs")
+    app = create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist")
+    c = TestClient(app, base_url="http://127.0.0.1")
+    assert c.get("/api/runs").status_code == 200
+    # DNS rebinding: a page on another name resolving to 127.0.0.1 is refused by the Host check.
+    assert c.get("/api/runs", headers={"host": "evil.example"}).status_code == 400
+    body = {"flight_id": 1, "decision": "confirm", "reviewer": "r"}
+    assert c.post("/api/runs/clip1/reviews", json=body, headers={"origin": "https://evil.example"}).status_code == 403
+    assert c.post("/api/runs/clip1/reviews", json=body, headers={"origin": "http://127.0.0.1"}).status_code == 201
+    # Same origin means the same host and port as the request: another local app on another port is refused.
+    other_port = {"origin": "http://127.0.0.1:9999"}
+    assert c.post("/api/runs/clip1/reviews", json=body, headers=other_port).status_code == 403
+    assert c.post("/api/runs/clip1/reviews", json=body, headers={"origin": "null"}).status_code == 403
+    # IPv6 loopback with a port is a local name too.
+    assert c.get("/api/runs", headers={"host": "[::1]:8765"}).status_code == 200
+    assert c.get("/api/runs", headers={"host": "localhost.evil.example"}).status_code == 400
+
+
+def test_on_a_network_address_any_host_is_answered_but_writes_stay_same_origin(tmp_path: Path) -> None:
+    _make_run(tmp_path / "runs")
+    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist", allowed_hosts=["*"]),
+                   base_url="http://192.168.1.20:8765")
+    body = {"flight_id": 1, "decision": "confirm", "reviewer": "r"}
+    assert c.get("/api/runs").status_code == 200
+    assert c.post("/api/runs/clip1/reviews", json=body, headers={"origin": "https://evil.example"}).status_code == 403
+    assert c.post("/api/runs/clip1/reviews", json=body,
+                  headers={"origin": "http://192.168.1.20:8765"}).status_code == 201
+
+
+def test_analysis_jobs_run_one_at_a_time(tmp_path: Path) -> None:
+    active, peak = [0], [0]
+    lock = __import__("threading").Lock()
+
+    def fake_analyze(video: Path, out: Path, progress) -> None:
+        with lock:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        time.sleep(0.2)
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "report.json").write_text("{}")
+        with lock:
+            active[0] -= 1
+
+    c = TestClient(create_app(tmp_path / "runs", uploads_dir=tmp_path / "up", web_dist=tmp_path / "x",
+                              analyze_fn=fake_analyze), base_url="http://127.0.0.1")
+    ids = [c.post("/api/jobs", files={"file": (f"v{i}.mp4", b"x" * 10, "video/mp4")}).json()["job_id"]
+           for i in range(3)]
+    for _ in range(100):
+        if all(c.get(f"/api/jobs/{j}").json()["status"] == "done" for j in ids):
+            break
+        time.sleep(0.05)
+    assert all(c.get(f"/api/jobs/{j}").json()["status"] == "done" for j in ids)
+    assert peak[0] == 1  # one GPU job at a time
+
+
+def test_a_source_link_is_served_only_if_it_points_at_a_video_and_broken_log_lines_are_skipped(
+        tmp_path: Path) -> None:
+    run = _make_run(tmp_path / "runs")
+    secret = tmp_path / "secret.txt"
+    secret.write_text("not a video")
+    (run / "source.mp4").symlink_to(secret)
+    (run / "reviews.jsonl").write_text('{"id": "a"}\n{"id": "b", "trunc\n')
+    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
+    assert c.get("/api/runs/clip1/media/source").status_code == 404
+    assert c.get("/api/runs/clip1/reviews").json() == [{"id": "a"}]

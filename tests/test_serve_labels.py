@@ -50,7 +50,7 @@ def test_serve_label_endpoints(tmp_path: Path) -> None:
                           {"id": 3, "kind": "serve", "start_frame": 40, "contact_frame": None, "call": None},
                           {"id": 4, "kind": "rally", "start_frame": 20, "call": None}]
     (d / "report.json").write_text(json.dumps(report))
-    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"))
+    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
     url = "/api/runs/clip1/serve-labels"
     assert c.get(url).json() == [] and c.get(f"{url}/summary").json()["labelled"] == 0
 

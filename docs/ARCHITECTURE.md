@@ -100,3 +100,24 @@ read and that can only be checked by re-reading every clip:
   other row's token.
 - `broadcast/scoreboard.py`: a graphic without a point column whose last set reads "0 0" is taken as
   showing points, so that frame's end-change count is one short (it can only mislabel names, never a call).
+
+## Review Room security (security review, 2026-11-14)
+
+The Review Room is a single-user tool for this machine. A security review found no HIGH findings; it is now
+hardened against the two ways a web page in the same browser could reach it:
+
+- **DNS rebinding:** only the host names 127.0.0.1, localhost and ::1 (with any port) are answered (400
+  otherwise).
+- **Cross-site writes:** a write whose `Origin` is not this host and port is refused (403), also on a
+  network address. A plain HTML form can post a file without a preflight, so the upload endpoint was
+  reachable before. The web dev server proxies with `changeOrigin: false` so its Origin and Host match.
+- **One analysis at a time:** uploaded jobs queue behind each other (one GPU job), and an upload is refused
+  when less than 1 GB is free.
+- **Source video link:** served only if both the link and its target are videos; a re-analysis from
+  another video replaces the old link.
+- **Logs:** a truncated line in `reviews.jsonl` or `labels.jsonl` is skipped instead of failing the page.
+
+`sekme serve --host 0.0.0.0` still works, with a warning: it has no authentication (any host name is then
+answered; writes still have to be same-origin). Not changed:
+`--reuse-perception` loads the run folder's `*.pkl` caches with `pickle`, which executes code from a crafted
+file, so reuse only run folders you made (or restored from your own private repo).

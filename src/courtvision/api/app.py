@@ -18,8 +18,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
@@ -32,6 +33,30 @@ RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 MEDIA = {"classic": "classic.mp4", "pro": "pro.mp4"}
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
 MAX_UPLOAD_BYTES = 2 * 1024**3
+MIN_FREE_BYTES = 1024**3  # an upload is refused when less than this is free on the upload disk
+# Names the Review Room answers to: a page on another name resolving to 127.0.0.1 (DNS rebinding) is refused.
+LOCAL_HOSTS = ["127.0.0.1", "localhost", "::1"]
+
+
+def host_name(netloc: str) -> str | None:
+    """'localhost:8765' -> 'localhost', '[::1]:8765' -> '::1'; None when it cannot be parsed."""
+    try:
+        return urlparse("//" + netloc).hostname
+    except ValueError:
+        return None
+
+
+def read_jsonl(p: Path) -> list[dict]:
+    """An append-only log; a line cut short by a crash mid-append is skipped, not fatal."""
+    if not p.is_file():
+        return []
+    out = []
+    for line in p.read_text().splitlines():
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return out
 
 AnalyzeFn = Callable[[Path, Path, Callable[[str, float], None]], object]
 
@@ -82,8 +107,8 @@ class Job(BaseModel):
 
 def media_path(run: Path, name: str) -> Path | None:
     if name == "source":
-        for p in sorted(run.glob("source.*")):
-            if p.suffix.lower() in VIDEO_EXT and p.resolve().is_file():
+        for p in sorted(run.glob("source.*")):  # the link and what it points at must both be a video
+            if p.suffix.lower() in VIDEO_EXT and p.resolve().is_file() and p.resolve().suffix.lower() in VIDEO_EXT:
                 return p
         return None
     p = run / MEDIA[name]
@@ -93,6 +118,8 @@ def media_path(run: Path, name: str) -> Path | None:
 def link_source(video: Path, run: Path) -> None:
     """Expose the analysed video inside the run folder (symlink; copy when links are unsupported)."""
     dest = run / f"source{video.suffix.lower()}"
+    if dest.is_symlink() and dest.resolve() != video.resolve():
+        dest.unlink()  # re-analysed from another video: do not show the old one beside the new report
     if dest.exists() or dest.is_symlink():
         return
     try:
@@ -112,13 +139,29 @@ class _WebFiles(StaticFiles):
 
 
 def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path | None = None,
-               analyze_fn: AnalyzeFn | None = None) -> FastAPI:
+               analyze_fn: AnalyzeFn | None = None, allowed_hosts: list[str] | None = None) -> FastAPI:
     runs_root = runs_dir.resolve()
     runs_root.mkdir(parents=True, exist_ok=True)
     uploads = (uploads_dir or runs_root.parent / "data" / "uploads").resolve()
     jobs: dict[str, Job] = {}
     review_lock = threading.Lock()
+    job_lock = threading.Lock()  # one analysis at a time: one GPU job (the machine froze with two)
     app = FastAPI(title="SEKME Review Room", version=__version__)
+    hosts = set(allowed_hosts or LOCAL_HOSTS)
+
+    @app.middleware("http")
+    async def local_and_same_origin(request: Request, call_next):  # type: ignore[no-untyped-def]
+        host = request.headers.get("host", "")
+        # DNS rebinding: a page on another name that resolves to this machine is not answered.
+        if "*" not in hosts and host_name(host) not in hosts:
+            return JSONResponse({"detail": "geçersiz sunucu adı"}, status_code=400)
+        # A page on another site can post a form here without a preflight: a write must come from this origin
+        # (same host and port). Requests without an Origin (curl, scripts) are not from a web page.
+        origin = request.headers.get("origin")
+        if (request.method not in ("GET", "HEAD", "OPTIONS") and origin is not None
+                and urlparse(origin).netloc.lower() != host.lower()):
+            return JSONResponse({"detail": "başka bir siteden gelen istek reddedildi"}, status_code=403)
+        return await call_next(request)
 
     def run_dir(run_id: str) -> Path:
         if not RUN_ID.match(run_id):
@@ -179,10 +222,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
 
     @app.get("/api/runs/{run_id}/reviews")
     def get_reviews(run_id: str) -> list[dict]:
-        p = run_dir(run_id) / "reviews.jsonl"
-        if not p.is_file():
-            return []
-        return [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+        return read_jsonl(run_dir(run_id) / "reviews.jsonl")
 
     @app.post("/api/runs/{run_id}/reviews", status_code=201)
     def add_review(run_id: str, body: ReviewIn) -> dict:
@@ -205,10 +245,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         return record
 
     def read_labels(d: Path) -> list[dict]:
-        p = d / "labels.jsonl"
-        if not p.is_file():
-            return []
-        return [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+        return read_jsonl(d / "labels.jsonl")
 
     @app.get("/api/runs/{run_id}/labels")
     def get_labels(run_id: str) -> list[dict]:
@@ -249,17 +286,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         return record
 
     def read_serve_labels(d: Path) -> list[dict]:
-        """The serve-label log; a line cut short by a crash mid-append is skipped, not fatal."""
-        p = d / "serve_labels.jsonl"
-        if not p.is_file():
-            return []
-        out = []
-        for line in p.read_text().splitlines():
-            try:
-                out.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-        return out
+        return read_jsonl(d / "serve_labels.jsonl")
 
     def clip_timing(d: Path, report: dict) -> tuple[int | None, float]:
         """(frame count or None when unknown, fps) as the run exposes them."""
@@ -318,6 +345,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         if ext not in VIDEO_EXT:
             raise HTTPException(415, f"desteklenmeyen dosya türü; izin verilenler: {', '.join(sorted(VIDEO_EXT))}")
         uploads.mkdir(parents=True, exist_ok=True)
+        if shutil.disk_usage(uploads).free < MIN_FREE_BYTES:
+            raise HTTPException(507, "diskte yer yok")
         job = Job(id=uuid.uuid4().hex[:12])
         dest = uploads / f"{job.id}{ext}"
         size = 0
@@ -335,15 +364,16 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         run_id = f"{stem}-{job.id}"
 
         def work() -> None:
-            job.status = "running"
-            try:
-                def prog(stage: str, frac: float) -> None:
-                    job.stage, job.progress = stage, round(float(frac), 3)
+            with job_lock:  # queued until the previous analysis has finished
+                job.status = "running"
+                try:
+                    def prog(stage: str, frac: float) -> None:
+                        job.stage, job.progress = stage, round(float(frac), 3)
 
-                analyze_fn(dest, runs_root / run_id, prog)
-                job.run_id, job.status, job.stage, job.progress = run_id, "done", "done", 1.0
-            except Exception as exc:  # reported to the client through the job status
-                job.status, job.error = "error", f"{type(exc).__name__}: {exc}"
+                    analyze_fn(dest, runs_root / run_id, prog)
+                    job.run_id, job.status, job.stage, job.progress = run_id, "done", "done", 1.0
+                except Exception as exc:  # reported to the client through the job status
+                    job.status, job.error = "error", f"{type(exc).__name__}: {exc}"
 
         threading.Thread(target=work, daemon=True).start()
         return {"job_id": job.id}

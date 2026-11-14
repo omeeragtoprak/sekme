@@ -52,7 +52,11 @@ def _serve(args: argparse.Namespace) -> int:
     def run_analysis(video: Path, out: Path, progress) -> None:
         analyze(video, out, PipelineConfig(device=args.device), progress)
 
-    app = create_app(Path(args.runs), analyze_fn=run_analysis)
+    local = args.host in ("127.0.0.1", "localhost", "::1")
+    if not local:
+        print(f"uyarı: İnceleme Odası {args.host} adresinde, kimlik doğrulaması olmadan açılıyor; ağdaki herkes "
+              "analizleri görebilir ve video yükleyebilir", file=sys.stderr)
+    app = create_app(Path(args.runs), analyze_fn=run_analysis, allowed_hosts=None if local else ["*"])
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0
 

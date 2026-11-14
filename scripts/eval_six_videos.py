@@ -113,8 +113,16 @@ def _check_frames(labels: list[dict], listed: Path, n: str) -> None:
         raise SystemExit(f"{n}: labelled frames differ from {listed.name}")
 
 
+PLAYER_FILES = ("_presence", "_presence_frames", "_disagree", "_disagree_frames")
+
+
+def label_names(labels_dir: Path) -> list[str]:
+    """The videos: one serve-label file DIR/<name>.json each (the player label and frame-list files are not)."""
+    return sorted(p.stem for p in labels_dir.glob("*.json") if not p.stem.endswith(PLAYER_FILES))
+
+
 def score(labels_dir: Path, out: Path | None) -> None:
-    names = sorted(p.stem for p in labels_dir.glob("*.json") if not p.stem.endswith(("_presence", "_presence_frames")))
+    names = label_names(labels_dir)
     if not names:
         raise SystemExit(f"no label files in {labels_dir}")
     missing = [f"{n}/{k}" for n in names for k in ("default", *VARIANTS) if not (RUNS / n / k / "report.json").exists()]

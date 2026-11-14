@@ -130,3 +130,13 @@ def test_player_rule_paths() -> None:
     wrong_spot = _frames(n, lambda i: [1480.0, 700.0, 1520.0, 900.0], lambda i: on_far)  # someone else
     assert player_rule([(labels, dis, default, wrong_spot, 1080)]).decision == "rejected"
     assert player_rule([(labels[:50], dis, default, better, 1080)]).decision == "inconclusive"  # < 100 frames
+
+
+def test_score_takes_only_serve_label_files_as_videos(tmp_path: Path) -> None:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import eval_six_videos
+
+    for suffix in ("", "_presence", "_presence_frames", "_disagree", "_disagree_frames"):
+        (tmp_path / f"m2025_final{suffix}.json").write_text("{}")
+    (tmp_path / "w2024_sf.json").write_text("{}")
+    assert eval_six_videos.label_names(tmp_path) == ["m2025_final", "w2024_sf"]
