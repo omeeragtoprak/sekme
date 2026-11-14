@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
 from courtvision import __version__
+from courtvision.errors import UnreadableVideoError
 from courtvision.eval.labels import evaluate, px_scale_cm, serve_state, serve_summary, summarize, world_from_px
 
 SERVE_TOL_S = 0.5  # a labelled serve and a system serve within this many seconds are the same serve
@@ -123,6 +124,13 @@ class _WebFiles(StaticFiles):
         if str(full_path).endswith(".html"):
             resp.headers["Cache-Control"] = "no-cache"
         return resp
+
+
+def display_name(filename: str | None) -> str:
+    """The name a user picked, for messages: its last path segment (either separator), without control
+    characters, at most 80 characters."""
+    picked = re.sub(r"[\x00-\x1f\x7f]", "", (filename or "").replace("\\", "/").rsplit("/", 1)[-1])
+    return picked[:79] + "…" if len(picked) > 80 else picked
 
 
 def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path | None = None,
@@ -349,6 +357,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         jobs[job.id] = job
         stem = re.sub(r"[^A-Za-z0-9_.-]", "_", Path(file.filename or "upload").stem)[:40].lstrip("._-") or "upload"
         run_id = f"{stem}-{job.id}"
+        shown_name = display_name(file.filename) or dest.name
 
         def work() -> None:
             with job_lock:  # queued until the previous analysis has finished
@@ -359,6 +368,9 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
 
                     analyze_fn(dest, runs_root / run_id, prog)
                     job.run_id, job.status, job.stage, job.progress = run_id, "done", "done", 1.0
+                except UnreadableVideoError as exc:  # the upload is not a usable video: say so and drop it
+                    job.status, job.error = "error", str(exc).replace(dest.name, shown_name, 1)
+                    dest.unlink(missing_ok=True)
                 except Exception as exc:  # reported to the client through the job status
                     job.status, job.error = "error", f"{type(exc).__name__}: {exc}"
 

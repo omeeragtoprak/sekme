@@ -73,6 +73,37 @@ def test_review_audit_log_snapshots_system_call(client: TestClient, tmp_path: Pa
     assert client.post("/api/runs/clip1/reviews", json={**body, "reviewer": ""}).status_code == 422
 
 
+def test_upload_job_that_is_not_a_video_fails_with_a_plain_message(tmp_path: Path) -> None:
+    from courtvision.io.video import UnreadableVideoError
+
+    def fake_analyze(video: Path, out: Path, progress) -> None:
+        raise UnreadableVideoError(f"{video.name}: video okunamadı (Invalid data found when processing input)")
+
+    app = create_app(tmp_path / "runs", uploads_dir=tmp_path / "up", web_dist=tmp_path / "x", analyze_fn=fake_analyze)
+    c = TestClient(app, base_url="http://127.0.0.1")
+    picked = "C:\\Users\\someone\\notes.mp4"  # a client's full Windows path
+    job_id = c.post("/api/jobs", files={"file": (picked, b"not a video", "video/mp4")}).json()["job_id"]
+    for _ in range(50):
+        job = c.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in ("done", "error"):
+            break
+        time.sleep(0.05)
+    assert job["status"] == "error"
+    assert job["error"] == "notes.mp4: video okunamadı (Invalid data found when processing input)"
+    assert "Error" not in job["error"] and str(tmp_path) not in job["error"]
+    assert list((tmp_path / "up").iterdir()) == []  # the unusable upload is not kept
+
+
+
+def test_display_name_keeps_only_a_short_clean_file_name() -> None:
+    from courtvision.api.app import display_name
+
+    assert display_name("C:\\Users\\someone\\maç\x07\n1.mp4") == "maç1.mp4"
+    assert display_name("/home/someone/x.mp4") == "x.mp4"
+    assert display_name(None) == ""
+    long = display_name("a" * 200 + ".mp4")
+    assert len(long) == 80 and long.endswith("…")
+
 def test_upload_job_runs_analysis_and_validates_type(tmp_path: Path) -> None:
     seen: dict = {}
 

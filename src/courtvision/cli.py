@@ -7,6 +7,8 @@ import sys
 import time
 from pathlib import Path
 
+from courtvision.errors import UnreadableVideoError
+
 
 def _analyze(args: argparse.Namespace) -> int:
     from courtvision.events.serves import TOSS_BRIDGE_S
@@ -122,7 +124,11 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--shots", type=int, default=40)
     b.set_defaults(fn=_benchmark)
     args = p.parse_args(argv)
-    return int(args.fn(args))
+    try:
+        return int(args.fn(args))
+    except UnreadableVideoError as exc:  # a wrong input file, not a bug: no traceback
+        print(f"hata: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

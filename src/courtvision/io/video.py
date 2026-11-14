@@ -7,6 +7,7 @@ opencv-python on macOS (duplicate AVFoundation classes in one process).
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from collections.abc import Iterator
@@ -16,6 +17,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+
+from courtvision.errors import UnreadableVideoError
 
 
 def _bin(name: str) -> str:
@@ -36,33 +39,60 @@ class VideoInfo:
     has_audio: bool
 
 
+_FFMPEG_TAG = re.compile(r"\[[^\]]*@ 0x[0-9a-fA-F]+\]\s*")  # "[mov,mp4,m4a @ 0x7f…] " before a message
+
+
+def _reason(stderr: str, path: str, name: str) -> str:
+    """ffprobe's last message, without the folder or the decoder's memory address, short enough to show."""
+    lines = [ln for ln in stderr.strip().splitlines() if ln.strip()]
+    why = (lines[-1] if lines else "ffprobe failed").removeprefix(f"{path}: ").replace(path, name)
+    why = _FFMPEG_TAG.sub("", why).strip()
+    return why if len(why) <= 120 else why[:119] + "…"
+
+
 def probe(path: str | Path) -> VideoInfo:
-    out = subprocess.run(
-        [_bin("ffprobe"), "-v", "error", "-print_format", "json", "-show_streams", "-show_format", str(path)],
-        check=True, capture_output=True, text=True,
-    ).stdout
-    meta = json.loads(out)
-    v = next(s for s in meta["streams"] if s["codec_type"] == "video")
+    p, name = str(path), Path(path).name
+    res = subprocess.run(
+        [_bin("ffprobe"), "-v", "error", "-print_format", "json", "-show_streams", "-show_format", p],
+        check=False, capture_output=True, text=True,
+    )
+    if res.returncode != 0:
+        raise UnreadableVideoError(f"{name}: video okunamadı ({_reason(res.stderr, p, name)})")
+
     def rate(s: str | None) -> float | None:  # "0/0" (no average rate) counts as missing
         if not s or s.endswith("/0"):
             return None
         r = float(Fraction(s))
         return r if r > 0 else None
 
-    fps = rate(v.get("avg_frame_rate")) or rate(v.get("r_frame_rate"))
-    if fps is None:
-        raise ValueError(f"{path}: no frame rate in the video stream")
-    duration = float(meta["format"].get("duration", v.get("duration", 0.0)))
-    n = int(v.get("nb_frames") or round(duration * fps))
-    has_audio = any(s["codec_type"] == "audio" for s in meta["streams"])
-    return VideoInfo(str(path), int(v["width"]), int(v["height"]), fps, n, duration, has_audio)
+    try:
+        meta = json.loads(res.stdout)
+        # Cover art in an audio file is a one-picture "video" stream (with a 90000/1 rate): not a video.
+        v = next((s for s in meta.get("streams", []) if s.get("codec_type") == "video"
+                  and not (s.get("disposition") or {}).get("attached_pic")), None)
+        if v is None:
+            raise UnreadableVideoError(f"{name}: dosyada video akışı yok")
+        width, height = int(v.get("width") or 0), int(v.get("height") or 0)
+        if width <= 0 or height <= 0:
+            raise UnreadableVideoError(f"{name}: video akışının boyutu yok")
+        fps = rate(v.get("avg_frame_rate")) or rate(v.get("r_frame_rate"))
+        if fps is None:
+            raise UnreadableVideoError(f"{name}: video akışında kare hızı yok")
+        duration = float(meta["format"].get("duration", v.get("duration", 0.0)))
+        n = int(v.get("nb_frames") or round(duration * fps))
+        has_audio = any(s.get("codec_type") == "audio" for s in meta["streams"])
+    except UnreadableVideoError:
+        raise
+    except (KeyError, TypeError, ValueError, ZeroDivisionError) as exc:  # malformed metadata ("N/A", missing keys)
+        raise UnreadableVideoError(f"{name}: video bilgileri okunamadı") from exc
+    return VideoInfo(p, width, height, fps, n, duration, has_audio)
 
 
 def iter_frames(path: str | Path, start: int = 0, end: int | None = None) -> Iterator[tuple[int, np.ndarray]]:
     """Yield (index, BGR frame) sequentially; decoding dominates, so we never seek per frame."""
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
-        raise RuntimeError(f"cannot open video {path}")
+        raise UnreadableVideoError(f"{Path(path).name}: video açılamadı")
     try:
         if start:
             cap.set(cv2.CAP_PROP_POS_FRAMES, start)

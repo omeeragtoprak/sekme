@@ -212,3 +212,18 @@ hardened against the two ways a web page in the same browser could reach it:
 answered; writes still have to be same-origin). Not changed:
 `--reuse-perception` loads the run folder's `*.pkl` caches with `pickle`, which executes code from a crafted
 file, so reuse only run folders you made (or restored from your own private repo).
+
+## Inputs that are not a tennis video (checked 2026-11-14)
+
+Eight files made locally were analysed (`sekme analyze`, default options). A 0-byte file, a text file, a
+truncated MP4 and an audio-only MP4 used to end in a Python traceback (the ffprobe command with the server's
+path, or an empty `StopIteration`), left an empty run folder, and in the Review Room kept the upload; an audio
+file with cover art passed as a 90 000 fps "video" (its picture stream). Now `probe` raises
+`UnreadableVideoError` (`courtvision/errors.py`) with one line naming the file, never its folder ("video
+okunamadı (…)" with ffprobe's last message, folder and decoder addresses removed; "dosyada video akışı yok",
+cover art not counted; "video akışının boyutu yok"; "video akışında kare hızı yok"; "video bilgileri
+okunamadı" for malformed metadata); `analyze` probes before creating the run folder; the command line prints
+`hata: …` and exits with 2; an upload job shows the message with the name the user picked (last path segment,
+no control characters, at most 80 characters) and deletes the upload. The ten broadcast clips and three valid
+synthetic clips probe exactly as before. A one-frame clip, two seconds of black and a portrait test pattern
+run to the end: no frame calibrated, no flight, no call.

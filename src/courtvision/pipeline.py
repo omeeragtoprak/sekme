@@ -346,11 +346,11 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
 def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None = None,
             progress: Callable[[str, float], None] | None = None) -> dict:
     cfg = cfg or PipelineConfig()
+    info = probe(video)  # before the run folder exists: an unreadable file leaves no empty run behind
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     prog = progress or (lambda stage, frac: None)
     timings: dict[str, float] = {}
-    info = probe(video)
     court = CourtModel()
     device = pick_device(cfg.device)
 
