@@ -182,8 +182,8 @@ def track_ball(cands: list[list[BallCandidate]], frame_w: int, max_gap: int = 6)
         if len(prev) == 3 and all(np.isfinite(p).all() for p in prev):
             p1, p2, p3 = prev
             acc = (p1 - p2) - (p2 - p3)
-            vel = (p1 - p2) + acc
-            pred = p1 + vel + acc / 2
+            vel = (p1 - p2) + acc  # the next step under constant acceleration
+            pred = p1 + vel
         # Across a short miss keep gating and predicting from the last seen position, so a
         # single missed detection does not hand the track to a court mark or a spectator.
         last = seen[-1] if seen and i - seen[-1] <= max_gap else None
@@ -211,22 +211,40 @@ def track_ball(cands: list[list[BallCandidate]], frame_w: int, max_gap: int = 6)
 
 
 def _remove_outliers(xy: np.ndarray, win: int = 3, k: float = 4.0, floor_px: float = 12.0) -> np.ndarray:
-    """Drop isolated points and points far from a local quadratic fit of their neighbours."""
+    """Drop isolated points and points far from a local quadratic fit of their neighbours, worst first.
+
+    A removed point is never a neighbour again, and the remaining points near it are re-tested. (The first
+    version tested points in order against neighbours it had already removed: NaN fits that never count as
+    too far, so a lone wild point could survive while the good points beside it were dropped.)
+    """
     xy = xy.copy()
-    ok = np.isfinite(xy[:, 0])
     n = len(xy)
-    for i in np.flatnonzero(ok):
+    ok = np.isfinite(xy[:, 0])
+
+    def ratio(i: int) -> float:  # residual / threshold; > 1 means too far, inf means isolated
         nb = [j for j in range(max(0, i - win), min(n, i + win + 1)) if j != i and ok[j]]
-        if len(nb) == 0:
-            xy[i] = np.nan
-            continue
-        if len(nb) >= 4:
-            t = np.array(nb, dtype=float)
-            pred = [np.polyval(np.polyfit(t, xy[nb, d], 2), i) for d in (0, 1)]
-            resid = np.hypot(xy[i, 0] - pred[0], xy[i, 1] - pred[1])
-            spread = np.median(np.hypot(*np.diff(xy[nb], axis=0).T)) if len(nb) > 1 else floor_px
-            if resid > max(k * spread, floor_px * 4):
-                xy[i] = np.nan
+        if not nb:
+            return np.inf
+        if len(nb) < 4:
+            return 0.0
+        t = np.array(nb, dtype=float)
+        pred = [np.polyval(np.polyfit(t, xy[nb, d], 2), i) for d in (0, 1)]
+        resid = np.hypot(xy[i, 0] - pred[0], xy[i, 1] - pred[1])
+        spread = np.median(np.hypot(*np.diff(xy[nb], axis=0).T))
+        return float(resid / max(k * spread, floor_px * 4))
+
+    r = np.full(n, -np.inf)
+    for i in np.flatnonzero(ok):
+        r[i] = ratio(i)
+    while n:
+        i = int(np.argmax(r))
+        if r[i] <= 1.0:
+            break
+        ok[i], r[i] = False, -np.inf
+        xy[i] = np.nan
+        for j in range(max(0, i - win), min(n, i + win + 1)):
+            if ok[j]:
+                r[j] = ratio(j)
     return xy
 
 

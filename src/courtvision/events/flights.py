@@ -296,7 +296,7 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
     else:
         fl.play_continued = ender == ("near" if receiver == Half.NEAR else "far")
     idx = np.arange(s + 2, e - 1)  # skip the racket-contact frames at both ends
-    ok = (ball.source[idx] == 1) & np.array([calib[i].valid and calib[i].camera is not None for i in idx])
+    ok = (ball.source[idx] == 1) & np.array([calib[i].valid and calib[i].camera is not None for i in idx], dtype=bool)
     idx = idx[ok]
     if len(idx) < min_points:
         fl.notes.append(f"yalnızca {len(idx)} kalibre tespit var; 3B uydurma yapılmadı")

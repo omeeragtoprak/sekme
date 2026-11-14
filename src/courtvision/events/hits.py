@@ -47,6 +47,8 @@ def detect_hits(ball: BallTrack, players: dict[str, PlayerTrack], fps: float, fr
     y = _smooth(ball.xy[:, 1])
     n = len(y)
     k = max(2, int(round(0.12 * fps)))  # ~4 frames at 30 fps
+    if n <= 2 * k:  # too short for the direction window
+        return []
     thr = 0.012 * frame_h
     dy = np.full(n, np.nan)
     dy[k:n - k] = y[2 * k:] - y[:n - 2 * k]

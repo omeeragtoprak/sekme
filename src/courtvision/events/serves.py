@@ -169,6 +169,11 @@ def detect_serves(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
                 else:
                     contact = refine_contact(win, ball.xy[win], contact)
                     px, sub = ball.xy[contact].copy(), None
+                    if not np.all(np.isfinite(px)):  # refined into a missed frame: between its neighbours
+                        lo, hi = win[win < contact], win[win > contact]
+                        if len(lo) and len(hi):
+                            w = (contact - lo[-1]) / (hi[0] - lo[-1])
+                            px = (1 - w) * ball.xy[lo[-1]] + w * ball.xy[hi[0]]
                 # Struck towards the opponent: far server sends it down the image, near server up.
                 dy = ball.xy[after[-1], 1] - ball.xy[after[0], 1]
                 if (dy > 0) != (side == "far"):

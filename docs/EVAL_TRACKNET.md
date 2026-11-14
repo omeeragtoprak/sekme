@@ -238,3 +238,36 @@ Timing is the smallest part: **hit/bounce segmentation** — false hits at near-
 strokes — accounts for most of the losses. It is the same step the rejected hit gate addressed. Games
 8–10 have now been used for many accept/reject decisions; a further change there would need new
 labelled data (e.g. bounces marked in the Review Room) to be tested honestly.
+
+## Ball tracker bugs found in review (rule written 2026-11-14, before the fixes were run)
+
+An independent code review found two bugs in `perception/ball.py`, confirmed by hand:
+
+1. `_remove_outliers` edits the track while it scans it, so later points are tested against neighbours it has
+   already removed (NaN fits, and a NaN residual never counts as too far); on a clean straight track with one
+   wild point it removes the two good points beside the outlier and keeps the outlier.
+2. The constant-acceleration predictor in `track_ball` adds half an acceleration step too many
+   (`pred = p1 + vel + acc / 2` with `vel` already holding the full step), which biases the choice between
+   candidates near bounces and strokes.
+
+A third, rarer one: a serve contact refined into a long detection gap takes its image point from a missing
+frame (NaN), which silently drops the serve's contact-height measurement.
+
+**Fixes:** outliers removed worst first against the remaining points (a removed point is never a neighbour
+again); `pred = p1 + vel`; the serve contact point interpolated from the detections around it when its
+frame has none.
+
+**Rule.** These are bug fixes, so the bar is *no measurable harm*; only development data exists for it
+(games 8–10 are used up). On TrackNet games 1–7 (`runs_dev_base` detections; baseline 220 / 329 first
+bounces, precision 89.1 %, decisive calls 228 / 228) the fixes are adopted if first-bounce recall falls by no
+more than 1 point, precision falls by no more than 1 point, and every decisive call agrees with the
+reference. Otherwise the code is kept as it is and the result is documented here. Broadcast clips and the
+serve labels are reported, not used.
+
+**Result (2026-11-14): adopted.** TrackNet games 1–7 unchanged: 220 / 329 first bounces, precision 89.1 %,
+228 / 228 decisive calls consistent (not a single ball position changed on those clips: their detections
+never reached either bug). On the broadcast clips (reported) 94 of 33 209 ball frames changed on the 554 s
+60 fps clip, 13 of 5 395 on the 90 s one and none on the 30 fps ones; no call verdict changed, bounces moved
+at most 0.2 cm, one call was added; the 23 labelled serves of the 2025 final are matched exactly as before.
+Two unreachable edge cases from the same review were hardened (`detect_hits` on a track shorter than its
+direction window, an empty mask in `_fit_one`).

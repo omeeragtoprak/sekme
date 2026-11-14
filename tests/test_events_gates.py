@@ -419,3 +419,25 @@ def test_player_size_from_camera_candidate_keeps_a_crouching_player_the_clip_wid
     new = select_players(dets, calib, 30.0, size_from_camera=True)["near"]
     assert np.isfinite(old.world[60:]).all(axis=1).sum() == 0  # the wide shot is lost by the default gate
     assert np.isfinite(new.world[60:]).all(axis=1).all()
+
+
+def test_the_outlier_filter_removes_the_wild_point_and_keeps_its_neighbours() -> None:
+    from courtvision.perception.ball import _remove_outliers
+
+    xy = np.column_stack([10.0 * np.arange(30), 100 + 2.0 * np.arange(30)])
+    xy[10] = [900, 900]  # one wild detection on a clean straight track
+    out = _remove_outliers(xy)
+    assert [i for i in range(30) if np.isnan(out[i, 0])] == [10]
+    xy[11] = [50, 700]  # two wild points side by side
+    out = _remove_outliers(xy)
+    assert [i for i in range(30) if np.isnan(out[i, 0])] == [10, 11]
+
+
+def test_the_tracker_predicts_the_next_step_of_a_constant_acceleration_track() -> None:
+    # x = 10 t^2 at t = 1, 2, 3, 4 (10, 40, 90, 160); at t = 4 a decoy sits where the old predictor pointed
+    # (170 = p1 + vel + acc / 2): the true ball must be chosen.
+    cands = [[BallCandidate(10.0 * t * t, 300.0, 1.0)] for t in range(1, 4)]
+    cands.append([BallCandidate(160.0, 300.0, 1.0), BallCandidate(172.0, 300.0, 1.0)])
+    cands.append([BallCandidate(250.0, 300.0, 1.0)])
+    tr = track_ball(cands, 1280)
+    assert tr.xy[3, 0] == 160.0
