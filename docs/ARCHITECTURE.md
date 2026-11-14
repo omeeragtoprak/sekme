@@ -56,3 +56,15 @@ flowchart LR
   rejected experiments are documented in `docs/EVAL_TRACKNET.md`.
 - **Caches are keyed by the video hash.** `--reuse-perception` re-runs everything after perception in
   seconds, which is how regressions are checked.
+
+## Candidates (off by default)
+
+Changes that are written and tested but not yet decided run only with their flag; each has a rule written
+before its test data is seen, and becomes the default only by that rule (rejected ones are removed and
+documented). `report.json` lists the flags a run used under `candidates`.
+
+| Flag | What it changes | Decided by |
+|---|---|---|
+| `--fps-scaled-thresholds` | frame counts set on 30 fps video (court-fixed filter, toss-run gap, toss speed per frame) scaled by round(fps / 30) | `docs/EVAL_SERVE_SPEED.md`, second candidate |
+| `--pin-serve-height` | the flight fit held at the serve contact height measured on the camera ray (±0.05 m) | `docs/EVAL_SERVE_SPEED.md` |
+| `--toss-bridge` | a toss run may span a missed apex; the serve contact is searched over the whole run | withdrawn from its test (`docs/EVAL_SPOT.md`); reported only |

@@ -127,11 +127,12 @@ frame). The ball network does detect the ball at the toss apex at 60 fps; the co
 it, because a ball hanging for 0.17 s fills 10 frames. With the change: 20 of 23 at 60 fps (19 within 2
 frames). On the four 60 fps development clips it also keeps 3–5 % more ball detections and changes some
 calls (one IN → REVIEW, two OUT counts, a few bounces moved), which nothing local can check directly.
-Indirectly: the same 554 s at 30 fps (every second frame, where these counts are what they were set for)
-gives 121 calls; the default 60 fps run finds 88 of those bounces (73 %), the scaled one 103 (85 %), with
-the same verdict on 88 / 88 and 102 / 103, no decisive IN/OUT flip in either, positions closer (90th
-percentile 13.0 → 11.5 cm) and fewer calls the 30 fps run does not make (35 → 29). Development evidence
-that the scaling makes 60 fps behave like 30 fps; not part of the rule.
+Indirectly: each of the four 60 fps development clips was also made into a 30 fps video (every second
+frame, where these counts are what they were set for). Of the 270 calls the 30 fps runs make, the default
+60 fps runs find 224 bounces (83 %), the scaled ones 243 (90 %; at least as many on every clip), with the
+same verdict on 224 / 224 and 242 / 243, no decisive IN/OUT flip in either, and fewer calls the 30 fps
+runs do not make (62 → 50). On the 554 s clip positions also come closer (90th percentile 13.0 → 11.5 cm).
+Development evidence that the scaling makes 60 fps behave like 30 fps; not part of the rule.
 
 **Rule**, on the six videos of this plan with the labels made for it (videos below 50 fps are left out:
 s = round(fps / 30) is 1 there and the change does nothing; if fewer than three remain, this footage
