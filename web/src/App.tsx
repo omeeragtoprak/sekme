@@ -119,6 +119,8 @@ export default function App() {
   const [reloadKey, setReloadKey] = useState(0);
   const [view, setView] = useState<MediaName>("source");
   const [mode, setMode] = useState<"review" | "analysis">("review");
+  // The run whose analysis page was opened: it then stays mounted (hidden) until another run is opened.
+  const [analysisSeen, setAnalysisSeen] = useState<string | null>(null);
   const [labels, setLabels] = useState<LabelRecord[]>([]);
   const [labelSummary, setLabelSummary] = useState<LabelSummary>({ n: 0 });
   const [labelingId, setLabelingId] = useState<number | null>(null);
@@ -411,6 +413,10 @@ export default function App() {
     [],
   );
 
+  useEffect(() => {
+    if (mode === "analysis" && runId) setAnalysisSeen(runId);
+  }, [mode, runId]);
+
   const selectedFlight = useMemo(
     () => (reportData && selectedFlightId !== null ? (reportData.flights.find((f) => f.id === selectedFlightId) ?? null) : null),
     [reportData, selectedFlightId],
@@ -484,7 +490,12 @@ export default function App() {
           health={health}
         />
         <div className="content-stack">
-          {mode === "analysis" && <Analysis report={rep} onOpenShot={onOpenShot} labelSummary={labelSummary} serveSummary={serveSummary} />}
+          {(mode === "analysis" || analysisSeen === runId) && (
+            // Hidden by this wrapper, not by a prop: the memoised page then is not rendered again on a switch.
+            <div className="analysis-host" hidden={mode !== "analysis"}>
+              <Analysis report={rep} onOpenShot={onOpenShot} labelSummary={labelSummary} serveSummary={serveSummary} />
+            </div>
+          )}
           <main className="content" hidden={mode === "analysis"}>
             <div className="phone-bar">
               <ViewPicker media={media} view={view} onChange={onViewChange} />

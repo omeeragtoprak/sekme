@@ -111,6 +111,14 @@ profile, more under load). The rest of a switch is React unmounting and mounting
 elements (shot list, timeline markers, inspector), the frame overlay and layout; keeping the panels mounted
 while the next run loads (instead of the spinner) would remove most of it and is the next step.
 
+**Review ↔ analysis page.** The analysis page used to be built from scratch on every switch (all its charts and
+tables over the run's shots, then a layout of the new page) and torn down on the way back. It is now built the
+first time it is opened for a run and then only hidden by a wrapper (`App.tsx`, `analysis-host`), so later
+switches change two `hidden` attributes and re-render nothing of it (checked: after the first open a switch
+adds or removes at most three nodes); player names are formatted once (`displayName` caches them; the page
+asked for the same few names thousands of times on the 554 s run), and the video overlay is not redrawn while
+the review page is hidden.
+
 ## Frame rates
 
 The networks and most thresholds were developed on 30 fps video (TrackNet). The ball network adapts by

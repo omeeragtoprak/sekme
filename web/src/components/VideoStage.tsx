@@ -389,7 +389,8 @@ export default function VideoStage({
     if (!c || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver((entries) => {
       const r = entries[entries.length - 1]?.contentRect;
-      if (r) cssHeights.set(c, r.height);
+      if (!r || r.height <= 0) return; // hidden (e.g. while the analysis page is shown): nothing to draw
+      cssHeights.set(c, r.height);
       redraw(frameRef.current);
     });
     ro.observe(c);

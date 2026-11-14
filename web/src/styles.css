@@ -2065,6 +2065,14 @@ code {
   background: var(--bg-grouped);
 }
 
+.analysis-host {
+  display: contents; /* the analysis page stays the layout's grid item */
+}
+
+.analysis-host[hidden] {
+  display: none !important;
+}
+
 .analysis-head {
   margin: 0 2px 16px;
 }

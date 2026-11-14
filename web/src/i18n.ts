@@ -73,13 +73,21 @@ export function timingLabel(key: string): string {
   return TIMINGS[key] ?? key.replace(/_s$/, "").replace(/_/g, " ");
 }
 
-/** "DJOKOVIC" -> "Djokovic" (Latin names use English casing so that "I" does not become "ı"). */
+const nameCache = new Map<string, string>();
+
+/** "DJOKOVIC" -> "Djokovic" (Latin names use English casing so that "I" does not become "ı"). Cached: the
+ * analysis page asks for the same few names thousands of times on a long run. */
 export function displayName(name: string): string {
+  const hit = nameCache.get(name);
+  if (hit !== undefined) return hit;
   const turkish = /[İIŞĞÜÖÇ]/.test(name) && /[İŞĞ]/.test(name);
   const loc = turkish ? "tr" : "en";
-  return name
+  const out = name
     .toLocaleLowerCase(loc)
     .replace(/(^|[\s'-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toLocaleUpperCase(loc));
+  if (nameCache.size >= 512) nameCache.clear();
+  nameCache.set(name, out);
+  return out;
 }
 
 /** Who hit a shot: the broadcast name when known, otherwise the side-based player label. */
