@@ -249,3 +249,17 @@ def test_a_labelled_bounce_on_the_other_half_is_not_inside_the_zone() -> None:
     r = evaluate([-1.0, -2.0], call)  # clicked on the near half: the far service box was not hit
     assert r["truth"] == "OUT" and r["agrees"] is False and r["truth_line"] == "net" and r["truth_margin_cm"] < 0
     assert evaluate([-1.0, 3.0], call)["truth"] == "IN"
+
+
+def test_a_source_video_is_served_with_the_media_type_of_its_container(tmp_path: Path) -> None:
+    run = _make_run(tmp_path / "runs")
+    for ext, expect in ((".webm", "video/webm"), (".mov", "video/quicktime"), (".mkv", "video/x-matroska"),
+                        (".mp4", "video/mp4")):
+        for old in run.glob("source.*"):
+            old.unlink()
+        video = tmp_path / f"match{ext}"
+        video.write_bytes(b"\x00" * 64)
+        (run / f"source{ext}").symlink_to(video)
+        c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
+        r = c.get("/api/runs/clip1/media/source")
+        assert r.status_code == 200 and r.headers["content-type"] == expect, ext

@@ -281,3 +281,8 @@ Each report now counts the intervals more than 25 % off the median (`video.irreg
 ffprobe in well under a second) and, when there are any, adds a limitation in Turkish that the Review Room shows
 and the command line repeats as a warning. Using the real timestamps throughout would be the fix; it touches
 every time computation and is not done.
+
+**Codecs.** One-second excerpts re-encoded as HEVC (MP4), VP9 (WebM and MP4) and AV1 (MP4) probe and decode
+with the size and frame count `probe` reports, and play in the Review Room. The source video used to be served
+as `video/mp4` whatever its container (Chrome played a WebM anyway by sniffing it); it is now served with its
+container's type (`video/webm`, `video/quicktime`, `video/x-matroska`).

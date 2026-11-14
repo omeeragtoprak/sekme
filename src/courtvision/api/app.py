@@ -33,6 +33,9 @@ SERVE_TOL_S = 0.5  # a labelled serve and a system serve within this many second
 RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 MEDIA = {"classic": "classic.mp4", "pro": "pro.mp4"}
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
+# Served with the type of their container (a WebM sent as video/mp4 plays in Chrome by sniffing, not everywhere).
+MEDIA_TYPES = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
+               ".mkv": "video/x-matroska"}
 MAX_UPLOAD_BYTES = 2 * 1024**3
 MIN_FREE_BYTES = 1024**3  # an upload is refused when less than this is free on the upload disk
 # Names the Review Room answers to: a page on another name resolving to 127.0.0.1 (DNS rebinding) is refused.
@@ -213,7 +216,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         p = media_path(run_dir(run_id), name)
         if p is None:
             raise HTTPException(404, "bu video bu analizde yok")
-        return FileResponse(p, media_type="video/mp4", headers={"Cache-Control": "no-cache"})
+        return FileResponse(p, media_type=MEDIA_TYPES.get(p.suffix.lower(), "video/mp4"),
+                            headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/runs/{run_id}/reviews")
     def get_reviews(run_id: str) -> list[dict]:
