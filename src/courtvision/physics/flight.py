@@ -31,17 +31,28 @@ BALL_MASS = 0.0577
 DRAG_K = 0.5 * AIR_DENSITY * DRAG_COEFF * np.pi * BALL_RADIUS**2 / BALL_MASS  # 1/m
 
 
-def _accel(v: np.ndarray, k: float, spin: np.ndarray) -> np.ndarray:
-    """Acceleration for a batch of velocities (B, 3) with per-member Magnus parameter ``spin`` (B,)."""
-    speed = np.linalg.norm(v, axis=1, keepdims=True)
+def _accel(v: np.ndarray, k: float, spin: np.ndarray, has_spin: bool | None = None) -> np.ndarray:
+    """Acceleration for a batch of velocities (B, 3) with per-member Magnus parameter ``spin`` (B,).
+
+    Hot path (millions of calls per clip): written as plain element-wise operations that give the same
+    floating-point results as the earlier np.linalg.norm / np.cross form, without their per-call overhead.
+    ``has_spin`` (any non-zero ``spin``) can be passed by a caller that integrates many steps.
+    """
+    speed = np.sqrt(np.add.reduce(v * v, axis=1, keepdims=True))  # what np.linalg.norm computes
     a = -k * speed * v
     a[:, 2] -= G
-    vh = np.hypot(v[:, 0], v[:, 1])
-    ok = vh > 1e-6
-    if np.any(spin[ok] != 0):
+    if has_spin is None:
+        has_spin = bool(np.any(spin != 0))
+    if has_spin:
+        vx, vy, vz = v[:, 0], v[:, 1], v[:, 2]
+        vh = np.hypot(vx, vy)
+        ok = vh > 1e-6
         inv = np.where(ok, 1.0 / np.where(ok, vh, 1.0), 0.0)
-        e = np.stack([-v[:, 1] * inv, v[:, 0] * inv, np.zeros(len(v))], axis=1)  # z x v_h, horizontal
-        a += spin[:, None] * np.cross(e, v)
+        ex, ey, ez = -vy * inv, vx * inv, np.zeros(len(v))  # e = z x v_h, horizontal (zero where v_h is)
+        # e x v written out: the same products and differences np.cross forms.
+        a[:, 0] += spin * (ey * vz - ez * vy)
+        a[:, 1] += spin * (ez * vx - ex * vz)
+        a[:, 2] += spin * (ex * vy - ey * vx)
     return a
 
 
@@ -51,6 +62,7 @@ def integrate(p0: np.ndarray, v0: np.ndarray, rel: np.ndarray, k: float = DRAG_K
     all on one side of 0 and ordered by increasing |t|. Returns (B, N, 3) positions and velocities."""
     B, N = rel.shape
     sp = np.zeros(B) if spin is None else spin
+    has = bool(np.any(sp != 0))
     pos = np.empty((B, N, 3))
     vel = np.empty((B, N, 3))
     p, v, t = p0.astype(float).copy(), v0.astype(float).copy(), np.zeros(B)
@@ -59,10 +71,10 @@ def integrate(p0: np.ndarray, v0: np.ndarray, rel: np.ndarray, k: float = DRAG_K
         n = max(1, int(np.ceil(np.max(np.abs(span)) * 30 * substeps)))
         h = (span / n)[:, None]
         for _ in range(n):
-            k1 = _accel(v, k, sp)
-            k2 = _accel(v + 0.5 * h * k1, k, sp)
-            k3 = _accel(v + 0.5 * h * k2, k, sp)
-            k4 = _accel(v + h * k3, k, sp)
+            k1 = _accel(v, k, sp, has)
+            k2 = _accel(v + 0.5 * h * k1, k, sp, has)
+            k3 = _accel(v + 0.5 * h * k2, k, sp, has)
+            k4 = _accel(v + h * k3, k, sp, has)
             p = p + h / 6 * (6 * v + h * (k1 + k2 + k3))
             v = v + h / 6 * (k1 + 2 * k2 + 2 * k3 + k4)
             # Drag integrated backward in time is anti-damping; keep wild optimiser trials finite.

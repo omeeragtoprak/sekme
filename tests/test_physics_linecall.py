@@ -79,3 +79,26 @@ def test_a_pinned_serve_contact_height_holds_where_the_soft_band_lets_the_fit_dr
         assert fit.success
         z[name] = fit.state_at(float(fit.anchor_times[0]))[0][2]
     assert z["band"] > 2.8 and abs(z["pin"] - 2.5) < 0.06
+
+
+def test_the_fast_acceleration_equals_the_norm_and_cross_product_form_exactly() -> None:
+    from courtvision.physics.flight import DRAG_K, G, _accel
+
+    def reference(v, k, spin):  # the form used before the speed-up
+        a = -k * np.linalg.norm(v, axis=1, keepdims=True) * v
+        a[:, 2] -= G
+        vh = np.hypot(v[:, 0], v[:, 1])
+        ok = vh > 1e-6
+        if np.any(spin[ok] != 0):
+            inv = np.where(ok, 1.0 / np.where(ok, vh, 1.0), 0.0)
+            e = np.stack([-v[:, 1] * inv, v[:, 0] * inv, np.zeros(len(v))], axis=1)
+            a += spin[:, None] * np.cross(e, v)
+        return a
+
+    rng = np.random.default_rng(7)
+    for _ in range(500):
+        n = int(rng.integers(1, 30))
+        v = rng.normal(0, 30, (n, 3))
+        v[rng.random(n) < 0.1, :2] = 0.0  # vertical balls: no horizontal direction for the Magnus term
+        spin = np.where(rng.random(n) < 0.4, 0.0, rng.normal(0, 0.3, n))
+        assert np.array_equal(_accel(v, DRAG_K, spin), reference(v, DRAG_K, spin))
