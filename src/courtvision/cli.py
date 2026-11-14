@@ -49,6 +49,9 @@ def _analyze(args: argparse.Namespace) -> int:
     _set_fit_workers(args.fit_workers)
     report = analyze(args.video, out, cfg, progress)
     print(file=sys.stderr)
+    if 0 < report["video"]["fps"] < 24:
+        print(f"uyarı: kare hızı düşük ({report['video']['fps']:.0f} fps); sekmelerin derinliği güvenilmez",
+              file=sys.stderr)
     if report["video"].get("irregular_frame_intervals"):
         print(f"uyarı: değişken kare hızı ({report['video']['irregular_frame_intervals']} düzensiz kare aralığı); "
               "hızlar ve işaretler kayabilir", file=sys.stderr)

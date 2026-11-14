@@ -207,7 +207,8 @@ promo/             HyperFrames promo film (footage not included)
   score is read from the broadcast).
 - Times are taken from frame numbers, assuming a constant frame rate. A video with irregular frame timestamps
   (a phone dropping frames) gets a warning in its report; phone videos stored sideways with a rotation tag are
-  analysed upright.
+  analysed upright. Below 24 fps the depth of a bounce becomes unreliable (2.5 m off on a 15 fps copy of a clip);
+  such videos get a warning too.
 
 ## License
 

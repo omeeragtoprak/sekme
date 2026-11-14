@@ -308,11 +308,30 @@ frame-count thresholds discussed above apply four times more strongly there.
 **Other shapes and sizes.** The same 4 s excerpt (1280 × 720, three IN calls at +1.46, +2.78, +1.09 m, 1σ 2, 14,
 9 cm): centre-cropped to 4:3 (960 × 720), every frame still calibrates (line RMSE 0.31 px) and the calls are
 +1.45, +2.78, +1.10 m; scaled down to 640 × 360, the calls are +1.46, +2.74, +1.08 m with 1σ 4, 28, 16 cm, about
-twice as wide as the pixels are twice as large. Compressed harder with x264 (CRF 32, a third of the size), the
-ball is found on 107 of 119 frames and the calls stay; at CRF 40 (an eighth) it is found on 19, the flights merge
-and the image-kink fallback used to give a confident call at a point 4.7 m from the real bounce. That fallback now
-needs its detections within 0.25 s (`docs/EVAL_TRACKNET.md`, rule written first; no call changed on TrackNet or the
+twice as wide as the pixels are twice as large.
+
+Compressed harder (x264, same excerpt; calls as bounce frame, margin, 1σ):
+
+| CRF | ball found | calls |
+|---|---|---|
+| original | 115 / 119 | 27: +1.46 m ±2 cm · 65: +2.78 ±14 · 104: +1.09 ±9 |
+| 32 | 107 | +1.46 ±2 · +2.75 ±14 · +1.08 ±9 |
+| 35 | 90 | +1.45 ±2 · +2.75 ±14 · +1.08 ±9 |
+| 37 | 61 | +1.46 ±3 · (no call) · +1.05 ±8 |
+| 38 | 44 | +1.46 ±4 · +2.67 ±17 · +1.05 ±9 |
+| 40 | 19 | none (was one spurious call, below) |
+
+Calls fade to "no call" rather than turning wrong, except for one case at CRF 40: the flights merged and the
+image-kink fallback gave a confident call at a point 4.7 m from the real bounce. That fallback now needs its
+detections within 0.25 s (`docs/EVAL_TRACKNET.md`, rule written first; no call changed on TrackNet or the
 broadcast runs), so that copy gets no call and the flight says why.
+
+**Low frame rates.** The same excerpt reduced to 15 fps keeps its first two calls (+1.45 and +2.78 m) but places
+the third bounce 2.5 m short in depth (the ball travels about 2.5 m between two frames there); the reported depth
+1σ widens from 9 to 73 cm, not enough to cover it. The lateral position stays right (x 1.83 m), and the call,
+now against the sideline, is still correct, but a ball landing just over the baseline could be called IN. Videos
+below 24 fps now get a limitation in their report and a warning on the command line; calls are not changed (no
+measured video is below 24 fps).
 
 **A fresh clone.** The weights are not in the repository. A missing checkpoint used to end in a traceback from
 hashing it, after an empty run folder had been made; `analyze` now checks the four checkpoints first and stops with

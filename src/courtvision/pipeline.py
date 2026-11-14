@@ -144,6 +144,18 @@ def _model_card(key: str, path: str) -> dict:
 VFR_NOTE = ("Videonun kare hızı değişken: {n} kare aralığı ortancadan %25'ten fazla sapıyor (ör. telefonun "
             "düşürdüğü kareler). Zamanlar kare sırasından hesaplandığı için bu aralıkların çevresindeki hızlar ve "
             "video üstündeki işaretler kayabilir.")
+LOW_FPS = 24.0
+LOW_FPS_NOTE = ("Kare hızı düşük ({fps:.0f} fps): sekme anı iki kare arasında kalınca sekmenin derinliği (dip "
+                "çizgiye uzaklık) birkaç metre kayabilir ve bu, gösterilen belirsizliğe tam yansımaz (15 fps'e "
+                "indirilmiş bir klipte 2,5 m, 1σ 0,73 m). Dip ve servis çizgisi kararlarına temkinli bakın.")
+
+
+def video_notes(fps: float, irregular: int) -> list[str]:
+    """Limitations that depend on the video itself, added to the general ones."""
+    notes = [VFR_NOTE.format(n=irregular)] if irregular else []
+    if 0 < fps < LOW_FPS:
+        notes.append(LOW_FPS_NOTE.format(fps=fps))
+    return notes
 
 LIMITATIONS = [
     "Tek yayın kamerası: sekme konumlarında santimetre ile desimetre arası belirsizlik var; her karar içeride olma "
@@ -458,7 +470,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "flights": [_flight_json(i, fl, info.fps) for i, fl in enumerate(flights)],
         "broadcast": broadcast,
         "timings_s": {k: round(v, 2) for k, v in timings.items()},
-        "limitations": LIMITATIONS + ([VFR_NOTE.format(n=irregular)] if irregular else []),
+        "limitations": LIMITATIONS + video_notes(info.fps, irregular),
     }
     _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
     t4 = time.time()

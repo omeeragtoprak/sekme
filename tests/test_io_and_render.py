@@ -205,3 +205,12 @@ def test_the_command_line_fits_in_parallel_by_default_but_respects_a_setting(mon
     assert cli.main([*args, "--fit-workers", "1"]) == 2 and seen[-1] == "1"
     monkeypatch.setenv("SEKME_FIT_WORKERS", "2")
     assert cli.main(args) == 2 and seen[-1] == "2"  # an explicit environment setting wins over the default
+
+
+def test_video_notes_warn_about_irregular_timing_and_low_frame_rates() -> None:
+    from courtvision.pipeline import LOW_FPS_NOTE, VFR_NOTE, video_notes
+
+    assert video_notes(29.97, 0) == [] and video_notes(59.94, 0) == [] and video_notes(25.0, 0) == []
+    assert video_notes(30.0, 3) == [VFR_NOTE.format(n=3)]
+    assert video_notes(15.0, 0) == [LOW_FPS_NOTE.format(fps=15.0)]
+    assert len(video_notes(12.0, 2)) == 2
