@@ -98,10 +98,60 @@ commit are recorded here before the first scoring, and both candidates are score
   ±5 %, the automatic board pairs, the change in the bounce's standard deviations and in P(in), and the
   same with the toss bridge.
 
+## Third candidate on the same videos: the player size gate from the camera (rule written 2026-11-14, before any download)
+
+**Change** (`sekme analyze --player-size-from-camera`; off by default): the player selection's size gate
+compares a box with the height a standing 1.85 m player has at the detected feet in that frame's calibrated
+camera, band 0.5–1.6, instead of 0.6–1.6 × one track's median height over the whole clip.
+
+**Why** (development data, `docs/EVAL_PLAYERS.md`): on long highlight videos that median can come from a
+tighter shot and reject the near player in the wide one (US Open 2025 final, 150–704 s: near player tracked
+on 37 % of calibrated frames). A 0.6 band was tested on development data by its own rule and not adopted
+(a crouching far player at 0.54–0.59 of the expected height was lost on one clip). The 0.5 band was chosen
+after that, on the same data, so those clips cannot judge it: with it, no player's coverage falls on any
+of the six development clips, the near player reaches 94–97 % on the four 60 fps ones, TrackNet games
+1–7 give 221 / 329 first bounces at 89.4 % precision with 229 / 229 decisive calls consistent (baseline
+220 / 329, 89.1 %, 228 / 228), and serve contacts within 2 frames go 6 → 8.
+
+**Labels, blind** (by the same separate labeller, after the serve labels; frames numbered by decoding each
+file in order with OpenCV, as the pipeline does; files named as in `scripts/six_videos_fetch.py`):
+
+- *random sample*: the 80 frames per video listed by `scripts/eval_six_videos.py sample` (drawn from the file
+  name and frame count alone; the lists are committed before labelling);
+- *disagreement sample*: after the runs, up to 60 calibrated frames per video where the default and the
+  candidate pick different players (`scripts/eval_six_videos.py disagreements`), so that clustered failures,
+  like the one that sank the 0.6 band, cannot hide between random frames. The labeller sees only the frames,
+  never which run picked what.
+
+For each frame: whether it is the main broadcast camera and, if so, each player's feet in the image (x, y),
+or "not in frame". Committed before any scoring.
+
+**Rule** (default analysis against `--player-size-from-camera`). A player is *found* when the tracked feet
+lie within 0.3 × the tracked box's height of the labelled feet (at least 15 px at 1080 lines), so a ball
+kid beside the far player is not the player; a selection is *wrong* when it is tracked away from the
+labelled feet or while the player is labelled out of frame. On the random sample:
+
+1. near-player coverage (found / labelled in frame) rises by **at least 5 points**;
+2. far-player coverage falls by **no more than 1 point**;
+3. wrong selections (share of player-frames) rise by **no more than 1 point**;
+
+and on the disagreement sample, for each player with at least 10 frames where exactly one run is right
+(right: found, or not tracking a player labelled out of frame):
+
+4. the candidate is the one that is right in **at least two thirds** of them.
+
+Inconclusive if fewer than 100 near-player frames are labelled in frame in the random sample (the
+candidate stays off; these videos count as used for it). Otherwise rejected unless all hold; reported, not
+used: the calls, serves and speeds of the `players` run, and the frames outside the main camera.
+
+**On the development evidence above:** with a band chosen on those clips, "no coverage falls on them" is
+true by construction (0.5 sits just under the lowest failing ratio, 0.54) and is not evidence; only the
+near-player gain and the TrackNet games are informative, and only the six videos decide.
+
 ## Scoring code (committed before any download)
 
-`scripts/eval_six_videos.py run` analyses each video once on the GPU and the three variants from that
-cache; `score` refuses to score a partial set and applies both rules through `courtvision.eval.six_videos`
+`scripts/eval_six_videos.py run` analyses each video once on the GPU and the variants from that cache;
+`score` refuses to score a partial set and applies the rules through `courtvision.eval.six_videos`
 (tests: `tests/test_six_videos.py`, including that its matching is the serve-contact test's). A dry run
 on the development clip (US Open 2025 final, 150–704 s, seeded with its existing cache; nothing kept)
 went through: the 60 fps rule answered "cannot decide" (one video), and the pin's criteria were computed

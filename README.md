@@ -197,7 +197,9 @@ promo/             HyperFrames promo film (footage not included)
 - Player selection takes the players' size from one track per half; on a long highlight video mixing
   shots that track can come from a tighter shot, and the near player then goes untracked for long spans
   (2025 final, 150–704 s: 37 % of calibrated frames), so those shots' 3D fits lose their contact anchor. A
-  camera-based size gate fixed that but failed its rule elsewhere ([EVAL_PLAYERS.md](docs/EVAL_PLAYERS.md)).
+  camera-based size gate fixed that but failed its rule elsewhere ([EVAL_PLAYERS.md](docs/EVAL_PLAYERS.md));
+  a version with a wider band (`--player-size-from-camera`, off by default) waits for its test on unused
+  footage.
 - Ball footprint is a fixed 2 cm half-length; point/score inference from play is not implemented (the
   score is read from the broadcast).
 

@@ -94,3 +94,39 @@ def test_pin_rule_paths() -> None:
     # Serves the pinned run rejects count as worse: 8 lost of 20 leaves 12 closer < two thirds of 20.
     lost = pin_rule(_pin_videos(20, 12.0, 3.0, lost=8))
     assert lost.criteria["two thirds closer"] is False and lost.numbers["further_or_lost"] == 8
+
+
+def test_presence_sample_depends_only_on_the_name() -> None:
+    from courtvision.eval.six_videos import presence_sample
+
+    a, b = presence_sample("w2024_final", 40000), presence_sample("w2024_final", 40000)
+    assert a == b and len(a) == 80 and a == sorted(a) and presence_sample("m2025_sf", 40000) != a
+
+
+def _frames(n: int, near_box, far_box) -> dict:
+    return {"players": {"near": {"box": [near_box(i) for i in range(n)]},
+                        "far": {"box": [far_box(i) for i in range(n)]}}}
+
+
+def test_player_rule_paths() -> None:
+    from courtvision.eval.six_videos import disagreement_stats, player_rule, presence_stats
+
+    n = 200
+    labels = [{"frame": i, "main": True, "near": [500.0, 900.0], "far": [960.0, 200.0]} for i in range(n)]
+    on_near = [480.0, 700.0, 520.0, 900.0]  # feet at (500, 900), 200 px tall
+    on_far = [945.0, 130.0, 975.0, 200.0]  # feet at (960, 200), 70 px tall
+    beside_far = [985.0, 130.0, 1015.0, 200.0]  # a ball kid 40 px away: more than 0.3 x 70 px
+    default = _frames(n, lambda i: on_near if i % 2 else None, lambda i: on_far)  # near found half the time
+    better = _frames(n, lambda i: on_near, lambda i: on_far)
+    st = presence_stats(labels, default, 1080)
+    assert (st["near"]["present"], st["near"]["found"], st["near"]["wrong"]) == (200, 100, 0)
+    assert presence_stats(labels, _frames(n, lambda i: None, lambda i: beside_far), 1080)["far"]["wrong"] == 200
+    dis = labels[1::2][:30]  # disagreement frames: the even frames where default misses the near player
+    dis = [dict(lb, frame=lb["frame"] - 1) for lb in dis]
+    ds = disagreement_stats(dis, default, better, 1080)
+    assert ds["near"] == {"one_right": 30, "b_right": 30} and ds["far"]["one_right"] == 0
+    v = player_rule([(labels, dis, default, better, 1080)])
+    assert v.decision == "accepted" and v.numbers["near_coverage"] == [50.0, 100.0]
+    wrong_spot = _frames(n, lambda i: [1480.0, 700.0, 1520.0, 900.0], lambda i: on_far)  # someone else
+    assert player_rule([(labels, dis, default, wrong_spot, 1080)]).decision == "rejected"
+    assert player_rule([(labels[:50], dis, default, better, 1080)]).decision == "inconclusive"  # < 100 frames

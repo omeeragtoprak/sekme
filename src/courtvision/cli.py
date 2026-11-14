@@ -21,7 +21,8 @@ def _analyze(args: argparse.Namespace) -> int:
     cfg = PipelineConfig(device=args.device, render=not args.no_render, reuse_perception=args.reuse_perception,
                          broadcast=not args.no_broadcast, ball_stride=args.ball_stride,
                          serve_toss_bridge_s=TOSS_BRIDGE_S if args.toss_bridge else 0.0,
-                         pin_serve_height=args.pin_serve_height, fps_scaled_thresholds=args.fps_scaled_thresholds)
+                         pin_serve_height=args.pin_serve_height, fps_scaled_thresholds=args.fps_scaled_thresholds,
+                         player_size_from_camera=args.player_size_from_camera)
     if args.ball_model:
         cfg.models["ball"] = str(Path(args.ball_model).resolve())
     for item in args.model:
@@ -91,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="candidate serve detector: bridge a missed toss apex (off by default, docs/EVAL_SPOT.md)")
     a.add_argument("--pin-serve-height", action="store_true",
                    help="candidate: pin the flight fit to the measured serve contact height (off by default, "
+                        "docs/EVAL_SERVE_SPEED.md)")
+    a.add_argument("--player-size-from-camera", action="store_true",
+                   help="candidate: player size gate from the calibrated camera (off by default, "
                         "docs/EVAL_SERVE_SPEED.md)")
     a.add_argument("--fps-scaled-thresholds", action="store_true",
                    help="candidate: frame counts set on 30 fps video scaled by round(fps / 30) (off by default, "

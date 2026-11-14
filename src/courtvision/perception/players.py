@@ -156,28 +156,50 @@ class PlayerTrack:
     track_ids: list[int] = field(default_factory=list)
 
 
+# Candidate, off by default (`--player-size-from-camera`, docs/EVAL_SERVE_SPEED.md): the size gate compares a
+# box with the height a standing player of PLAYER_HEIGHT_M has at the detected feet in that frame's camera,
+# instead of one track's median height (which on a long highlight video can come from a tighter shot and
+# reject the near player in the wide one: docs/EVAL_PLAYERS.md, where a 0.6 band was not adopted).
+PLAYER_HEIGHT_M = 1.85
+
+
+def expected_height_px(camera, w: np.ndarray) -> float | None:
+    """Image height of a standing player (PLAYER_HEIGHT_M) whose feet are at court point ``w``."""
+    if camera is None or w is None:
+        return None
+    p = camera.project(np.array([[w[0], w[1], 0.0], [w[0], w[1], PLAYER_HEIGHT_M]]))
+    return float(abs(p[0, 1] - p[1, 1]))
+
+
 def _plausible(w: np.ndarray, d: PersonDet, last: np.ndarray | None, frames: int, fps: float,
-               ref_h: float | None) -> bool:
+               ref_h: float | None, exp_h: float | None = None) -> bool:
     """Reachable from the last position at human speed (plus box jitter) and of the player's size.
 
-    The size gate rejects ball kids and line judges who stand close to a player.
+    The size gate rejects ball kids and line judges who stand close to a player. ``exp_h`` (the height a
+    standing player would have there, from the camera) is used when known, else ``ref_h``.
     """
     if last is not None and np.linalg.norm(w - last) > MAX_PLAYER_SPEED * frames / fps + 0.35:
         return False
-    return ref_h is None or 0.6 * ref_h <= d.box[3] - d.box[1] <= 1.6 * ref_h
+    h = d.box[3] - d.box[1]
+    if exp_h is not None:  # a crouching or lunging player's box is down to ~0.55 of the standing height
+        return 0.5 * exp_h <= h <= 1.6 * exp_h
+    return ref_h is None or 0.6 * ref_h <= h <= 1.6 * ref_h
 
 
 def select_players(dets: list[list[PersonDet]], calib: list[FrameCalibration],
-                   fps: float = 30.0) -> dict[str, PlayerTrack]:
+                   fps: float = 30.0, size_from_camera: bool = False) -> dict[str, PlayerTrack]:
     """Choose the near and far player per frame: dominant in-court track, then continuity fallback."""
     n = len(dets)
     feet_world: list[list[np.ndarray | None]] = []
+    exp_h: list[list[float | None]] = []
     for i in range(n):
         c = calib[i]
         row: list[np.ndarray | None] = []
         for d in dets[i]:
             row.append(apply_h(c.H_inv, d.foot) if c.valid and c.H_inv is not None else None)
         feet_world.append(row)
+        exp_h.append([expected_height_px(c.camera if c.valid else None, w) if size_from_camera else None
+                      for w in row])
 
     def in_half(w: np.ndarray | None, side: str) -> bool:
         if w is None or abs(w[0]) > PLAY_X:
@@ -204,15 +226,15 @@ def select_players(dets: list[list[PersonDet]], calib: list[FrameCalibration],
             if last is not None and i - last_i > fps:
                 last = None  # lost for over a second (cut, close-up): re-seed instead of chaining
             pick = None
-            for d, w in zip(dets[i], feet_world[i], strict=True):
-                if d.track_id in main_ids and in_half(w, side) and _plausible(w, d, last, i - last_i, fps, ref_h):
+            for d, w, e in zip(dets[i], feet_world[i], exp_h[i], strict=True):
+                if d.track_id in main_ids and in_half(w, side) and _plausible(w, d, last, i - last_i, fps, ref_h, e):
                     pick = (d, w)
             if pick is None:  # identity switch / missed association: nearest plausible in-half detection
                 best = None
-                for d, w in zip(dets[i], feet_world[i], strict=True):
+                for d, w, e in zip(dets[i], feet_world[i], exp_h[i], strict=True):
                     if w is None or not in_half(w, side) or last is None:
                         continue
-                    if not _plausible(w, d, last, i - last_i, fps, ref_h):
+                    if not _plausible(w, d, last, i - last_i, fps, ref_h, e):
                         continue
                     dist = float(np.linalg.norm(w - last))
                     if best is None or dist < best[0]:
@@ -221,8 +243,8 @@ def select_players(dets: list[list[PersonDet]], calib: list[FrameCalibration],
                     pick = (best[1], best[2])
             if pick is None and last is None:  # re-seed: the most player-like person in this half
                 cands = [(d.conf * (d.box[3] - d.box[1]) / (1.0 + abs(w[0]) / 4.0), d, w)
-                         for d, w in zip(dets[i], feet_world[i], strict=True)
-                         if w is not None and in_half(w, side) and _plausible(w, d, None, 0, fps, ref_h)]
+                         for d, w, e in zip(dets[i], feet_world[i], exp_h[i], strict=True)
+                         if w is not None and in_half(w, side) and _plausible(w, d, None, 0, fps, ref_h, e)]
                 if cands:
                     _, d, w = max(cands, key=lambda c: c[0])
                     pick = (d, w)

@@ -55,3 +55,14 @@ open: the camera-based reference itself works (the near player on long highlight
 lower end is the problem. A version with a wider lower bound would be a new candidate, and deciding it on
 these same clips would be choosing the band on the data that judges it, so it needs footage not used here
 (for instance the six videos named in `docs/EVAL_SERVE_SPEED.md`, with player presence checked by eye).
+
+## Follow-up (2026-11-14, afternoon): a 0.5 band as a new candidate
+
+A version with the band widened to 0.5–1.6 is a new candidate, `--player-size-from-camera` (off by default).
+The 0.6 version's rejection stands. On the same development data, after the band was chosen: TrackNet games 1–7
+221 / 329 first bounces, 89.4 % precision, 229 / 229 decisive calls consistent (as the 0.6 version);
+coverage on the six broadcast clips falls nowhere (true by construction for a band set just under the
+lowest failing ratio, 0.54), near player 37.0 → 96.9 % (2025 final 150–704 s), 76.8 → 96.6 % (60–150 s),
+91.6 → 96.3 % (QF), 90.5 → 93.9 % (2024 final); serve contacts within 2 frames 6 → 8. Because the band was
+chosen on these clips, they decide nothing: it is judged on unused footage with player positions
+labelled by eye (third candidate in `docs/EVAL_SERVE_SPEED.md`).

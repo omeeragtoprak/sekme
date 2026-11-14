@@ -158,6 +158,7 @@ class PipelineConfig:
     serve_toss_bridge_s: float = 0.0  # candidate, off by default (docs/EVAL_SPOT.md): 0.3 bridges a missed toss apex
     pin_serve_height: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md)
     fps_scaled_thresholds: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): 60 fps frame counts
+    player_size_from_camera: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): camera size gate
     models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
@@ -355,7 +356,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     fscale = frame_scale(info.fps) if cfg.fps_scaled_thresholds else 1
     ball = track_ball(drop_court_fixed(cands, [c.H_inv if c.valid else None for c in calib],
                                        win=15 * fscale, min_frames=10 * fscale), info.width)
-    players = select_players(dets, calib, info.fps)
+    players = select_players(dets, calib, info.fps, size_from_camera=cfg.player_size_from_camera)
     kin = {side: player_kinematics(tr.world, info.fps) for side, tr in players.items()}
     segments = measurable_segments(calib, cuts, min_len=int(info.fps))
     hits = detect_hits_in_segments(ball, players, info.fps, info.height, segments)
@@ -388,7 +389,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "models": {k: _model_card(k, v) for k, v in cfg.models.items()},
         "candidates": {k: v for k, v in (("serve_toss_bridge_s", cfg.serve_toss_bridge_s),
                                          ("pin_serve_height", cfg.pin_serve_height),
-                                         ("fps_scaled_thresholds", cfg.fps_scaled_thresholds)) if v},
+                                         ("fps_scaled_thresholds", cfg.fps_scaled_thresholds),
+                                         ("player_size_from_camera", cfg.player_size_from_camera)) if v},
         "calibration": {
             "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts,
             "line_support_median": _f(np.median([c.support for c in valid]) if valid else None),

@@ -392,3 +392,30 @@ def test_at_60_fps_scaled_serve_thresholds_find_a_near_serve_the_30_fps_frame_co
     assert detect_serves(ball, _players(n), 60.0, [(0, n)]) == []
     sv = detect_serves(ball, _players(n), 60.0, [(0, n)], frame_scale=2)
     assert len(sv) == 1 and sv[0].side == "near" and 72 <= sv[0].frame <= 78  # contact at 75
+
+
+def test_player_size_from_camera_candidate_keeps_a_crouching_player_the_clip_wide_height_rejects(
+        broadcast_camera) -> None:
+    from courtvision.perception.players import expected_height_px, select_players
+
+    w = np.array([0.5, -12.0])
+    e = expected_height_px(broadcast_camera, w)
+    foot = broadcast_camera.project(np.array([[0.5, -12.0, 0.0]]))[0]
+
+    def det(tid: int, frac: float) -> PersonDet:
+        return PersonDet(tid, np.array([foot[0] - 20, foot[1] - frac * e, foot[0] + 20, foot[1]]), 0.9)
+
+    tight = 1.8 * e  # the clip-wide reference came from a tighter shot
+    assert not _plausible(w, det(1, 0.95), None, 0, 30.0, tight)  # the default gate rejects him
+    assert _plausible(w, det(1, 0.95), None, 0, 30.0, tight, e)
+    assert _plausible(w, det(1, 0.55), None, 0, 30.0, tight, e)  # crouching
+    assert not _plausible(w, det(2, 0.4), None, 0, 30.0, tight, e)  # a ball kid crouching
+    # Through select_players: frames 0-59 a tighter shot (the near player 1.8x taller: the main track), then
+    # the wide shot with the player at 0.95 of the expected height and crouching for a while.
+    H = broadcast_camera.ground_homography()
+    calib = [FrameCalibration(True, H, np.linalg.inv(H), broadcast_camera, 1.0, 0.3) for _ in range(120)]
+    dets = [[det(7, 1.8)] for _ in range(60)] + [[det(8, 0.95 if i % 10 else 0.55)] for i in range(60)]
+    old = select_players(dets, calib, 30.0)["near"]
+    new = select_players(dets, calib, 30.0, size_from_camera=True)["near"]
+    assert np.isfinite(old.world[60:]).all(axis=1).sum() == 0  # the wide shot is lost by the default gate
+    assert np.isfinite(new.world[60:]).all(axis=1).all()
