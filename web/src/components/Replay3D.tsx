@@ -363,6 +363,8 @@ import.meta.hot?.dispose(() => {
 type Ctx = Engine & {
   controls: OrbitControls;
   dirty: boolean;
+  /** Mark the view for redrawing and make sure a frame is scheduled. */
+  invalidate: () => void;
   anim: { traj: TrajectorySample[] | null; speeds: number[]; t: number; T: number; playing: boolean; rate: number };
   tween: { fromPos: Vector3; toPos: Vector3; fromTarget: Vector3; start: number; dur: number } | null;
 };
@@ -451,6 +453,18 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
     controls.target.set(0, 0, 0);
     controls.update();
 
+    // Frames are drawn only while something changes (camera damping, a preset move, playback, a redraw
+    // request): an idle replay schedules nothing, so the page can rest (battery on a laptop).
+    let raf = 0;
+    let last = 0;
+    let alive = true;
+    let inFrame = false;
+    const wake = () => {
+      if (raf || !alive) return;
+      if (!inFrame) last = performance.now(); // restarting after a pause: no time passed for playback
+      raf = requestAnimationFrame(loop);
+    };
+
     const ctx: Ctx = {
       renderer,
       scene,
@@ -459,14 +473,16 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
       ball,
       shadow,
       dirty: true,
+      invalidate: () => {
+        ctx.dirty = true;
+        wake();
+      },
       anim: { traj: null, speeds: [], t: 0, T: 0, playing: false, rate: 0.5 },
       tween: null,
     };
     ctxRef.current = ctx;
 
-    const onChange = () => {
-      ctx.dirty = true;
-    };
+    const onChange = () => ctx.invalidate();
     controls.addEventListener("change", onChange);
     const el = renderer.domElement;
     const enableZoom = () => {
@@ -484,24 +500,23 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
       renderer.setSize(r.width, r.height, false);
       camera.aspect = r.width / r.height;
       camera.updateProjectionMatrix();
-      ctx.dirty = true;
+      ctx.invalidate();
     });
     ro.observe(host);
 
     const scheme = window.matchMedia("(prefers-color-scheme: dark)");
     const onScheme = () => {
       renderer.setClearColor(sceneColor(), 1);
-      ctx.dirty = true;
+      ctx.invalidate();
     };
     scheme.addEventListener("change", onScheme);
     // A restored context starts with three's default background: apply the theme colour again.
     el.addEventListener("webglcontextrestored", onScheme);
 
-    let raf = 0;
-    let last = performance.now();
-    const loop = (now: number) => {
-      raf = requestAnimationFrame(loop);
-      const dt = Math.min(0.1, (now - last) / 1000);
+    function loop(now: number) {
+      raf = 0;
+      inFrame = true;
+      const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
       last = now;
       if (ctx.tween) {
         const tw = ctx.tween;
@@ -523,16 +538,20 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
         }
         syncBall(ctx);
       }
-      if (controls.update()) ctx.dirty = true;
+      const moving = controls.update(); // true while the camera is still easing after a drag
+      if (moving) ctx.dirty = true;
       if (ctx.dirty) {
         renderer.render(scene, camera);
         ctx.dirty = false;
       }
-    };
-    raf = requestAnimationFrame(loop);
+      if (!raf && (moving || ctx.tween || (a.playing && a.traj))) raf = requestAnimationFrame(loop);
+      inFrame = false;
+    }
+    wake();
     setReady(true);
 
     return () => {
+      alive = false;
       cancelAnimationFrame(raf);
       scheme.removeEventListener("change", onScheme);
       el.removeEventListener("webglcontextrestored", onScheme);
@@ -564,11 +583,11 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
     };
     setPlaying(false);
     syncBall(ctx);
-    ctx.dirty = true;
+    ctx.invalidate();
     return () => {
       ctx.scene.remove(group);
       disposeObject(group);
-      ctx.dirty = true;
+      ctx.dirty = true; // the next flight's effect (or the next mount) draws the frame
     };
   }, [flight, ready, syncBall]);
 
@@ -589,7 +608,7 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
       a.playing = true;
       setPlaying(true);
     }
-    ctx.dirty = true;
+    ctx.invalidate();
   };
 
   const goPreset = (p: Preset) => {
@@ -604,6 +623,7 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
       start: performance.now(),
       dur: 650,
     };
+    ctx.invalidate();
   };
 
   const onScrub = (value: number) => {
@@ -613,6 +633,7 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
     setPlaying(false);
     ctx.anim.t = Math.max(0, Math.min(1, value)) * ctx.anim.T;
     syncBall(ctx);
+    ctx.invalidate();
   };
 
   const hasTraj = !!flight?.trajectory && flight.trajectory.length >= 2;

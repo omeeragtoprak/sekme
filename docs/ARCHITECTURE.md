@@ -98,7 +98,10 @@ uploaded its texture (about 0.9 s for context and court, then about 1.4 s of fir
 upload in one profile; GPU-bound calls stall longer while the new video starts decoding). **Changed:** the
 renderer, scene and camera are made once per page and the panel only attaches and detaches the canvas
 (`Replay3D.tsx`, `getEngine`); a lost WebGL context is detected on the next mount and replaced, a context
-restored while mounted gets the theme colour again, and the pixel ratio is read on every mount. Checked: WebGL
+restored while mounted gets the theme colour again, and the pixel ratio is read on every mount. Its render loop
+now runs only while something changes (camera easing after a drag, a preset move, playback, a redraw request):
+idle, the page requests no animation frames (it used to request one every frame for the life of the page).
+Checked: WebGL
 contexts created over a page load and three run switches 3 → 1; after the switch no context creation, shader
 compilation, court build or texture upload appears in the profile; replay, presets and playback work after a
 switch and after a forced context loss. The forced reflow on opening came from the frame overlay reading its
