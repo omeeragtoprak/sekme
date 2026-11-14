@@ -110,9 +110,12 @@ def perception_key(video_sha: str, cfg: PipelineConfig) -> dict:
             "settings": {k: getattr(cfg, k) for k in PERCEPTION_SETTINGS}}
 
 
-def same_perception_key(cached: dict, key: dict) -> bool:
+def same_perception_key(cached: dict | None, key: dict) -> bool:
     """A cache written before the settings were part of its key was made with their defaults, which have not
-    changed since the settings were introduced (2026-10-27): it is read as such, not recomputed."""
+    changed since the settings were introduced (2026-10-27): it is read as such, not recomputed. A cache without a
+    usable key (none, or null) is recomputed."""
+    if not cached:
+        return False
     defaults = {f.name: f.default for f in fields(PipelineConfig) if f.name in PERCEPTION_SETTINGS}
     return {"settings": defaults, **cached} == key
 

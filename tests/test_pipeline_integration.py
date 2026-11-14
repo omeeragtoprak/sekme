@@ -90,6 +90,8 @@ def test_perception_cache_key_covers_the_settings_and_reads_old_caches_as_defaul
         setattr(c, name, value)
         assert not same_perception_key(k, perception_key("video", c))
         assert not same_perception_key(old, perception_key("video", c))  # an old cache had the defaults
+    # A cache whose key is unknown (written with a null key, or none at all) is recomputed, not a crash.
+    assert not same_perception_key(None, k) and not same_perception_key({}, k)
 
 
 def test_pose_cache_key_covers_the_hitter_and_its_box():
