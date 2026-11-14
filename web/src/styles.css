@@ -63,6 +63,9 @@
   --thumb: #ffffff;
   --thumb-shadow: 0 2px 6px rgb(0 0 0 / 0.12), 0 0 0 0.5px rgb(0 0 0 / 0.04);
   --selection-muted: rgb(0 0 0 / 0.08);
+  /* Accent surfaces that carry white text (primary button, highlighted menu item, focused selection): macOS's
+     selected-content blue, dark enough for white text (≥ 4.5:1); the brighter --accent stays for marks and bars. */
+  --accent-fill: rgb(0 88 208);
 
   --court-surround: #2f5a84;
   --court-surface: #3b6c9e;
@@ -497,16 +500,16 @@ code {
 }
 
 .btn--primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 88%, #000);
+  background: color-mix(in srgb, var(--accent-fill) 88%, #000);
 }
 
 .btn--primary:active:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 78%, #000);
+  background: color-mix(in srgb, var(--accent-fill) 78%, #000);
 }
 
 .btn--large {
@@ -590,13 +593,13 @@ code {
 .menu-item:hover:not(:disabled),
 .menu-item:focus-visible {
   outline: none;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
 .menu-item:hover:not(:disabled) .menu-item-hint,
 .menu-item:focus-visible .menu-item-hint {
-  color: rgb(255 255 255 / 0.75);
+  color: rgb(255 255 255 / 0.86);
 }
 
 .menu-item:disabled {
@@ -885,14 +888,14 @@ code {
 }
 
 .shots:focus-within .shot[aria-selected="true"] {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
 }
 
 .shots:focus-within .shot[aria-selected="true"] .shot-sub,
 .shots:focus-within .shot[aria-selected="true"] .shot-time,
 .shots:focus-within .shot[aria-selected="true"] .shot-tag {
-  color: rgb(255 255 255 / 0.82);
+  color: rgb(255 255 255 / 0.86);
 }
 
 .shots:focus-within .shot[aria-selected="true"] .glyph {
@@ -2221,7 +2224,7 @@ code {
 
 .legend-n,
 .legend-extra {
-  color: var(--label-3);
+  color: var(--label-2); /* counts are information: secondary label (contrast), not tertiary */
   font-size: 12px;
 }
 

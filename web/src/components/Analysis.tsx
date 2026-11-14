@@ -91,7 +91,7 @@ function AnalysisImpl({ report, onOpenShot, labelSummary, serveSummary }: Props)
   const measurable = report.calibration.total_frames ? report.calibration.valid_frames / report.calibration.total_frames : null;
 
   return (
-    <div className="analysis" onMouseLeave={hide}>
+    <main className="analysis" onMouseLeave={hide}>
       <header className="analysis-head">
         <h1 className="analysis-title">{players.byName ? players.keys.join(" – ") : "Maç analizi"}</h1>
         <p className="analysis-sub">
@@ -199,7 +199,7 @@ function AnalysisImpl({ report, onOpenShot, labelSummary, serveSummary }: Props)
           {tip.text}
         </div>
       )}
-    </div>
+    </main>
   );
 }
 
