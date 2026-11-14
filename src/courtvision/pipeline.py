@@ -26,6 +26,7 @@ from courtvision import __version__
 from courtvision.analytics.kinematics import player_kinematics
 from courtvision.broadcast import ocr
 from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
+from courtvision.errors import UnreadableVideoError
 from courtvision.eval.broadcast_check import Serve, check, serve_anchored_names, side_names
 from courtvision.events.flights import Flight, build_flights, measurable_segments
 from courtvision.events.hits import detect_hits_in_segments
@@ -243,6 +244,9 @@ def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog)
     # while the ball and person networks run here.
     with ThreadPoolExecutor(max_workers=1) as pool:
         for i, frame in iter_frames(video):
+            if i == 0 and frame.shape[:2] != (info.height, info.width):  # sizes would scale every detection wrongly
+                raise UnreadableVideoError(f"{Path(video).name}: kareler {frame.shape[1]}×{frame.shape[0]} çözülüyor, "
+                                           f"video {info.width}×{info.height} bildiriyor (döndürme?)")
             hist = frame_hist(frame)
             is_cut = prev_hist is not None and cv2.compareHist(prev_hist, hist, cv2.HISTCMP_CORREL) < cfg.cut_threshold
             if is_cut:

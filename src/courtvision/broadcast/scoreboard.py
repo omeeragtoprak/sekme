@@ -27,6 +27,7 @@ import numpy as np
 
 from courtvision.broadcast import ocr
 from courtvision.broadcast.ocr import TextBox
+from courtvision.io.video import open_video
 
 POINT_RANK = {"0": 0, "15": 1, "30": 2, "40": 3, "AD": 4, "A": 4}
 _NUM_TOKEN = re.compile(r"^(?:\d{1,2}|AD|A)$", re.IGNORECASE)
@@ -272,7 +273,7 @@ def scan_video(path: str | Path, fps: float, step_s: float = 0.5, max_frames: in
     scan = BroadcastScan(step_frames=step, frames_read=0)
     if not ocr.available():
         return scan
-    cap = cv2.VideoCapture(str(path))
+    cap = open_video(path)
     units: Counter[str] = Counter()
     i = 0
     try:

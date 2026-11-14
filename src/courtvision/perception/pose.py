@@ -13,6 +13,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from courtvision.io.video import open_video
 from courtvision.models.pose_unet import crop_box
 
 NOSE, L_SHOULDER, R_SHOULDER, L_WRIST, R_WRIST, L_HIP, R_HIP = 0, 5, 6, 9, 10, 11, 12
@@ -116,7 +117,7 @@ def poses_at(video: str | Path, requests: list[tuple[int, np.ndarray]], estimato
     """Poses for (frame, box) requests, reading only the frames that are needed."""
     out: list[Pose | None] = [None] * len(requests)
     order = sorted(range(len(requests)), key=lambda k: requests[k][0])
-    cap = cv2.VideoCapture(str(video))
+    cap = open_video(video)
     try:
         for k in order:
             frame, box = requests[k]

@@ -50,6 +50,18 @@ def _reason(stderr: str, path: str, name: str) -> str:
     return why if len(why) <= 120 else why[:119] + "…"
 
 
+def _rotation(stream: dict) -> int:
+    """Display rotation of a video stream in degrees (0 when none or unreadable): the display matrix, else the
+    old tag. A malformed value must not make an otherwise readable video unreadable."""
+    values = [sd["rotation"] for sd in stream.get("side_data_list") or []
+              if sd.get("side_data_type") == "Display Matrix" and "rotation" in sd]
+    values.append((stream.get("tags") or {}).get("rotate", 0))
+    try:
+        return int(round(float(values[0])))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def probe(path: str | Path) -> VideoInfo:
     p, name = str(path), Path(path).name
     res = subprocess.run(
@@ -75,6 +87,8 @@ def probe(path: str | Path) -> VideoInfo:
         width, height = int(v.get("width") or 0), int(v.get("height") or 0)
         if width <= 0 or height <= 0:
             raise UnreadableVideoError(f"{name}: video akışının boyutu yok")
+        if _rotation(v) % 180 == 90:  # stored sideways (phones): OpenCV and ffmpeg decode the frames upright
+            width, height = height, width
         fps = rate(v.get("avg_frame_rate")) or rate(v.get("r_frame_rate"))
         if fps is None:
             raise UnreadableVideoError(f"{name}: video akışında kare hızı yok")
@@ -88,9 +102,17 @@ def probe(path: str | Path) -> VideoInfo:
     return VideoInfo(p, width, height, fps, n, duration, has_audio)
 
 
+def open_video(path: str | Path) -> cv2.VideoCapture:
+    """OpenCV capture that decodes rotated (phone) video upright, as `probe` reports its size. Set explicitly:
+    the default depends on the OpenCV build."""
+    cap = cv2.VideoCapture(str(path))
+    cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 1)
+    return cap
+
+
 def iter_frames(path: str | Path, start: int = 0, end: int | None = None) -> Iterator[tuple[int, np.ndarray]]:
     """Yield (index, BGR frame) sequentially; decoding dominates, so we never seek per frame."""
-    cap = cv2.VideoCapture(str(path))
+    cap = open_video(path)
     if not cap.isOpened():
         raise UnreadableVideoError(f"{Path(path).name}: video açılamadı")
     try:

@@ -261,3 +261,14 @@ okunamadı" for malformed metadata); `analyze` probes before creating the run fo
 no control characters, at most 80 characters) and deletes the upload. The ten broadcast clips and three valid
 synthetic clips probe exactly as before. A one-frame clip, two seconds of black and a portrait test pattern
 run to the end: no frame calibrated, no flight, no call.
+
+**Phone videos stored sideways (found and fixed 2026-11-14).** A phone often stores a landscape recording
+sideways with a rotation tag. OpenCV and ffmpeg decode such frames upright, but `probe` reported the stored size,
+which scales every ball position: a 4 s broadcast excerpt re-encoded that way (pixels transposed, tag rotating
+them back) gave one REVIEW call instead of the original's three IN calls, with its ball points shrunk by
+720/1280, and its rendered videos were written at the stored 720 × 1280 size from 1280 × 720 frames. `probe` now swaps width and height for a 90° or 270° rotation (display matrix, or the older `rotate`
+tag); the same excerpt then gives the original's calls (margins +1.46, +2.78, +1.09 m against +1.46, +2.78,
++1.10 m, the last from the re-encoding's colour sampling) and its ball points (median 0 px, at most 0.41 px). The
+ten broadcast clips have no rotation and probe exactly as before. Every OpenCV capture now asks for upright
+frames explicitly (`open_video`; the default depends on the build), and perception stops with a clear message
+if the first decoded frame does not have the probed size.
