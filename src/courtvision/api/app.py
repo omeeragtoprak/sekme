@@ -21,7 +21,7 @@ from typing import Literal
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
@@ -33,6 +33,17 @@ SERVE_TOL_S = 0.5  # a labelled serve and a system serve within this many second
 RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 MEDIA = {"classic": "classic.mp4", "pro": "pro.mp4"}
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
+# Shown at / when the web app has not been built (a fresh clone): the API works, the page says what to do.
+NO_WEB_APP_HTML = """<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>SEKME</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem">
+<h1>SEKME İnceleme Odası</h1>
+<p>Arayüz henüz derlenmemiş. Proje klasöründe çalıştırın, sonra sunucuyu yeniden başlatın:</p>
+<pre>cd web &amp;&amp; npm ci &amp;&amp; npm run build</pre>
+<p lang="en">The web app has not been built yet: run the command above in the project folder, then restart
+<code>sekme serve</code>. The API is available at <a href="/api/runs">/api/runs</a>.</p>
+</body></html>
+"""
 # Served with the type of their container (a WebM sent as video/mp4 plays in Chrome by sniffing, not everywhere).
 MEDIA_TYPES = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
                ".mkv": "video/x-matroska"}
@@ -391,4 +402,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
     dist = web_dist if web_dist is not None else Path(__file__).resolve().parents[3] / "web" / "dist"
     if dist.is_dir():
         app.mount("/", _WebFiles(directory=dist, html=True), name="web")
+    else:
+        @app.get("/", response_class=HTMLResponse)
+        def no_web_app() -> str:
+            return NO_WEB_APP_HTML
     return app

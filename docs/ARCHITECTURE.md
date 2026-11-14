@@ -286,3 +286,8 @@ every time computation and is not done.
 with the size and frame count `probe` reports, and play in the Review Room. The source video used to be served
 as `video/mp4` whatever its container (Chrome played a WebM anyway by sniffing it); it is now served with its
 container's type (`video/webm`, `video/quicktime`, `video/x-matroska`).
+
+**120 fps.** A 2 s excerpt of the 2023 final interpolated to 120 fps (ffmpeg `minterpolate`, blended frames, so
+not real slow motion) runs to the end: all 240 frames calibrated, ball network stride 4, and its first call is
+the 30 fps excerpt's (IN, +147 cm against +146 cm). Real high-frame-rate footage has not been tested; the
+frame-count thresholds discussed above apply four times more strongly there.

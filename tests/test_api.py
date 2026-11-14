@@ -263,3 +263,11 @@ def test_a_source_video_is_served_with_the_media_type_of_its_container(tmp_path:
         c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
         r = c.get("/api/runs/clip1/media/source")
         assert r.status_code == 200 and r.headers["content-type"] == expect, ext
+
+
+def test_without_a_built_web_app_the_root_page_says_how_to_build_it(tmp_path: Path) -> None:
+    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
+    r = c.get("/")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    assert "npm run build" in r.text
+    assert c.get("/api/health").status_code == 200  # the API itself still works
