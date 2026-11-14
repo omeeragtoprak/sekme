@@ -241,6 +241,32 @@ strokes — accounts for most of the losses. It is the same step the rejected hi
 8–10 have now been used for many accept/reject decisions; a further change there would need new
 labelled data (e.g. bounces marked in the Review Room) to be tested honestly.
 
+## Open findings 2 (games 1–7, `runs_dev_base`; descriptive, nothing changed; 2026-11-14)
+
+**Hit timing predicts whether the next first bounce is found.** Each first bounce on the near half was paired
+with the labelled stroke before it and the system's far-side hit nearest to that stroke:
+
+| System's hit vs the labelled stroke | First bounces | Found |
+|---|---|---|
+| within ±3 frames | 89 | 77 (87 %) |
+| more than 3 frames late | 50 | 18 (36 %) |
+| more than 3 frames early | 26 | 11 (42 %) |
+| no far-side hit within 20 frames (mostly near-side strokes) | 143 | 105 (73 %) |
+
+About 47 of the ~103 missed first bounces follow a mistimed hit. Far-side hits are mistimed more often than
+near-side ones (within ±3 frames of a labelled stroke: 56 % against 77 %; late by more than 3 frames: 29 %
+against 6 %). This is an association, not yet a cause (hard rallies could produce both), but the mechanism is
+plausible: a late hit hands the first detections of the next flight to the previous one, whose fit then fails.
+A hit-timing refinement for rally hits (as the serve contact already has) is the candidate this points to; the
+E2E-Spot labels time strokes directly, so its test can measure it. (Tried as a changepoint shift of each rally
+hit: hit timing improved, the bounce check on games 6–7 failed; rejected, see the last section.)
+
+**Near-side bounces taken for strokes are already separable.** Of the near-side hits, 118 match a labelled
+stroke and 46 a labelled bounce; the rejected gate's single feature (change of horizontal image velocity over
+the incoming speed) separates them with AUC 0.976 (medians 1.92 and 0.17), against 0.69–0.79 for vertical
+reversal, distance to the player box and the next-to-player flag. A classifier would add little there; the
+gate failed on call safety, not on classification. Script: `devir/scratch/seg_hit_features.py`.
+
 ## Ball tracker bugs found in review (rule written 2026-11-14, before the fixes were run)
 
 An independent code review found two bugs in `perception/ball.py`, confirmed by hand:
@@ -304,3 +330,38 @@ Numbers elsewhere in these documents were measured with the old scorer and stay 
 adjacent frames still counts as two references in the all-bounces recall (the second one usually "missed");
 no rule uses that number, and merging such labels was not part of the correction decided above, so it is only
 noted here.
+
+## Development candidate: rally-hit timing refinement (rule for the games 6–7 check written 2026-11-14, before it)
+
+**Change** (development only, not in the pipeline yet): each detected rally hit (not serves) is moved to the
+two-piece changepoint of the ball's image track within ±12 frames when that split reduces the residual at least
+3× (`events.image_track.changepoint`, as the serve contact is refined). The window and the gain were chosen on
+games 1–5 by hit timing alone (far-side hits within ±3 frames of a labelled stroke 51 → 68 %, near 75 → 77 %);
+on games 6–7, not used for the choice, far-side timing went 72 → 78 % (near 81 → 81 %).
+
+**Check on games 6–7** (events re-run from the cached detections with the current code, baseline and candidate
+alike): first bounces found must not fall, bounce precision must not fall by more than 1 point, and every decisive
+call must agree with the label. Games 1–5 are reported. If it holds, the candidate is a development result that
+may later take one of the two E2E-Spot test slots, with its own rule written there first; if not, it is recorded
+here and dropped.
+
+**Result (2026-11-14): rejected on all three counts; dropped.** Events re-run from the cached detections of
+games 1–7 (`runs_dev_now` baseline, `runs_dev_refine` candidate, the same code apart from the change):
+
+| | baseline | candidate |
+|---|---|---|
+| games 6–7: first bounces found | 62 / 87 (71.3 %) | 59 / 87 (67.8 %) |
+| games 6–7: all bounces found, false alarms, precision | 73, 2, 97.3 % | 69, 4, 94.5 % |
+| games 6–7: decisive calls consistent | 66 / 66 | 63 / 64 |
+| games 1–5 (reported): first bounces found | 159 / 236 (67.4 %) | 163 / 236 (69.1 %) |
+| games 1–5 (reported): false alarms, precision | 27, 85.9 % | 24, 87.4 % |
+| games 1–5 (reported): decisive calls consistent | 163 / 163 | 166 / 166 |
+
+On games 6–7 the candidate loses a first bounce in four clips (game 7 clips 1, 4, 8, 9) and gains one (game 7
+clip 6); two false alarms are added (game 7 clips 4, 5), and one second bounce (game 6 clip 3, frame 97,
+labelled IN) is called OUT, 32 cm from its label. On games 1–5, where window and gain were chosen, it moves
+first bounces both ways in 9 clips for a net +4; over games 1–7 it gains 8 first bounces and loses 7. Better
+hit timing did not carry over to the bounces as the association in "Open findings 2" suggested. A plausible
+reason, not checked: moving a hit also moves where the next flight's fit starts, which can help or hurt. The change stays out of the pipeline and does not take an
+E2E-Spot slot. (Baseline note: the current code finds 221 / 323 first bounces on games 1–7 against 220 for the
+`runs_dev_base` events above; both are development numbers, and every comparison here is within one re-run.)

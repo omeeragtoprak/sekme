@@ -33,10 +33,16 @@ four local clips with sound: about 180 onsets per minute (crowd, commentary), an
 35 vs 38.3). A simple onset detector adds nothing on highlight audio; an audio cue would need a learned
 classifier and cleaner match sound. (The six-video test's downloads are video-only.)
 
+## Measured afterwards on games 1–7 (see `docs/EVAL_TRACKNET.md`, "Open findings 2")
+
+The near-side "bounce taken for a stroke" group is already separated by the gate's single feature (AUC 0.976),
+so a classifier adds little there. The larger lever is hit *timing*: first bounces after a hit the system places
+more than 3 frames off are found 36–42 % of the time, against 87 % after an on-time hit (about 47 of the ~103
+misses), and far-side hits are mistimed more often.
+
 ## Suggested next candidate
 
-Lead 2 combined with lead 3: a small classifier on track features (image velocity change, curvature, height
-above the court in the image, distance to the nearest player box) proposing hit/bounce labels, used to choose the
-segmentation by fit residual. Developed on TrackNet games 1–7 and the E2E-Spot dev matches (once downloaded);
+Revised after the measurement above: refine each rally hit's frame (as the serve contact is refined), or choose
+the split between two flights by their joint fit residual (lead 3), rather than a classifier. Developed on TrackNet games 1–7 and the E2E-Spot dev matches (once downloaded);
 recall tested on E2E-Spot test matches as one of its two slots, with its rule written first; call safety checked
 on labelled bounce positions from new footage before it can become the default.
