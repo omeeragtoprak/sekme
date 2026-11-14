@@ -134,7 +134,7 @@ def _marker_pixels(img: np.ndarray | None, row: TextBox, gap_x1: float, boxes: l
     mask = yellow | white
     text = np.zeros(mask.shape, bool)
     for b in boxes:  # recognised glyphs are not markers
-        text[int(b.y * H) - 1:int((b.y + b.h) * H) + 2, int(b.x * W) - 1:int(b.x1 * W) + 2] = True
+        text[max(0, int(b.y * H) - 1):int((b.y + b.h) * H) + 2, max(0, int(b.x * W) - 1):int(b.x1 * W) + 2] = True
     n = 0
     for xa, xb in regions:
         a, b = max(0, int(xa * W)), min(W, int(xb * W))
@@ -246,10 +246,13 @@ def parse_speed(boxes: list[TextBox], frame: int, t: float) -> tuple[SpeedReadin
             unit = "mph"
         elif "KM" in u:
             unit = "km/h"
+    # A clock ("12:30") or a score ("40") next to the label is not a speed: same plausibility as the glued path.
+    lo, hi = SERVE_SPEED_RANGE[unit] if unit else (min(r[0] for r in SERVE_SPEED_RANGE.values()),
+                                                  max(r[1] for r in SERVE_SPEED_RANGE.values()))
     cands = []
     for b in near:
         m = re.match(r"^\s*(\d{2,3})(?!\d)", b.text)
-        if m and b not in labels:
+        if m and b not in labels and lo <= int(m.group(1)) <= hi:
             cands.append((b.conf, int(m.group(1))))
     if not cands:
         return None, unit

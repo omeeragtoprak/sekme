@@ -87,3 +87,16 @@ second) mean the same at any rate; those counted in frames cover half the time a
 
 The 60 fps development evidence (US Open 2025 clips and the same footage at 30 fps) is in
 `docs/EVAL_SERVE_SPEED.md`; the rows marked "not scaled" are candidates for a later round.
+
+## Known issues (code review, 2026-11-14)
+
+Two code reviews read the event, physics, call, tracker, calibration and OCR modules. The bugs that could
+change a ball track or crash were fixed (`docs/EVAL_TRACKNET.md`, "Ball tracker bugs"; the OCR and
+calibration guards). Left as they are, because changing them changes how existing broadcast graphics are
+read and that can only be checked by re-reading every clip:
+
+- `broadcast/scoreboard.py`: the tolerance for lining up score columns is half a row height in normalised
+  x, which is about 0.9 row heights in pixels on 16:9 video; a missing digit in one row could take the
+  other row's token.
+- `broadcast/scoreboard.py`: a graphic without a point column whose last set reads "0 0" is taken as
+  showing points, so that frame's end-change count is one short (it can only mislabel names, never a call).

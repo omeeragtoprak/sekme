@@ -199,3 +199,13 @@ def test_a_single_serve_still_names_both_ends_when_nothing_contradicts_it():
     scan = BroadcastScan(step_frames=15, frames_read=1, scores=[r], names=("SINNER", "ALCARAZ"))
     ss = check(scan, [Serve(0, 2.0, "near", None)])["server_sides"]
     assert ss["consistent"] is True and ss["start_end"] == {"ALCARAZ": "near", "SINNER": "far"}
+
+
+def test_a_clock_or_a_score_next_to_the_speed_label_is_not_a_speed():
+    label = TextBox("SERVE SPEED", 1.0, 0.314, 0.142, 0.027, 0.014)
+    mph = TextBox("MPH", 1.0, 0.33, 0.13, 0.01, 0.01)
+    for text in ("12:30", "40"):
+        sp, unit = parse_speed([label, mph, TextBox(text, 1.0, 0.316, 0.125, 0.016, 0.019)], 1, 0.0)
+        assert sp is None and unit == "mph"
+    sp, _ = parse_speed([label, mph, TextBox("118", 1.0, 0.316, 0.125, 0.016, 0.019)], 1, 0.0)
+    assert sp is not None and sp.value == 118

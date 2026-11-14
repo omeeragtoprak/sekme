@@ -123,6 +123,8 @@ def refine_homography(frame_bgr: np.ndarray, H: np.ndarray, court: CourtModel, p
             break
         pts_arr = np.asarray(pts)
         ids_arr = np.asarray(ids)
+        if not np.all(np.isfinite(_perp_residuals(Hc.ravel()[:8], pts_arr, ids_arr, ends))):
+            break  # a degenerate homography (a line end at infinity): keep the last good one
         sol = least_squares(_perp_residuals, (Hc.ravel()[:8]), args=(pts_arr, ids_arr, ends),
                             loss="soft_l1", f_scale=1.5, x_scale="jac")
         Hn = np.append(sol.x, 1.0).reshape(3, 3)
