@@ -133,7 +133,9 @@ Otherwise it is rejected, its code is removed and the result stays here.
 analysed right after the baseline, from the baseline's cached detections of the same clip file, before
 the clip is deleted, so the two runs differ only by the candidate's code path. The dev matches are run
 first; any change to the candidate after seeing them is written here, with its reason, before the test
-matches are run, and the test pass uses the commit recorded in its results' provenance.
+matches are run, and the test pass uses the commit recorded in its results' provenance. A dry run on
+local footage with made-up labels (2026-11-14, nothing kept) went through cutting, the baseline, the
+candidate from the cached detections (perception 0.02 s against 20.5 s for the baseline) and scoring.
 
 **Notes.** This candidate targets serves, so its primary measure is serve recall, not first-bounce
 recall as in rule 2's template; first bounces are a guard. The bridge is 0.3 s (8 frames at 25 fps, 9
