@@ -66,3 +66,11 @@ lowest failing ratio, 0.54), near player 37.0 → 96.9 % (2025 final 150–704 s
 91.6 → 96.3 % (QF), 90.5 → 93.9 % (2024 final); serve contacts within 2 frames 6 → 8. Because the band was
 chosen on these clips, they decide nothing: it is judged on unused footage with player positions
 labelled by eye (third candidate in `docs/EVAL_SERVE_SPEED.md`).
+
+**Speed note (same day, development):** detecting people on every second frame at 60 fps and holding the
+detections in between makes the 90 s 1080p60 clip 16 % faster end to end (556 → 465 s; perception 483 →
+395 s), with the same calls (none changed, bounces moved ≤ 4 cm). With the default size gate, though, the
+near player was then tracked on 1 093 frames instead of 2 960: the changed track ids moved the one-track
+height reference again. With the camera-based gate the same fast run tracks him on 3 706 frames, positions
+within 2.4 cm (median) of the full run. The option was therefore not added (patch kept locally); it is worth
+adding only if the camera-based gate becomes the default.
