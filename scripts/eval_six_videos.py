@@ -24,6 +24,7 @@ labels, uncommitted changes to the analysis or the scorer, and an existing resul
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import shutil
@@ -64,9 +65,7 @@ FLAGS = {"default": set(), "scaled": {"fps_scaled_thresholds"},
          "scaled_pin": {"fps_scaled_thresholds", "pin_serve_height"}, "players": {"player_size_from_camera"},
          "bridge": {"serve_toss_bridge_s"}, "bridge_pin": {"serve_toss_bridge_s", "pin_serve_height"}}
 CACHES = ("perception.pkl", "broadcast.pkl", "pose.pkl")
-# The scorer is not used by the analysis, so changing it does not make the runs stale.
-ANALYSIS_CODE = ["src", ":(exclude)src/courtvision/eval/six_videos.py"]
-SCORER_CODE = ["src", "scripts/eval_six_videos.py"]
+SCORER_CODE = ["src", "scripts/eval_six_videos.py", "scripts/six_videos_fetch.py"]
 PLAYER_FILES = ("_presence", "_presence_frames", "_disagree", "_disagree_frames")
 
 
@@ -75,12 +74,50 @@ def git(*args: str) -> subprocess.CompletedProcess:
 
 
 def head_sha() -> str:
-    return git("rev-parse", "HEAD").stdout.strip()
+    r = git("rev-parse", "HEAD")
+    if r.returncode != 0 or not r.stdout.strip():
+        raise SystemExit(f"git rev-parse HEAD failed: {r.stderr.strip()}")
+    return r.stdout.strip()
 
 
 def clean(paths: list[str]) -> bool:
-    """No uncommitted change (staged, unstaged or untracked) under these paths."""
-    return git("status", "--porcelain", "--", *paths).stdout.strip() == ""
+    """No uncommitted change (staged, unstaged or untracked) under these paths; a failing git is not clean."""
+    r = git("status", "--porcelain", "--", *paths)
+    return r.returncode == 0 and r.stdout.strip() == ""
+
+
+def analysis_code() -> list[str]:
+    """The source files ``sekme analyze`` can load: cli.py and the import closure of what its analyze command
+    imports (every import statement, also those inside functions, and the packages' __init__ files). Only these
+    decide whether two runs come from the same code: a commit to the API, the web app or the scorer between two
+    batches of videos does not make the earlier batch stale."""
+    src = ROOT / "src"
+
+    def file_of(mod: str) -> Path | None:
+        p = src / Path(*mod.split("."))
+        return next((c for c in (p.with_suffix(".py"), p / "__init__.py") if c.exists()), None)
+
+    files = {src / "courtvision" / "cli.py"}
+    todo = ["courtvision.pipeline", "courtvision.events.serves"]  # what cli._analyze imports
+    seen: set[str] = set()
+    while todo:
+        mod = todo.pop()
+        if mod in seen:
+            continue
+        seen.add(mod)
+        f = file_of(mod)
+        if f is None:
+            continue
+        files.add(f)
+        parts = mod.split(".")
+        todo += [".".join(parts[:i]) for i in range(1, len(parts))]  # parent packages run their __init__
+        for node in ast.walk(ast.parse(f.read_text())):
+            if isinstance(node, ast.Import):
+                todo += [a.name for a in node.names if a.name.startswith("courtvision")]
+            elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("courtvision"):
+                todo.append(node.module)
+                todo += [f"{node.module}.{a.name}" for a in node.names]  # "from pkg import module"
+    return sorted(str(f.relative_to(ROOT)) for f in files)
 
 
 def same_code(run: Path) -> bool:
@@ -88,7 +125,7 @@ def same_code(run: Path) -> bool:
     marker = run / "code_sha.txt"
     if not marker.exists():
         return False
-    return git("diff", "--quiet", marker.read_text().strip(), "HEAD", "--", *ANALYSIS_CODE).returncode == 0
+    return git("diff", "--quiet", marker.read_text().strip(), "HEAD", "--", *analysis_code()).returncode == 0
 
 
 def videos_in(videos: Path) -> list[Path]:
@@ -109,13 +146,13 @@ def write_once(path: Path, data: dict) -> None:
 
 
 def sample(videos: Path, labels_dir: Path) -> None:
-    import cv2
+    from courtvision.io.video import iter_frames
 
     labels_dir.mkdir(parents=True, exist_ok=True)
     for v in videos_in(videos):
-        cap, n = cv2.VideoCapture(str(v)), 0
-        while cap.grab():  # count as the pipeline decodes: in order, no seeking
-            n += 1
+        n = 0
+        for i, _ in iter_frames(v):  # the pipeline's own reader: the labels' frame numbers are the analysis's
+            n = i + 1
         frames = presence_sample(v.stem, n)
         write_once(labels_dir / f"{v.stem}_presence_frames.json", {"n_frames": n, "frames": frames})
         print(f"{v.stem}: {n} frames, {len(frames)} to label", flush=True)
@@ -124,7 +161,8 @@ def sample(videos: Path, labels_dir: Path) -> None:
 def analyse(video: Path, out: Path, extra: list[str]) -> None:
     if (out / "report.json").exists():
         return  # its code_sha.txt says which code made it; score refuses runs from other code
-    if not clean(ANALYSIS_CODE):
+    code = analysis_code()
+    if not clean(code):
         raise SystemExit("the analysis code has uncommitted changes: commit them first (runs must name their code)")
     sha = head_sha()  # taken before the run: the code the process loads
     r = subprocess.run([str(ROOT / ".venv" / "bin" / "python"), "-m", "courtvision.cli", "analyze", str(video),
@@ -133,7 +171,7 @@ def analyse(video: Path, out: Path, extra: list[str]) -> None:
                        capture_output=True, text=True)
     if r.returncode != 0:
         raise SystemExit(f"{video.name} {out.name}: analysis failed: {r.stderr.strip().splitlines()[-1:]}")
-    if not clean(ANALYSIS_CODE) or git("diff", "--quiet", sha, "HEAD", "--", *ANALYSIS_CODE).returncode != 0:
+    if not clean(code) or git("diff", "--quiet", sha, "HEAD", "--", *code).returncode != 0:
         (out / "report.json").unlink()  # which code it ran is unclear: it is made again on the next call
         raise SystemExit(f"{video.name} {out.name}: the analysis code changed during the run; run again")
     (out / "code_sha.txt").write_text(sha)
@@ -205,7 +243,14 @@ def _check_frames(labels: list[dict], listed: Path, n: str) -> None:
         raise SystemExit(f"{n}: labelled frames differ from {listed.name}")
 
 
-def score(labels_dir: Path, out: Path) -> None:
+def committed(labels_dir: Path) -> bool:
+    """Every label file is tracked by git and unchanged since its commit (labels are committed before scoring)."""
+    files = sorted(labels_dir.glob("*.json"))
+    tracked = git("ls-files", "--error-unmatch", "--", *map(str, files))
+    return bool(files) and tracked.returncode == 0 and clean([str(labels_dir)])
+
+
+def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
     names = label_names(labels_dir)
     if names != NAMES:  # a partial or different set would quietly change the test
         raise SystemExit(f"score needs the serve labels of exactly the six videos; missing "
@@ -214,6 +259,8 @@ def score(labels_dir: Path, out: Path) -> None:
         raise SystemExit(f"{out} exists: the test is scored once")
     if not clean(SCORER_CODE):
         raise SystemExit("uncommitted changes in src or the scorer: the result must name the code that made it")
+    if require_committed and not committed(labels_dir):
+        raise SystemExit(f"the labels in {labels_dir} are not all committed: commit them before scoring")
     missing = [f"{n}/{k}" for n in NAMES for k in KINDS if not (RUNS / n / k / "report.json").exists()]
     if missing:
         raise SystemExit(f"runs missing: {missing[:4]}")
@@ -222,7 +269,9 @@ def score(labels_dir: Path, out: Path) -> None:
         raise SystemExit(f"runs made with other code: {stale[:4]}")
     rep = {n: {k: json.loads((RUNS / n / k / "report.json").read_text()) for k in KINDS} for n in NAMES}
     manifest = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
-    ball_sha = hashlib.sha256(BALL_MODEL.read_bytes()).hexdigest() if BALL_MODEL.exists() else None
+    if not BALL_MODEL.exists():
+        raise SystemExit(f"{BALL_MODEL} missing: the runs cannot be checked to use ball v4")
+    ball_sha = hashlib.sha256(BALL_MODEL.read_bytes()).hexdigest()
     problems = [p for n in NAMES for p in check_provenance(n, rep[n], manifest, ball_sha)]
     if problems:
         raise SystemExit("\n".join(problems[:8]))

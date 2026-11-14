@@ -115,19 +115,6 @@ def media_path(run: Path, name: str) -> Path | None:
     return p if p.is_file() else None
 
 
-def link_source(video: Path, run: Path) -> None:
-    """Expose the analysed video inside the run folder (symlink; copy when links are unsupported)."""
-    dest = run / f"source{video.suffix.lower()}"
-    if dest.is_symlink() and dest.resolve() != video.resolve():
-        dest.unlink()  # re-analysed from another video: do not show the old one beside the new report
-    if dest.exists() or dest.is_symlink():
-        return
-    try:
-        dest.symlink_to(video.resolve())
-    except OSError:
-        shutil.copy2(video, dest)
-
-
 class _WebFiles(StaticFiles):
     """Built web app. index.html names the hashed bundles, so it must be revalidated after a rebuild."""
 

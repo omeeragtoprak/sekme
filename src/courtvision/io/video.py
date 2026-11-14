@@ -69,6 +69,19 @@ def iter_frames(path: str | Path, start: int = 0, end: int | None = None) -> Ite
         cap.release()
 
 
+def link_source(video: Path, run: Path) -> None:
+    """Expose the analysed video inside the run folder (symlink; copy when links are unsupported)."""
+    dest = run / f"source{video.suffix.lower()}"
+    if dest.is_symlink() and dest.resolve() != video.resolve():
+        dest.unlink()  # re-analysed from another video: do not show the old one beside the new report
+    if dest.exists() or dest.is_symlink():
+        return
+    try:
+        dest.symlink_to(video.resolve())
+    except OSError:
+        shutil.copy2(video, dest)
+
+
 def extract_audio(path: str | Path, sample_rate: int = 22050) -> np.ndarray:
     """Mono float32 audio in [-1, 1]; empty array when the file has no audio."""
     proc = subprocess.run(

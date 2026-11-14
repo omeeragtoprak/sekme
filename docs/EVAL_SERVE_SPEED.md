@@ -250,5 +250,14 @@ The items "reported, not used" were not produced; they now are (`reported_not_us
 including a run with the toss bridge and the pin (`bridge_pin`), which "the same with the toss bridge" needs.
 Variant runs drop their copy of the perception cache once made (it stays in the default run), for the disk.
 
+A second review of these corrections found no blocker and one major gap, also closed before any download:
+the code identity of a run covered all of `src/`, so any commit to the Review Room between two batches of
+videos (deleted after each batch) would have made the earlier runs unusable. It now covers only the files
+`sekme analyze` can load (`cli.py` and the import closure of what its analyze command imports, read from the
+source); the one function the pipeline took from the Review Room's module (linking the source video into the
+run folder) moved to `io/video.py`. Also: the frame lists count frames with the pipeline's own reader (the
+first version used a faster count that could differ at a damaged last frame); a failing `git` counts as
+uncommitted code; the label files must be committed before scoring; the ball model file must be there.
+
 Not changed, noted: s = round(fps / 30) is already 2 from 45 fps, so "s = 1 below 50 fps" above is only
 true below 45 fps; the rule keeps videos of 50 fps and more, and all six are 60 fps.

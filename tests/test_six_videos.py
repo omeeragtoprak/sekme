@@ -253,3 +253,30 @@ def test_provenance_catches_wrong_flags_video_and_models() -> None:
     assert any("x/bridge: models" in p for p in problems)
     unlisted = e.check_provenance("x", {k: rep(k) for k in e.KINDS}, {}, "b4")
     assert unlisted[0] == "x: no SHA-256 in manifest.json" and len(unlisted) == 1 + len(e.KINDS)
+
+
+def test_only_the_analysis_code_decides_whether_runs_are_stale() -> None:
+    e = _script()
+    code = e.analysis_code()
+    for f in ("pipeline.py", "cli.py", "events/serves.py", "perception/ball.py", "io/video.py", "__init__.py"):
+        assert f"src/courtvision/{f}" in code
+    for f in ("api/app.py", "eval/six_videos.py", "eval/spot.py"):  # the Review Room and the scorers are not
+        assert f"src/courtvision/{f}" not in code
+
+
+def test_a_failing_git_is_never_clean_and_labels_outside_the_repo_are_not_committed(tmp_path: Path) -> None:
+    import subprocess
+
+    import pytest
+
+    e = _script()
+    real = e.git
+    try:
+        e.git = lambda *a: subprocess.CompletedProcess(a, 128, "", "fatal: not a git repository")
+        assert e.clean(["src"]) is False
+        with pytest.raises(SystemExit):
+            e.head_sha()
+    finally:
+        e.git = real
+    (tmp_path / "a.json").write_text("{}")
+    assert e.committed(tmp_path) is False

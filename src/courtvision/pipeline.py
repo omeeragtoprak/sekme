@@ -24,7 +24,6 @@ import torch
 
 from courtvision import __version__
 from courtvision.analytics.kinematics import player_kinematics
-from courtvision.api.app import link_source
 from courtvision.broadcast import ocr
 from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
 from courtvision.eval.broadcast_check import Serve, check, serve_anchored_names, side_names
@@ -33,7 +32,7 @@ from courtvision.events.hits import detect_hits_in_segments
 from courtvision.events.serves import detect_serves, merge_serves
 from courtvision.events.strokes import classify, serve_hand, vote_hand
 from courtvision.geometry.court import CourtModel
-from courtvision.io.video import VideoWriter, iter_frames, probe
+from courtvision.io.video import VideoWriter, iter_frames, link_source, probe
 from courtvision.perception.ball import BallDetector, ball_arch, drop_court_fixed, track_ball
 from courtvision.perception.court import (
     CourtCalibrator,
