@@ -2,6 +2,7 @@
 
     .venv/bin/python scripts/eval_spot.py sample --name test4 --split test --matches M1 M2 ...
     .venv/bin/python scripts/eval_spot.py run    --name test4 [--runs-dir runs_spot] [--keep-clips]
+                                                 [--candidate-flag toss-bridge ...] [--candidate-runs-dir DIR]
     .venv/bin/python scripts/eval_spot.py score  --name test4 [--runs-dir runs_spot]
 
 Labels: data/spot/tennis/{train,val,test}.json from github.com/jhong93/spot (data/tennis, BSD-3-Clause).
@@ -20,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -40,9 +42,9 @@ def clip_frames(video: str) -> tuple[int, int]:
     return int(start), int(end)
 
 
-def analyse(clip_path: Path, run: Path) -> None:
+def analyse(clip_path: Path, run: Path, extra: tuple[str, ...] = ()) -> None:
     r = subprocess.run([str(ROOT / ".venv" / "bin" / "python"), "-m", "courtvision.cli", "analyze", str(clip_path),
-                        "--out", str(run), "--no-render", "--no-broadcast"],
+                        "--out", str(run), "--no-render", "--no-broadcast", *extra],
                        env={"PYTHONPATH": str(ROOT / "src"), "PATH": "/usr/local/bin:/usr/bin:/bin"},
                        capture_output=True, text=True)
     if r.returncode != 0:  # recorded, and scored as a clip with no system events (docs/EVAL_SPOT.md)
@@ -51,10 +53,31 @@ def analyse(clip_path: Path, run: Path) -> None:
         print(f"  {run.name}: analysis failed: {r.stderr.strip().splitlines()[-1:]}", flush=True)
 
 
-def run_match(src: Path, clips: list[dict], runs: Path, tmp: Path, keep: bool) -> None:
-    todo = sorted((c for c in clips if not ((runs / c["video"] / "report.json").exists()
-                                           or (runs / c["video"] / "FAILED.txt").exists())),
-                  key=lambda c: clip_frames(c["video"])[0])
+def analyse_candidate(clip_path: Path, base: Path, run: Path, flags: list[str]) -> None:
+    """A candidate on the baseline's cached detections of the same clip file: the two runs differ only by
+    the candidate's code path, and no second GPU pass is needed."""
+    run.mkdir(parents=True, exist_ok=True)
+    if not (base / "perception.pkl").exists():
+        (run / "FAILED.txt").write_text("baseline analysis failed: no cached perception")
+        return
+    for f in ("perception.pkl", "pose.pkl"):
+        if (base / f).exists():
+            shutil.copy(base / f, run / f)
+    analyse(clip_path, run, ("--reuse-perception", *(f"--{x}" for x in flags)))
+
+
+def _done(run: Path) -> bool:
+    return (run / "report.json").exists() or (run / "FAILED.txt").exists()
+
+
+def run_match(src: Path, clips: list[dict], runs: Path, tmp: Path, keep: bool,
+              cand: tuple[Path, list[str]] | None = None) -> None:
+    """Cut and analyse every clip not done yet; with ``cand`` = (runs dir, CLI flags) also the candidate,
+    right after the baseline and before the clip is deleted."""
+    def done(name: str) -> bool:
+        return _done(runs / name) and (cand is None or _done(cand[0] / name))
+
+    todo = sorted((c for c in clips if not done(c["video"])), key=lambda c: clip_frames(c["video"])[0])
     if not todo:
         return
     cap = cv2.VideoCapture(str(src))
@@ -89,7 +112,10 @@ def run_match(src: Path, clips: list[dict], runs: Path, tmp: Path, keep: bool) -
                 got = int(cv2.VideoCapture(str(out)).get(cv2.CAP_PROP_FRAME_COUNT))
                 if got != n + 1:
                     raise SystemExit(f"{out.name}: wrote {n + 1} frames, the file holds {got}")
-                analyse(out, runs / name)
+                if not _done(runs / name):
+                    analyse(out, runs / name)
+                if cand is not None and not _done(cand[0] / name):
+                    analyse_candidate(out, runs / name, cand[0] / name, cand[1])
                 if not keep:
                     out.unlink()
         i += 1
@@ -105,9 +131,11 @@ def provenance(sample_path: Path, runs: Path, sample: dict) -> dict:
 
 
 def line(name: str, k: dict) -> str:
+    extra = (f"  precision without likely faults {k['precision_excl_faults']:.3f} ({k['before_label']} set apart)"
+             if "precision_excl_faults" in k else "")
     return (f"{name:10s} labelled {k['labelled']:5d}  system {k['system']:5d}  recall {k['recall']:.3f}  "
             f"precision {k['precision']:.3f}  F1 {k['f1']:.3f}  side {k['same_side']:.3f}  "
-            f"median dt {k['median_dt_frames']:+.1f} fr")
+            f"median dt {k['median_dt_frames']:+.1f} fr" + extra)
 
 
 def main() -> None:
@@ -119,6 +147,10 @@ def main() -> None:
     ap.add_argument("--videos", default=str(DATA / "videos"))
     ap.add_argument("--runs-dir", default="runs_spot")
     ap.add_argument("--keep-clips", action="store_true")
+    ap.add_argument("--candidate-flag", action="append", default=[], metavar="FLAG",
+                    help="also run the candidate (sekme analyze --FLAG) on each clip from the baseline's cached "
+                         "detections, e.g. toss-bridge (repeatable)")
+    ap.add_argument("--candidate-runs-dir", help="where the candidate's runs go (default: <runs-dir>_cand)")
     ap.add_argument("--delete-videos", action="store_true",
                     help="delete a match video once every one of its clips has a report or failure record")
     args = ap.parse_args()
@@ -146,8 +178,10 @@ def main() -> None:
             if not src.exists():
                 print(f"{m}: no video yet, skipped", flush=True)
                 continue
+            cand = ((DATA / (args.candidate_runs_dir or f"{args.runs_dir}_cand")), args.candidate_flag) \
+                if args.candidate_flag else None
             run_match(src, [c for c in sample["clips"] if match_name(c["video"]) == m], runs, DATA / "clips_tmp",
-                      args.keep_clips)
+                      args.keep_clips, cand)
             if args.delete_videos:  # run_match returns only when every clip of the match is done
                 src.unlink()
         return

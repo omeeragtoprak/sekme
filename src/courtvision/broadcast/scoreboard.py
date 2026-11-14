@@ -362,8 +362,27 @@ def score_changes(scores: list[ScoreReading], max_gap: float = 1.2) -> list[Scor
     return out
 
 
+# The board changes once per serve, and two serves never fall within this time. A value whose old one is back
+# sooner was never shown: a misread (Vision reads a small "112" as "122") or a close-up/replay of an old board.
+BOARD_FLICKER_S = 4.0
+
+
+def _drop_flickers(runs: list[tuple[float, float, object]], max_s: float) -> list[tuple[float, float, object]]:
+    """Remove a run B between two runs of the same value A when A is back within ``max_s`` of B's first sighting."""
+    runs = list(runs)
+    i = 1
+    while i < len(runs) - 1:
+        (a0, _, a), (b0, _, b), (c0, c1, c) = runs[i - 1], runs[i], runs[i + 1]
+        if a.value == c.value != b.value and c0 - b0 < max_s:
+            runs[i - 1:i + 2] = [(a0, c1, c)]
+            i = max(i - 1, 1)
+        else:
+            i += 1
+    return runs
+
+
 def speed_updates(speeds: list[SpeedReading], max_gap: float = 1.2) -> list[SpeedUpdate]:
-    stable = _stable(speeds, lambda s: s.value, max_gap)
+    stable = _drop_flickers(_stable(speeds, lambda s: s.value, max_gap), BOARD_FLICKER_S)
     out = []
     prev = None
     for t0, t1, s in stable:

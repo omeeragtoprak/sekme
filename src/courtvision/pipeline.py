@@ -149,6 +149,7 @@ class PipelineConfig:
     broadcast: bool = True  # read the score graphic and the serve-speed board (macOS Vision) as a check
     player_imgsz: int = 1280
     ball_stride: int = 0  # frames between the ball network's three inputs; 0: match its 30 fps training video
+    serve_toss_bridge_s: float = 0.0  # candidate, off by default (docs/EVAL_SPOT.md): 0.3 bridges a missed toss apex
     models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
@@ -343,7 +344,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     kin = {side: player_kinematics(tr.world, info.fps) for side, tr in players.items()}
     segments = measurable_segments(calib, cuts, min_len=int(info.fps))
     hits = detect_hits_in_segments(ball, players, info.fps, info.height, segments)
-    hits = merge_serves(hits, detect_serves(ball, players, info.fps, segments), info.fps)
+    hits = merge_serves(hits, detect_serves(ball, players, info.fps, segments, bridge_s=cfg.serve_toss_bridge_s),
+                        info.fps)
     flights = build_flights(ball, hits, calib, info.fps, players, segments, frame_w=info.width)
     timings["analysis_s"] = time.time() - t1
 
@@ -368,6 +370,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "video": {"file": Path(video).name, "width": info.width, "height": info.height, "fps": info.fps,
                   "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": video_sha},
         "models": {k: _model_card(k, v) for k, v in cfg.models.items()},
+        "candidates": {"serve_toss_bridge_s": cfg.serve_toss_bridge_s} if cfg.serve_toss_bridge_s else {},
         "calibration": {
             "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts,
             "line_support_median": _f(np.median([c.support for c in valid]) if valid else None),

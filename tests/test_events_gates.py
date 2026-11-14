@@ -14,7 +14,7 @@ from courtvision.events.flights import (
     net_clearance_sd,
 )
 from courtvision.events.hits import Hit, detect_hits_in_segments
-from courtvision.events.serves import detect_serves, merge_serves
+from courtvision.events.serves import _toss_runs, detect_serves, merge_serves
 from courtvision.geometry.court import Half
 from courtvision.perception.ball import BallCandidate, BallTrack, drop_court_fixed, track_ball
 from courtvision.perception.court import FrameCalibration
@@ -201,6 +201,24 @@ def test_refine_contact_finds_the_kink_across_a_missing_frame():
     assert refine_contact(frames2, xy2, 1309) == 1308
 
 
+def test_contact_in_gap_puts_a_hidden_serve_contact_inside_the_gap():
+    from courtvision.events.image_track import contact_in_gap
+
+    # US Open 2025 QF serve, ball net v4: toss seen to 8880, ball hidden by the racket and the backdrop
+    # lettering 8881-8889 (contact ~8887-8888 by eye), struck flight from 8890.
+    frames = np.array([8873, 8874, 8875, 8876, 8877, 8878, 8880, 8890, 8891, 8892])
+    xy = np.array([[905.2, 78.2], [904.6, 78.5], [904.9, 79.7], [903.6, 80.5], [905.0, 83.8], [905.0, 83.6],
+                   [906.1, 86.2], [923.9, 130.8], [931.8, 145.1], [940.7, 160.7]])
+    f, p = contact_in_gap(frames, xy, 8880)
+    assert 8886 < f < 8889
+    assert 905 < p[0] < 925 and 86 < p[1] < 131
+    # No gap after the split frame, or no speed-up across it: nothing to do.
+    assert contact_in_gap(frames, xy, 8877) is None
+    slow = xy.copy()
+    slow[7:] = xy[6] + np.array([[1.0, 2.0], [1.1, 2.2], [1.2, 2.4]])
+    assert contact_in_gap(frames, slow, 8880) is None
+
+
 def test_kink_point_is_where_two_image_lines_meet():
     from courtvision.events.image_track import kink_point
 
@@ -223,3 +241,81 @@ def test_image_bounce_gives_a_ground_point_with_uncertainty():
     f, g, cov = out
     assert abs(f - 10.0) < 1e-6 and np.allclose(g, [3.0, 4.1], atol=1e-6)
     assert np.all(np.linalg.eigvalsh(cov) > 0)
+
+
+def _near_serve_60fps(n: int = 140) -> BallTrack:
+    """Near server at 60 fps as on the US Open 2025 final (frames 1878-1941): ball held, toss with the apex
+    missed for 13 frames (the ball net loses the nearly still ball), contact at 75, struck ball slow in the
+    image (it flies away from the camera), so it still passes the toss gates for a while."""
+    xy = np.full((n, 2), np.nan)
+    for t in range(n):
+        if t < 20:
+            xy[t] = (1060, 640)  # held below the shoulders
+        elif t <= 75:
+            if not 44 <= t <= 56:
+                xy[t] = (1060 - 0.4 * (t - 20), 470 + 0.189 * (t - 50) ** 2)
+        elif t <= 120:
+            xy[t] = (1038 - 5 * (t - 75), 588 - 6 * (t - 75))
+    src = np.where(np.isfinite(xy[:, 0]), 1, 0)
+    return BallTrack(xy, src.astype(float), src)
+
+
+def test_a_near_serve_with_the_toss_apex_missed_and_a_slow_struck_ball_is_found_by_the_bridge_candidate():
+    ball, players = _near_serve_60fps(), _players(140)
+    # Current detector: the apex gap splits the toss, the struck ball extends the second run past the
+    # contact, and neither run passes (wrong direction after the first, not vertical for the second).
+    assert detect_serves(ball, players, 60.0, [(0, 140)]) == []
+    serves = detect_serves(ball, players, 60.0, [(0, 140)], bridge_s=0.3)
+    assert len(serves) == 1 and serves[0].side == "near" and 74 <= serves[0].frame <= 76
+    # The far serve of the other tests is found the same way with the candidate.
+    far = detect_serves(_far_serve_rally(), _players(140), FPS, [(0, 140)], bridge_s=0.3)
+    assert len(far) == 1 and 39 <= far[0].frame <= 41
+
+
+def test_the_bridge_does_not_join_a_toss_to_a_struck_ball_seen_again_after_a_contact_gap():
+    # US Open 2025 final serve 25425 (far, 60 fps): the ball is missed for 6 frames after the contact and
+    # the struck ball is still slow and above the shoulders when it reappears. Falling on both sides of the
+    # gap, so it is not an apex: the toss stays one run and the contact goes inside the gap, as without it.
+    n = 140
+    xy = np.full((n, 2), np.nan)
+    for t in range(n):
+        if t < 10:
+            xy[t] = (603, 132)
+        elif t <= 58:
+            xy[t] = (603 + 0.1 * (t - 10), 46 + 0.06 * (t - 40) ** 2)
+        elif 65 <= t <= 100:
+            xy[t] = (608 + 2 * (t - 58), 65 + 6 * (t - 58))
+    src = np.where(np.isfinite(xy[:, 0]), 1, 0)
+    ball = BallTrack(xy, src.astype(float), src)
+    players = _players(n)
+    assert _toss_runs(ball, players["far"], 0, n, bridge=18) == _toss_runs(ball, players["far"], 0, n) == [(11, 58)]
+    for bridge in (0.0, 0.3):
+        serves = detect_serves(ball, players, 60.0, [(0, n)], bridge_s=bridge)
+        assert len(serves) == 1 and serves[0].side == "far" and 58 < serves[0].contact_sub < 65
+    # The near serve's apex gap (rising into it, falling out of it) is joined.
+    near = _near_serve_60fps()
+    assert len(_toss_runs(near, players["near"], 0, 140)) == 2
+    joined = _toss_runs(near, players["near"], 0, 140, bridge=18)
+    assert len(joined) == 1 and joined[0][0] < 44 and joined[0][1] > 75
+
+
+def test_a_bridged_toss_that_drifts_sideways_is_still_a_toss_and_its_apex_is_not_a_contact():
+    # US Open 2024 final serve 1409 (far, 60 fps): apex missed for 13 frames, toss drifting ~40 px sideways.
+    # Without the bridge the first half ends at the gap and, since the ball comes down "towards the
+    # receiver" after it, is taken for a serve too (a false serve at the apex). Bridged, the whole toss
+    # rises and falls ~90 px in all: counting both, it is vertical enough.
+    n = 140
+    xy = np.full((n, 2), np.nan)
+    for t in range(n):
+        if t < 10:
+            xy[t] = (603, 132)
+        elif t <= 66 and not 30 <= t <= 42:
+            xy[t] = (603 + 0.7 * (t - 10), 52 + 0.0607 * (t - 36) ** 2)
+        elif 67 <= t <= 100:
+            xy[t] = (642 + 14 * (t - 66), 107 + 20 * (t - 66))
+    src = np.where(np.isfinite(xy[:, 0]), 1, 0)
+    ball = BallTrack(xy, src.astype(float), src)
+    old = detect_serves(ball, _players(n), 60.0, [(0, n)])
+    assert len(old) == 2 and old[0].frame < 31  # the apex split, a false serve
+    new = detect_serves(ball, _players(n), 60.0, [(0, n)], bridge_s=0.3)
+    assert len(new) == 1 and new[0].side == "far" and 65 <= new[0].frame <= 68

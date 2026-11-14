@@ -1,0 +1,258 @@
+{
+ "video": "usopen2025_final_150-704s.mp4",
+ "n_frames": 33405,
+ "n_frames_decoded_by_cv2": 33209,
+ "frame_numbering": "sequential OpenCV decode from 0",
+ "labeller": "separate labeller, blind to system output",
+ "serves": [
+  {
+   "lo": 186,
+   "hi": 187,
+   "side": "near",
+   "radar": {
+    "value": 101,
+    "unit": "mph",
+    "frame": 337
+   },
+   "note": "Alcaraz; ball round at 186, streaked at 187"
+  },
+  {
+   "lo": 871,
+   "hi": 872,
+   "side": "near",
+   "radar": {
+    "value": 107,
+    "unit": "mph",
+    "frame": 1083
+   },
+   "note": "Alcaraz; first main-cam serve after dissolve at ~686 (time jump)"
+  },
+  {
+   "lo": 1933,
+   "hi": 1934,
+   "side": "near",
+   "radar": {
+    "value": 94,
+    "unit": "mph",
+    "frame": 2085
+   },
+   "note": "Sinner; clean"
+  },
+  {
+   "lo": 3270,
+   "hi": 3271,
+   "side": "near",
+   "radar": {
+    "value": 91,
+    "unit": "mph",
+    "frame": 3423
+   },
+   "note": "Alcaraz; closeup cuts to main camera at 3243 mid-toss, contact seen in main camera"
+  },
+  {
+   "lo": 5811,
+   "hi": 5812,
+   "side": "near",
+   "radar": {
+    "value": 91,
+    "unit": "mph",
+    "frame": 6022
+   },
+   "note": "Alcaraz; ball streak at 5812 is short (contact late in 5812 exposure)"
+  },
+  {
+   "lo": 7414,
+   "hi": 7415,
+   "side": "far",
+   "radar": null,
+   "note": "Alcaraz far; clean; board reads 112 mph before and after (no change, so no attributable reading)"
+  },
+  {
+   "lo": 10343,
+   "hi": 10344,
+   "side": "far",
+   "radar": {
+    "value": 92,
+    "unit": "mph",
+    "frame": 10493
+   },
+   "note": "Sinner far; clean"
+  },
+  {
+   "lo": 11789,
+   "hi": 11790,
+   "side": "near",
+   "radar": {
+    "value": 97,
+    "unit": "mph",
+    "frame": 12000
+   },
+   "note": "Alcaraz; clean"
+  },
+  {
+   "lo": 12568,
+   "hi": 12569,
+   "side": "near",
+   "radar": {
+    "value": 99,
+    "unit": "mph",
+    "frame": 12779
+   },
+   "note": "Alcaraz; clean"
+  },
+  {
+   "lo": 14190,
+   "hi": 14191,
+   "side": "near",
+   "radar": {
+    "value": 115,
+    "unit": "mph",
+    "frame": 14400
+   },
+   "note": "Alcaraz; closeup shows the toss earlier, main camera from 14160"
+  },
+  {
+   "lo": 15843,
+   "hi": 15844,
+   "side": "near",
+   "radar": {
+    "value": 122,
+    "unit": "mph",
+    "frame": 15994
+   },
+   "note": "Sinner; clean"
+  },
+  {
+   "lo": 16729,
+   "hi": 16730,
+   "side": "far",
+   "radar": {
+    "value": 88,
+    "unit": "mph",
+    "frame": 16879
+   },
+   "note": "Sinner far; ball round at 16729, no longer visible at 16730 (blur); contact slightly less certain"
+  },
+  {
+   "lo": 17903,
+   "hi": 17904,
+   "side": "near",
+   "radar": {
+    "value": 117,
+    "unit": "mph",
+    "frame": 18053
+   },
+   "note": "Alcaraz; clean"
+  },
+  {
+   "lo": 18779,
+   "hi": 18780,
+   "side": "near",
+   "radar": {
+    "value": 85,
+    "unit": "mph",
+    "frame": 18929
+   },
+   "note": "Sinner; clean"
+  },
+  {
+   "lo": 19823,
+   "hi": 19824,
+   "side": "near",
+   "radar": {
+    "value": 121,
+    "unit": "mph",
+    "frame": 20033
+   },
+   "note": "Sinner; clean"
+  },
+  {
+   "lo": 21426,
+   "hi": 21428,
+   "side": "near",
+   "radar": {
+    "value": 132,
+    "unit": "mph",
+    "frame": 21637
+   },
+   "note": "Alcaraz; ball hidden by racket blur at 21427, bracket widened to 3 frames"
+  },
+  {
+   "lo": 23099,
+   "hi": 23100,
+   "side": "near",
+   "radar": {
+    "value": 111,
+    "unit": "mph",
+    "frame": 23309
+   },
+   "note": "Alcaraz; clean"
+  },
+  {
+   "lo": 25425,
+   "hi": 25427,
+   "side": "far",
+   "radar": {
+    "value": 104,
+    "unit": "mph",
+    "frame": 25576
+   },
+   "note": "Sinner far; ball hidden at 25426 (racket at ball position), bracket widened to 3 frames"
+  },
+  {
+   "lo": 26450,
+   "hi": 26451,
+   "side": "far",
+   "radar": {
+    "value": 103,
+    "unit": "mph",
+    "frame": 26600
+   },
+   "note": "Alcaraz far; streak at 26451 faint (blur); main camera from 26400 after closeup"
+  },
+  {
+   "lo": 27318,
+   "hi": 27319,
+   "side": "near",
+   "radar": {
+    "value": 122,
+    "unit": "mph",
+    "frame": 27468
+   },
+   "note": "Sinner; clean"
+  },
+  {
+   "lo": 29304,
+   "hi": 29305,
+   "side": "near",
+   "radar": {
+    "value": 115,
+    "unit": "mph",
+    "frame": 29454
+   },
+   "note": "Alcaraz; very late contact: ball hangs near apex 29269-29290 then falls, struck at 29304/29305 (not at ~29293)"
+  },
+  {
+   "lo": 29932,
+   "hi": 29933,
+   "side": "near",
+   "radar": {
+    "value": 94,
+    "unit": "mph",
+    "frame": 30082
+   },
+   "note": "Alcaraz; clean"
+  },
+  {
+   "lo": 30692,
+   "hi": 30693,
+   "side": "near",
+   "radar": {
+    "value": 131,
+    "unit": "mph",
+    "frame": 30842
+   },
+   "note": "Alcaraz; first streak at 30693 is faint/low contrast"
+  }
+ ]
+}

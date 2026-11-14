@@ -130,6 +130,12 @@ SERVE_T_SIGMA_FRAMES = 0.5
 SERVE_XY_SIGMA_M = 0.5
 
 
+# A contact hidden in a detection gap (``contact_in_gap``): on development serves bracketed by eye the
+# toss/struck line meeting came out 0-1 frame after the contact; with a prior as wide as the gap
+# (sd gap/sqrt(12)) the fit drifted about a frame later still (docs/EVAL_SERVE_CONTACT.md).
+GAP_T_SIGMA_FRAMES = 1.0
+
+
 RALLY_MAX_CONTACT_M = 3.25
 
 
@@ -258,14 +264,17 @@ def build_flights(ball: BallTrack, hits: list[Hit], calib: list[FrameCalibration
                 if e - s < min_points:
                     continue
                 fl = _fit_one(ball, calib, fps, players, s, e, opener.side if opener else None, ender, S, frame_w,
-                              min_points, pixel_sigma, dead_ball_s, serve=bool(opener and opener.serve))
+                              min_points, pixel_sigma, dead_ball_s, serve=bool(opener and opener.serve),
+                              contact_px=opener.px if opener is not None else None,
+                              contact_sub=opener.contact_sub if opener is not None else None)
                 flights.append(fl)
     return flights
 
 
 def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players: dict[str, PlayerTrack],
              s: int, e: int, hitter: str | None, ender: str | None, seg_start: int, frame_w: int,
-             min_points: int, pixel_sigma: float, dead_ball_s: float, serve: bool = False) -> Flight:
+             min_points: int, pixel_sigma: float, dead_ball_s: float, serve: bool = False,
+             contact_px: np.ndarray | None = None, contact_sub: float | None = None) -> Flight:
     leading = hitter is None
     if hitter is None:  # leading flight: infer the hitter from the travel direction
         ys = ball.xy[s:e, 1]
@@ -299,12 +308,16 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
     feet = players[hitter].world[s] if hitter in players else np.full(2, np.nan)
     cam = calib[s].camera
     h_contact = None
+    # A contact hidden in a detection gap has no detection: use where the toss and struck lines meet.
+    px_contact = contact_px if contact_sub is not None and contact_px is not None else ball.xy[s]
     if (serve and start_anchor is not None and cam is not None and np.all(np.isfinite(feet))
-            and np.all(np.isfinite(ball.xy[s]))):
+            and np.all(np.isfinite(px_contact))):
         # The serve contact is seen directly (end of the toss): measure its height on the camera ray above
         # the server and pin the fit to it, instead of extrapolating back from the first flight frames.
-        h_contact = cam.height_above(ball.xy[s], feet)
-        start_anchor = replace(start_anchor, t_sigma=SERVE_T_SIGMA_FRAMES / fps, sigma_x=SERVE_XY_SIGMA_M,
+        h_contact = cam.height_above(px_contact, feet)
+        t_c, t_sd = (start_anchor.t, SERVE_T_SIGMA_FRAMES) if contact_sub is None else (contact_sub / fps,
+                                                                                       GAP_T_SIGMA_FRAMES)
+        start_anchor = replace(start_anchor, t=t_c, t_sigma=t_sd / fps, sigma_x=SERVE_XY_SIGMA_M,
                                sigma_y=SERVE_XY_SIGMA_M, z_min=h_contact - SERVE_CONTACT_TOL_M,
                                z_max=h_contact + SERVE_CONTACT_TOL_M)
     if start_anchor is not None:

@@ -120,3 +120,24 @@ def test_a_board_update_with_an_unknown_time_is_not_paired():
     out = check(scan, [Serve(3, 16.5, "far", 190.0)])
     assert out["serve_speed"]["pairs"] == []
     assert [u["reason"] for u in out["serve_speed"]["unmatched_updates"]] == ["timing"]
+
+
+def test_a_value_seen_briefly_between_two_sightings_of_the_same_value_is_not_an_update():
+    # US Open 2025 final, 150-704 s, cached readings (frame, mph) at 59.94 fps. The board showed 112 mph
+    # throughout (checked by eye); Vision read "122MPН" at confidence 0.3 in two samples.
+    fps = 59.94
+    seq = [SpeedReading(f, f / fps, v) for f, v in
+           [(7500, 112), (7530, 112), (7560, 112), (7590, 112), (7620, 112), (7680, 122), (7710, 122), (7800, 112),
+            (7830, 112)]]
+    assert [(u.previous, u.value) for u in speed_updates(seq)] == [(None, 112)]
+    # A real change 130 -> 91, then a close-up that shows an old 130 for one second before 91 again,
+    # then the next serve's 112: the stale 130 goes, the real change and the next update stay.
+    seq = [SpeedReading(f, f / fps, v) for f, v in
+           [(5820, 130), (5880, 130), (5970, 91), (6030, 91), (6090, 91), (6240, 91), (6480, 130), (6510, 130),
+            (6540, 91), (6570, 91), (6600, 91), (6630, 112), (6660, 112)]]
+    ups = speed_updates(seq)
+    assert [(u.previous, u.value) for u in ups] == [(None, 130), (130, 91), (91, 112)]
+    assert ups[2].t_before == 6600 / fps  # the last sighting of 91 before 112
+    # Back to the old value only after longer than two serves could take: both changes are kept.
+    seq = [SpeedReading(i, i * 0.5, v) for i, v in enumerate([125] * 3 + [93] * 12 + [125] * 3)]
+    assert [(u.previous, u.value) for u in speed_updates(seq)] == [(None, 125), (125, 93), (93, 125)]

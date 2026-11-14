@@ -322,6 +322,22 @@ serves: mean |error| 7.0 % (v3 3.9 %): four serves within 0.4 point of v3's, but
 that v3 had brought to −0.4 % is back at −16.5 % (v1 −18.7 %). Together with games 8–10, the
 independent checks do not show v4 better than v3; they were not part of its rule.
 
+**v3 vs v4 on serves, decided on unused footage (2026-11-14, [EVAL_SERVE_CONTACT.md](EVAL_SERVE_CONTACT.md)).**
+The radar gap above came from one serve: v4 missed the ball from the end of the toss until well after
+the contact, so the contact was put on the last toss frame, about ten frames early. A change that puts
+such a hidden contact inside the detection gap was tested, with v3 against v4, on 554 s of the 2025 final
+nothing had been run on, against 23 serve contacts bracketed by eye by a separate labeller (rules
+committed before any output existed). The change was **accepted** (paired mean contact error v3 1.49 →
+0.53 frames, v4 2.08 → 0.18; good serves 4 → 6 for both; 3 serves moved, none got worse), and **v4 stays
+the default**: with the change both nets have 6 good serves. Re-run with the change on the five radar
+clips (`runs/<id>_v4`, `_v3`; no call changes): the QF serve moves from −16.5 % to +11.7 % (v4) and from
+−0.4 % to +14.6 % (v3), so radar mean |error| is now 6.0 % for v4 and 6.7 % for v3 on the same 5 serves;
+correct contact timing does not make that serve's speed right. The test also measured **serve recall:
+6 of 23 for either net**. Most near-side serves are never split from their toss, because the ball net
+loses the nearly still ball at the toss apex for 0.2 s and the struck ball (flying away from the camera)
+is slow enough in the image to pass for the toss; that is a detector problem, not a ball-net one, and the
+next thing to fix.
+
 ## SEKME court network
 
 A 5-level U-Net (`src/courtvision/models/court_unet.py`; 32-64-128-256-256 channels, 22×40 bottleneck)

@@ -15,6 +15,9 @@ import numpy as np
 # Matching windows in seconds: 0.1 s is the TrackNet bounce tolerance (3 frames at 30 fps); a serve is
 # matched as in the Review Room's serve labels (SERVE_TOL_S in courtvision.api.app).
 TOL_S = {"bounce": 0.1, "stroke": 0.1, "serve": 0.5, "serve_toss": 0.5}
+# A serve the system finds before a labelled serve of the same side, in the same clip and within this time,
+# is most likely a fault the labels leave out: precision is also given without such serves (EVAL_SPOT.md).
+FAULT_WINDOW_S = 30.0
 SWEEP_S = (0.05, 0.1, 0.2)  # descriptive only: bounce and stroke recall at other windows
 
 
@@ -107,6 +110,11 @@ def score_clip(clip: dict, report: dict | None) -> dict:
                "dt": [sys[j].frame - ref[i].frame for i, j in pairs]}
         if kind in ("bounce", "stroke"):
             row["sweep"] = {f"{t:g}": len(match_events(ref, sys, t * fps)) for t in SWEEP_S}
+        if kind in ("serve", "serve_toss"):
+            used = {j for _, j in pairs}
+            row["before_label"] = sum(
+                j not in used and any(r.side == e.side and 0 < r.frame - e.frame <= FAULT_WINDOW_S * fps for r in ref)
+                for j, e in enumerate(sys))
         if kind == "bounce":
             first = first_bounce_flags(ref_all)
             hit = {i for i, _ in pairs}
@@ -139,6 +147,10 @@ def summary(rows: list[dict]) -> dict:
         if rows and "sweep" in rows[0][kind]:
             s["recall_sweep"] = {t: ratio(sum(r[kind]["sweep"][t] for r in rows), n_ref)
                                  for t in rows[0][kind]["sweep"]}
+        if kind in ("serve", "serve_toss"):
+            before = sum(r[kind].get("before_label", 0) for r in rows)
+            s["before_label"] = before
+            s["precision_excl_faults"] = ratio(m, n_sys - before)
         if kind == "bounce":
             fl = sum(r[kind]["first_labelled"] for r in rows)
             s["first_recall"] = ratio(sum(r[kind]["first_matched"] for r in rows), fl)

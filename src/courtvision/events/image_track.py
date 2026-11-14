@@ -50,6 +50,29 @@ def refine_contact(frames: np.ndarray, xy: np.ndarray, contact: int, max_back: i
     return contact
 
 
+def contact_in_gap(frames: np.ndarray, xy: np.ndarray, contact: int, min_gap: int = 2,
+                   jump: float = 2.0) -> tuple[float, np.ndarray] | None:
+    """Serve contact hidden in a detection gap right after the last toss detection ``contact``.
+
+    The changepoint can only split on a detected frame; when the racket and the backdrop hide the ball
+    from the end of the toss until it is well on its way (2025 QF serve, frames 8881-8889 missed), the
+    split lands on the last toss frame and the contact comes out early. If the next detection is at least
+    ``min_gap`` frames later and the ball covers the gap ``jump`` times faster than the toss moved, the
+    contact is where the toss line meets the struck line, inside the gap. Returns (sub-frame contact,
+    image point) or None.
+    """
+    frames = np.asarray(frames)
+    c = int(np.searchsorted(frames, contact))
+    if c < 1 or c + 2 >= len(frames) or frames[c] != contact or frames[c + 1] - frames[c] < min_gap:
+        return None
+    toss = np.linalg.norm(xy[c] - xy[c - 1]) / (frames[c] - frames[c - 1])
+    across = np.linalg.norm(xy[c + 1] - xy[c]) / (frames[c + 1] - frames[c])
+    if across < jump * max(toss, 1e-6):
+        return None
+    f, p = kink_point(frames[c - 1:c + 1], xy[c - 1:c + 1], frames[c + 1:c + 3], xy[c + 1:c + 3])
+    return f, p
+
+
 def kink_point(f_pre: np.ndarray, p_pre: np.ndarray, f_post: np.ndarray,
                p_post: np.ndarray) -> tuple[float, np.ndarray]:
     """Where the image line through two samples before an event meets the line through two after it.

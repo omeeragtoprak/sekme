@@ -68,3 +68,16 @@ def test_failed_clip_counts_as_all_missed_and_matches_are_kept_apart() -> None:
     assert s["failed"] == 1 and s["bounce"]["recall"] == 2 / 6 and s["calibrated_share"] == 0.9
     pm = per_match(rows)
     assert pm["a"]["bounce"]["recall"] == 2 / 3 and pm["b"]["bounce"]["recall"] == 0.0
+
+
+def test_a_system_serve_before_a_labelled_serve_of_the_same_side_is_set_apart_as_a_likely_fault() -> None:
+    clip = {"video": "m_0_1000", "fps": 25.0, "num_frames": 1000,
+            "events": [{"label": "far_court_serve", "frame": 400, "comment": ""}]}
+    rep = {"hits": [], "calibration": {"valid_frames": 1000},
+           "flights": [{"kind": "serve", "hitter": "far", "contact_frame": 100.0, "start_frame": 100},  # 12 s before
+                       {"kind": "serve", "hitter": "far", "contact_frame": 401.0, "start_frame": 401},
+                       {"kind": "serve", "hitter": "near", "contact_frame": 300.0, "start_frame": 300}]}  # other side
+    row = score_clip(clip, rep)
+    assert row["serve"]["matched"] == 1 and row["serve"]["before_label"] == 1
+    s = summary([row])["serve"]
+    assert s["precision"] == 1 / 3 and s["precision_excl_faults"] == 1 / 2 and s["before_label"] == 1

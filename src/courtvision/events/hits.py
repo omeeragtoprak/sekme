@@ -21,6 +21,7 @@ class Hit:
     near_player: bool  # ball was next to that player's box
     serve: bool = False  # a toss above this player preceded the contact
     toss_start: int | None = None  # first toss frame (serves only); the point starts here
+    contact_sub: float | None = None  # serves: sub-frame contact estimated inside a detection gap
 
 
 def _smooth(y: np.ndarray, win: int = 3) -> np.ndarray:

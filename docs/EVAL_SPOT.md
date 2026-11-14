@@ -82,3 +82,66 @@ generalise.
    TrackNet games 8–10, and a further change needs other matches.
 4. A test result that rejects a candidate is final for it; its code is removed and the result stays
    documented.
+
+## Candidate 1: toss bridge in the serve detector (rule written 2026-11-14, before any E2E-Spot download)
+
+**Change** (`sekme analyze --toss-bridge`, `serves.TOSS_BRIDGE_S = 0.3`; off by default): two toss runs
+separated only by missed frames, at most 0.3 s of them, are joined when the ball rises into the gap and
+falls out of it (the gap holds the apex); the serve contact is searched over the whole run, with the
+toss checks on the detections before it (vertical travel counted as rise plus fall) and the direction
+check on those after it. Two refinements were made on the same development footage before this rule
+was written: the apex condition (a first version joined any gap and lost a far serve whose struck ball
+was missed right after the contact) and the rise-plus-fall measure (a bridged toss drifting 36 px
+sideways failed the old range-based check, US Open 2024 final serve 1409).
+
+**Why** (development data only, `docs/EVAL_SERVE_CONTACT.md`): on the US Open 2025 final (150–704 s,
+60 fps) the pipeline found 6 of 23 eye-labelled serves and missed 15 (v4) of the 18 near-side ones. On
+those the ball net loses the nearly still ball at the toss apex for 11–15 frames (the toss splits in
+two), and the struck ball, flying away from the camera, moves only 0.05–0.08 player heights per frame,
+so it passes the toss gates and stretches the second run past the contact.
+
+**Development check, full pipeline, ball v4** (`runs/<id>_v4_bridge` vs `runs/<id>_v4`):
+
+| Clip (60 fps unless noted) | Serves | Calls (OUT) | By eye |
+|---|---|---|---|
+| 2025 final 150–704 s | 7 → 22; labelled 6 → 21 of 23, all within 2 frames | 123 → 136 (2 → 2) | the extra serve (13748) is real, filmed by a low camera the labels leave out; the mid-rally false serve (9572) is gone; 3 lost calls were the serve contact taken as a bounce, 13 gained are serve bounces in the service boxes, 5 gained rally calls unchecked |
+| 2025 QF | 4 → 4 | 75 → 76 (0 → 0) | +8017 (real), 3689 → 3662 (same serve, contact 27 frames late before), −9388 (the far player still bouncing the ball) |
+| 2024 final | 4 → 5 | 66 → 65 (0 → 0) | +5423 (real); two false serves split at a toss apex (1378, 3586) are no longer serve hits |
+| 2025 final 60–150 s | 1 → 2 | 22 → 23 (0 → 0) | +4679 (real) |
+| 2023 final, both clips (30 fps) | 2 → 2, 2 → 2 | no change | — |
+
+That footage now counts as development data for this candidate; it says little about 25–30 fps video,
+where the struck ball moves twice as far per frame.
+
+**Rule for its single run on the four test matches.** Measures from `courtvision.eval.spot` /
+`scripts/eval_spot.py score` (pooled over the test clips, and per match). The candidate is accepted
+only if all hold:
+
+1. **Serve recall** (flight serves matched within 0.5 s, in percentage points) rises by at least
+   min(10, half of the baseline's missed share), e.g. 10 points from a baseline of 60 %, 5 points from
+   90 %; and in **every** test match it is strictly higher than the baseline's (at least one more
+   labelled serve matched). Matched counts are reported with the percentages.
+2. **Serve precision without likely faults** (`precision_excl_faults`: a system serve with no label but a
+   labelled serve of the same side later in the same clip within 30 s is set apart, since the labels
+   carry fewer serves than clips and probably leave faults out) falls by no more than 5 points. Plain
+   precision is reported, not used.
+3. **Pooled first-bounce recall** and **pooled bounce precision** each fall by no more than 1 point.
+
+Otherwise it is rejected, its code is removed and the result stays here.
+
+**How it is run.** `eval_spot.py run --candidate-flag toss-bridge`: on each clip the candidate is
+analysed right after the baseline, from the baseline's cached detections of the same clip file, before
+the clip is deleted, so the two runs differ only by the candidate's code path. The dev matches are run
+first; any change to the candidate after seeing them is written here, with its reason, before the test
+matches are run, and the test pass uses the commit recorded in its results' provenance.
+
+**Notes.** This candidate targets serves, so its primary measure is serve recall, not first-bounce
+recall as in rule 2's template; first bounces are a guard. The bridge is 0.3 s (8 frames at 25 fps, 9
+at 30); the 2-frame run gap and the 3-frame contact window stay in frames as in the default detector.
+With the bridge, the vertical check counts rise plus fall for every toss run, bridged or not. The
+"slow struck ball" cause may matter less at 25–30 fps (twice the image motion per frame), so the gain
+there may be smaller than on the development clip; the margin in rule 1 shrinks with the baseline's
+headroom for that reason. **Serve speed is not part of the rule:** on the development clip the newly
+found serves' fitted speeds are worse (mean |error| against the eye-read board 9.6 % on 5 serves → 14.9 %
+on 20); if accepted, near-side serve speeds are reported with that caveat until a speed check passes.
+This is the first of the two candidates the test matches allow (rule 3).

@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 def _analyze(args: argparse.Namespace) -> int:
+    from courtvision.events.serves import TOSS_BRIDGE_S
     from courtvision.pipeline import PipelineConfig, analyze
 
     out = Path(args.out or Path("runs") / Path(args.video).stem)
@@ -18,7 +19,8 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"\r[{time.time() - t0:6.1f}s] {stage:<10s} {100 * frac:5.1f}%", end="", file=sys.stderr, flush=True)
 
     cfg = PipelineConfig(device=args.device, render=not args.no_render, reuse_perception=args.reuse_perception,
-                         broadcast=not args.no_broadcast, ball_stride=args.ball_stride)
+                         broadcast=not args.no_broadcast, ball_stride=args.ball_stride,
+                         serve_toss_bridge_s=TOSS_BRIDGE_S if args.toss_bridge else 0.0)
     if args.ball_model:
         cfg.models["ball"] = str(Path(args.ball_model).resolve())
     for item in args.model:
@@ -84,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--reuse-perception", action="store_true", help="reuse cached detections from a previous run")
     a.add_argument("--ball-model", help="ball network checkpoint (SEKME U-Net or WASB); default from the model cards")
     a.add_argument("--ball-stride", type=int, default=0, help="frames between the ball network's inputs (0: auto)")
+    a.add_argument("--toss-bridge", action="store_true",
+                   help="candidate serve detector: bridge a missed toss apex (off by default, docs/EVAL_SPOT.md)")
     a.add_argument("--model", action="append", default=[], metavar="KEY=PATH",
                    help="override a network checkpoint: court, ball, players or pose (repeatable)")
     a.set_defaults(fn=_analyze)

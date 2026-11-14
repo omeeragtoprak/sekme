@@ -122,11 +122,12 @@ calibrated, 22 calls on 43 shots (ball v3: 26 on 42).
 
 **Radar** ([results/radar.txt](results/radar.txt); 5 official US Open clips, pairs kept only when the board
 change is timed to ≤ 4 s). With the current defaults (ball v4): 5 serves, +5.2, +8.1, −2.2, −3.0,
-−16.5 % → mean −1.7 % (SE 4.3), mean |error| 7.0 %. The outlier is the fast 60 fps serve: −16.5 % with
-v4, −0.4 % with ball v3, −18.7 % with v1 and −8.9 % with WASB; v3's five serves gave mean |error|
-3.9 %, v1's six 7.7 %, WASB 4.9 %. One serve that v1 recognised in the 2025 final is recognised by
-neither v3 nor v4 (toss and serve merged into one flight). Five serves are too few for a bias claim
-either way.
++11.7 % → mean +4.0 % (SE 2.9), mean |error| 6.0 % (ball v3: 6.7 %). The largest error is a fast 60 fps
+serve whose contact v4 used to put ten frames early (−16.5 %); with the contact now found inside the
+detection gap it is timed correctly and measured 11.7 % fast. Five serves are too few for a bias claim
+either way. **Serve contact timing** was tested separately, on 554 s of unused footage against 23 serve
+contacts bracketed by eye: every serve the pipeline found has its contact within 2 frames at 60 fps
+([EVAL_SERVE_CONTACT.md](docs/EVAL_SERVE_CONTACT.md)).
 
 ## Quick start
 
@@ -177,9 +178,14 @@ promo/             HyperFrames promo film (footage not included)
 - The SEKME ball network still misses some of the most motion-blurred balls right after a serve
   (one of three serves on the 2023 final clip). It was trained at 30 fps and is fed every second
   frame on 60 fps footage. Trained on 7 matches only: more data is the obvious next step.
-- Serve recognition on broadcast clips is not measured against labels: with ball v4 it finds 13 serves
-  on the five US Open clips (v3 11, v1 13). The cause is not established; a change to the dead-ball
-  check was tried and rejected ([details](docs/EVAL_TRACKNET.md)). The Review Room's *Servis etiketi*
+- **Serve recall is low.** On 554 s of unused US Open 2025 final footage the pipeline finds 6 of the 23
+  serves shown from the main camera (either ball net), 3–4 of the 18 near-side ones: the ball net loses
+  the nearly still ball at the toss apex, and a near-side serve's struck ball is slow in the image, so
+  toss and serve stay one flight ([details](docs/EVAL_SERVE_CONTACT.md)). A candidate fix
+  (`--toss-bridge`, off by default) finds 21 of those 23 serves, but that footage is now development data:
+  it becomes the default only if it passes a rule written for unused matches ([docs/EVAL_SPOT.md](docs/EVAL_SPOT.md)).
+  A change to the dead-ball check
+  was tried and rejected earlier ([details](docs/EVAL_TRACKNET.md)). The Review Room's *Servis etiketi*
   section measures serve recall (and, once every serve is marked, precision) on your own footage
   ([labelling guide, Turkish](docs/ETIKETLEME_TR.md)).
 - Ball footprint is a fixed 2 cm half-length; point/score inference from play is not implemented (the

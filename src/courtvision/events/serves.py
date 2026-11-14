@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 
 from courtvision.events.hits import Hit
-from courtvision.events.image_track import changepoint, refine_contact
+from courtvision.events.image_track import changepoint, contact_in_gap, refine_contact
 from courtvision.perception.ball import BallTrack
 from courtvision.perception.players import PlayerTrack
 
@@ -29,14 +29,23 @@ TOSS_MAX_SPEED = 0.15  # box heights per frame; a struck ball is faster
 SERVER_ABS_Y = (10.9, 13.5)  # server's feet on, or up to ~1.6 m behind, the baseline (m)
 
 
+# Candidate, off by default (docs/EVAL_SPOT.md, candidate 1): the ball net loses the nearly still ball at the
+# toss apex for 0.18-0.25 s (US Open 2025 final, near serves), which splits the toss into two runs.
+TOSS_BRIDGE_S = 0.3
+
+
 def _box_near(track: PlayerTrack, i: int, win: int = 5) -> np.ndarray | None:
     b = track.boxes[max(0, i - win):i + win + 1]
     b = b[np.isfinite(b).all(axis=1)]
     return np.median(b, axis=0) if len(b) else None
 
 
-def _toss_runs(ball: BallTrack, track: PlayerTrack, s: int, e: int) -> list[tuple[int, int]]:
-    """Runs of >= 3 detections that are slow and above the player's shoulders (gaps up to 2 frames)."""
+def _toss_runs(ball: BallTrack, track: PlayerTrack, s: int, e: int, bridge: int = 0) -> list[tuple[int, int]]:
+    """Runs of >= 3 detections that are slow and above the player's shoulders (gaps up to 2 frames).
+
+    ``bridge`` > 0 (candidate): two runs separated only by missed frames, at most ``bridge`` of them, are
+    joined when the ball rises into the gap and falls out of it, i.e. the gap holds the toss apex.
+    """
     runs: list[tuple[int, int]] = []
     run: list[int] = []
     for i in range(s, e):
@@ -61,23 +70,67 @@ def _toss_runs(ball: BallTrack, track: PlayerTrack, s: int, e: int) -> list[tupl
             run = []
     if run:
         runs.append((run[0], run[-1]))
+    if bridge > 0:
+        runs = _bridge_apex(ball, runs, bridge)
     return [(a, b) for a, b in runs if np.sum(ball.source[a:b + 1] == 1) >= 3]
 
 
+def _y_slope(ball: BallTrack, frames: np.ndarray) -> float:
+    """Image-y velocity (px per frame) by least squares; nan with fewer than two detections."""
+    if len(frames) < 2:
+        return float("nan")
+    return float(np.polyfit(frames, ball.xy[frames, 1], 1)[0])
+
+
+def _bridge_apex(ball: BallTrack, runs: list[tuple[int, int]], bridge: int) -> list[tuple[int, int]]:
+    """Join consecutive toss runs across a gap of missed frames that holds the apex (up before, down after)."""
+    out: list[tuple[int, int]] = []
+    for a, b in runs:
+        if out:
+            pa, pb = out[-1]
+            before = np.flatnonzero(ball.source[pa:pb + 1] == 1)[-3:] + pa
+            after = np.flatnonzero(ball.source[a:b + 1] == 1)[:3] + a
+            if (a - pb - 1 <= bridge and not np.any(ball.source[pb + 1:a] == 1)
+                    and _y_slope(ball, before) < 0 < _y_slope(ball, after)):
+                out[-1] = (pa, b)
+                continue
+        out.append((a, b))
+    return out
+
+
 def detect_serves(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
-                  segments: list[tuple[int, int]], dead_ball_s: float = 1.0) -> list[Hit]:
-    """Serve contacts: a toss above a baseline player after a dead ball, then a strike towards the opponent."""
+                  segments: list[tuple[int, int]], dead_ball_s: float = 1.0, bridge_s: float = 0.0) -> list[Hit]:
+    """Serve contacts: a toss above a baseline player after a dead ball, then a strike towards the opponent.
+
+    ``bridge_s`` > 0 is a candidate (off by default): a toss may span a missed apex up to that long, and
+    the contact is searched over the whole run, because a near server's struck ball flies away from the
+    camera and can be slow enough in the image to pass the toss gates for a few frames. The toss checks
+    then use the detections up to the contact, the direction check those after it.
+    """
+    bridge = int(round(bridge_s * fps))
     serves: list[Hit] = []
     for S, E in segments:
         for side, track in players.items():
-            for a, b in _toss_runs(ball, track, S, E):
+            for a, b in _toss_runs(ball, track, S, E, bridge):
                 box = _box_near(track, a)
                 if box is None:
                     continue
                 h = box[3] - box[1]
-                det = np.flatnonzero(ball.source[a:b + 1] == 1) + a
+                win = np.arange(a, min(E, b + int(0.3 * fps) + 1))
+                win = win[ball.source[win] == 1]
+                split = None
+                if bridge_s > 0:
+                    k, _ = changepoint(win / fps, ball.xy[win], win <= b + 3)
+                    if k is None:
+                        continue
+                    split = int(win[k])
+                    det = win[win <= split]
+                else:
+                    det = np.flatnonzero(ball.source[a:b + 1] == 1) + a
                 tx, ty = ball.xy[det, 0], ball.xy[det, 1]
-                if ty.min() > box[1] - TOSS_APEX * h or np.ptp(tx) > max(0.5 * np.ptp(ty), 0.1 * h):
+                # Vertical travel: a whole toss (bridged) goes up and down, so count the rise and the fall.
+                vert = (ty[0] - ty.min()) + (ty[-1] - ty.min()) if split is not None else np.ptp(ty)
+                if ty.min() > box[1] - TOSS_APEX * h or np.ptp(tx) > max(0.5 * vert, 0.1 * h):
                     continue  # not high enough above the head, or not a near-vertical toss
                 feet = track.world[a:b + 1]
                 feet = feet[np.isfinite(feet).all(axis=1)]
@@ -94,20 +147,29 @@ def detect_serves(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
                                            & (ball.xy[pre, 1] >= reach[1]) & (ball.xy[pre, 1] <= reach[3])):
                     continue
                 # Contact: changepoint between the toss parabola and the struck flight.
-                win = np.arange(a, min(E, b + int(0.3 * fps) + 1))
-                win = win[ball.source[win] == 1]
-                after = win[win > b]
-                if len(after) < 3:
-                    continue
-                allowed = (win >= b - 2) & (win <= b + 3)
-                k, _ = changepoint(win / fps, ball.xy[win], allowed)
-                contact = int(win[k]) if k is not None else b
-                contact = refine_contact(win, ball.xy[win], contact)
+                if split is None:
+                    after = win[win > b]
+                    if len(after) < 3:
+                        continue
+                    allowed = (win >= b - 2) & (win <= b + 3)
+                    k, _ = changepoint(win / fps, ball.xy[win], allowed)
+                    contact = int(win[k]) if k is not None else b
+                else:
+                    after = win[win > split]
+                    if len(after) < 3:
+                        continue
+                    contact = split
+                gap = contact_in_gap(win, ball.xy[win], contact)
+                if gap is not None:
+                    contact, px, sub = int(round(gap[0])), gap[1], gap[0]
+                else:
+                    contact = refine_contact(win, ball.xy[win], contact)
+                    px, sub = ball.xy[contact].copy(), None
                 # Struck towards the opponent: far server sends it down the image, near server up.
                 dy = ball.xy[after[-1], 1] - ball.xy[after[0], 1]
                 if (dy > 0) != (side == "far"):
                     continue
-                serves.append(Hit(contact, side, ball.xy[contact].copy(), True, serve=True, toss_start=a))
+                serves.append(Hit(contact, side, px, True, serve=True, toss_start=a, contact_sub=sub))
     return sorted(serves, key=lambda h: h.frame)
 
 

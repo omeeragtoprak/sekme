@@ -55,6 +55,33 @@ def test_clips_start_and_end_on_their_labelled_frames(tmp_path: Path, monkeypatc
     eval_spot.run_match(src, clips, tmp_path / "runs", tmp_path / "tmp", keep=False)
     assert seen == {"m_0_20": (0, 19, 20), "m_50_80": (50, 79, 30), "m_70_90": (70, 89, 20)}  # overlap too
     assert not list((tmp_path / "tmp").glob("*.mp4"))  # clips are deleted once analysed
+    # The candidate runs right after the baseline, on the same clip file, from the baseline's cached
+    # detections; a clip whose baseline is already done is cut again for the candidate alone.
+    calls = []
+
+    def fake_analyse2(clip: Path, run: Path, extra: tuple[str, ...] = ()) -> None:
+        cap = cv2.VideoCapture(str(clip))
+        calls.append((run.parent.name, run.name, _read(cap.read()[1]), extra))
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "report.json").write_text("{}")
+        if not extra:
+            (run / "perception.pkl").write_bytes(b"cache")
+
+    monkeypatch.setattr(eval_spot, "analyse", fake_analyse2)
+    eval_spot.run_match(src, clips, tmp_path / "runs", tmp_path / "tmp", keep=False,
+                        cand=(tmp_path / "cand", ["toss-bridge"]))
+    # Baselines done above left no cached detections: the candidate is recorded as failed, not re-detected.
+    assert calls == [] and all((tmp_path / "cand" / c["video"] / "FAILED.txt").exists() for c in clips)
+    eval_spot.run_match(src, clips[1:], tmp_path / "runs2", tmp_path / "tmp", keep=False,
+                        cand=(tmp_path / "cand2", ["toss-bridge"]))
+    assert calls == [("runs2", "m_50_80", 50, ()), ("cand2", "m_50_80", 50, ("--reuse-perception", "--toss-bridge")),
+                     ("runs2", "m_70_90", 70, ()), ("cand2", "m_70_90", 70, ("--reuse-perception", "--toss-bridge"))]
+    assert (tmp_path / "cand2" / "m_70_90" / "perception.pkl").read_bytes() == b"cache"
+    calls.clear()  # baseline done, candidate missing: the clip is cut again for the candidate alone
+    (tmp_path / "cand2" / "m_50_80" / "report.json").unlink()
+    eval_spot.run_match(src, clips[1:], tmp_path / "runs2", tmp_path / "tmp", keep=False,
+                        cand=(tmp_path / "cand2", ["toss-bridge"]))
+    assert calls == [("cand2", "m_50_80", 50, ("--reuse-perception", "--toss-bridge"))]
     with pytest.raises(SystemExit, match="ended at frame 130"):
         eval_spot.run_match(src, [{"video": "m_120_140", "fps": fps, "num_frames": 20}], tmp_path / "r2",
                             tmp_path / "tmp", keep=False)
