@@ -94,8 +94,8 @@ steps: the timeline used to rebuild its ~600 markers on every frame (54.7 ms med
 build); it now builds them once per run, selection and zoom (3.9 ms). Opening the run takes about 2 s (warm):
 the 4.8 MB frame file parses in 11 ms; the panels' React rendering is ~2.2 s in the development build (a few
 times less in production); a layout pass over ~4 500 elements (~0.4 s) and a forced reflow (~0.4 s) account for
-much of the rest. Not changed further, since the remaining cost could not be attributed precisely; the next
-steps would be fewer elements in the shot list (rendering only the visible rows) and finding the forced reflow.
+much of the rest. (Both were taken up later the same day, below: the forced reflow came from the frame overlay,
+and off-screen shot rows are no longer rendered.)
 
 **Switching runs, attributed (2026-11-14, production and profiling builds, same clip).** On this machine under
 other load, identical switches to the 554 s run took 1–6 s until the shot list was painted, so wall-clock times
