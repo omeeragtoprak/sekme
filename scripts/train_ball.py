@@ -99,12 +99,20 @@ def motion_blur(img: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     return cv2.filter2D(img, -1, kernel / max(kernel.sum(), 1e-6))
 
 
+def sensor_noise(img: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Gaussian noise of a random strength (1 sigma 0.01-0.06, up to ~15/255), drawn anew for every frame: the grain
+    of low-light video. The ball network was trained on clean broadcast frames and loses the ball under such noise
+    (docs/ARCHITECTURE.md, "Light, blur and sensor noise")."""
+    sigma = float(rng.uniform(0.01, 0.06))
+    return np.clip(img + rng.normal(0.0, sigma, img.shape).astype(np.float32), 0.0, 1.0)
+
+
 class Windows(Dataset):
     """Every run of three consecutive labelled frames inside one clip."""
 
     def __init__(self, clip_dirs: list[Path], augment: bool, stride: int = 1, blur: float = 0.0,
-                 centred: bool = False) -> None:
-        self.augment, self.blur = augment, blur
+                 centred: bool = False, noise: float = 0.0) -> None:
+        self.augment, self.blur, self.noise = augment, blur, noise
         self.items = []
         for c in clip_dirs:
             names, pts = labels(c, centred)
@@ -129,6 +137,8 @@ class Windows(Dataset):
             if rng.random() < self.blur:
                 seed = int(rng.integers(1 << 30))  # the same smear on all three frames
                 imgs = [motion_blur(im, np.random.default_rng(seed)) for im in imgs]
+            if rng.random() < self.noise:  # off unless --noise: earlier networks were trained without it
+                imgs = [sensor_noise(im, rng) for im in imgs]
         x = np.concatenate([((im - MEAN) / STD).transpose(2, 0, 1) for im in imgs], axis=0)
         truth = torch.tensor([[-1.0, -1.0] if p is None else [p[0], p[1]] for p in pts])
         return torch.from_numpy(np.ascontiguousarray(x)), torch.from_numpy(disk_targets(pts)), truth
@@ -171,7 +181,8 @@ def validate(net: torch.nn.Module, loader: DataLoader, dev: torch.device, thr: f
     return detection_scores(pred, truth)
 
 
-RESUME_KEYS = ("epochs", "batch", "lr", "train_games", "blur", "centre_labels")
+RESUME_KEYS = ("epochs", "batch", "lr", "train_games", "blur", "centre_labels", "noise")
+RECIPE_DEFAULTS = {"noise": 0.0}  # a state written before a key existed was trained without it
 
 
 def state_path(out: Path) -> Path:
@@ -187,7 +198,7 @@ def atomic_save(obj: dict, path: Path) -> None:
 
 def recipe(args: dict, steps_per_epoch: int) -> dict:
     """What a resumed run must share with the stopped one (the schedule spans epochs x steps_per_epoch)."""
-    return {**{k: args[k] for k in RESUME_KEYS}, "steps_per_epoch": steps_per_epoch}
+    return {**{k: args.get(k, RECIPE_DEFAULTS.get(k)) for k in RESUME_KEYS}, "steps_per_epoch": steps_per_epoch}
 
 
 def save_state(path: Path, net: torch.nn.Module, opt: torch.optim.Optimizer, sched, *, epoch: int,
@@ -202,7 +213,7 @@ def load_state(path: Path, net: torch.nn.Module, opt: torch.optim.Optimizer, sch
                recipe: dict) -> tuple[int, float, int, list]:
     """Restore a run saved by save_state; refuses a state written with a different recipe."""
     s = torch.load(path, map_location="cpu", weights_only=False)
-    saved = s["args"]
+    saved = {**RECIPE_DEFAULTS, **s["args"]}
     # A state written before steps_per_epoch was recorded still has to match the rest of the recipe.
     if set(RESUME_KEYS) - set(saved) or any(saved[k] != recipe.get(k) for k in saved):
         raise SystemExit(f"{path} was written with {saved}, this run is {recipe}")
@@ -222,6 +233,8 @@ def main() -> None:
     ap.add_argument("--train-games", type=int, default=5, choices=range(1, 8),
                     help="train on games 1..N (6-7 select when N=5); games 8-10 are the test set")
     ap.add_argument("--blur", type=float, default=0.0, help="probability of motion-blur augmentation")
+    ap.add_argument("--noise", type=float, default=0.0,
+                    help="probability of sensor-noise augmentation (per window; off by default)")
     ap.add_argument("--centre-labels", action="store_true",
                     help="targets at the ball's image centre (labels minus LABEL_OFFSET, pixel-centre mapping)")
     ap.add_argument("--out", default=str(OUT))
@@ -247,8 +260,8 @@ def main() -> None:
     print(f"cache ready in {time.time() - t0:.0f} s; train {len(train_clips)} clips, select {len(val_clips)}",
           flush=True)
     c = args.centre_labels
-    train = DataLoader(Windows(train_clips, augment=True, blur=args.blur, centred=c), batch_size=args.batch,
-                       shuffle=True, num_workers=2, persistent_workers=True, drop_last=True)
+    train = DataLoader(Windows(train_clips, augment=True, blur=args.blur, centred=c, noise=args.noise),
+                       batch_size=args.batch, shuffle=True, num_workers=2, persistent_workers=True, drop_last=True)
     val = DataLoader(Windows(val_clips, augment=False, stride=4, centred=c), batch_size=16, num_workers=2,
                      persistent_workers=True)
     out = Path(args.out)

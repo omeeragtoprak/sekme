@@ -339,6 +339,9 @@ all three calls within 1 cm. Temporal noise (ffmpeg `noise`, strength 5 / 10 / 1
 no calls at all. The court still calibrates on every frame. The ball network was trained on clean broadcast frames
 with motion-blur augmentation but no noise augmentation, so grainy low-light phone video is its weak point; adding
 noise to the training data is the obvious next step for it (a new network would need its own selection and test).
+`scripts/train_ball.py --noise P` now adds it to a share P of the training windows (Gaussian, 1σ 0.01–0.06, drawn
+per frame; off by default, so earlier recipes are unchanged and their saved states still resume); no network has
+been trained with it yet.
 
 **A fresh clone.** The weights are not in the repository. A missing checkpoint used to end in a traceback from
 hashing it, after an empty run folder had been made; `analyze` now checks the four checkpoints first and stops with

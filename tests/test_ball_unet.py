@@ -131,3 +131,26 @@ def test_training_state_resumes_exactly_and_refuses_another_recipe(tmp_path):
     save_state(old, *fresh(), epoch=1, best=0.5, step=3, history=[],
                recipe={k: v for k, v in rec.items() if k != "steps_per_epoch"})
     assert load_state(old, *fresh(), rec)[0] == 1
+    older = state_path(tmp_path / "older.pt")  # written before the noise augmentation existed: it had none
+    save_state(older, *fresh(), epoch=1, best=0.5, step=3, history=[],
+               recipe={k: v for k, v in rec.items() if k != "noise"})
+    assert rec["noise"] == 0.0 and load_state(older, *fresh(), rec)[0] == 1
+    with pytest.raises(SystemExit):
+        load_state(older, *fresh(), {**rec, "noise": 0.3})
+
+
+def test_sensor_noise_keeps_the_frame_in_range_and_the_ball_where_it_was():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from train_ball import sensor_noise
+
+    img = np.full((40, 40, 3), 0.5, np.float32)
+    img[20, 20] = 1.0
+    out = sensor_noise(img, np.random.default_rng(0))
+    assert out.shape == img.shape and out.dtype == np.float32
+    assert out.min() >= 0.0 and out.max() <= 1.0
+    assert 0.003 < float(np.std(out[:10, :10] - img[:10, :10])) < 0.07  # some noise, at most ~15/255
+    assert abs(float(out.mean()) - float(img.mean())) < 0.01  # no brightness shift
+    assert not np.array_equal(out, sensor_noise(img, np.random.default_rng(1)))  # differs frame to frame
