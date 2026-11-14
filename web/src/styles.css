@@ -818,6 +818,10 @@ code {
   padding: 6px 8px 7px;
   border-radius: 8px;
   scroll-margin: 8px;
+  /* A long run lists hundreds of shots (about 70 % of the page's elements): rows outside the list's view
+     are not styled, laid out or painted until scrolled near. They stay in the accessibility tree. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 47px;
 }
 
 .shot + .shot {

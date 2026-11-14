@@ -108,8 +108,14 @@ switch and after a forced context loss. The forced reflow on opening came from t
 canvas's on-screen height while drawing; that height now comes from the canvas's ResizeObserver
 (`VideoStage.tsx`), and the profile of a switch shows no layout forced by script (before: about 30 ms in one
 profile, more under load). The rest of a switch is React unmounting and mounting about 4 500
-elements (shot list, timeline markers, inspector), the frame overlay and layout; keeping the panels mounted
-while the next run loads (instead of the spinner) would remove most of it and is the next step.
+elements, the frame overlay and layout. Counted on the 554 s run: of the page's 3 202 elements the shot list
+holds 2 233 (237 rows of 10) and the timeline 749; everything else is about 220. Keeping the panels mounted
+while the next run loads would therefore save little, and was not done. Instead the shot rows use
+`content-visibility: auto` (rows outside the list's view are not styled, laid out or painted; they stay in the
+accessibility tree): in the browser's trace of the same switch, the largest layout went from 4 467 to 1 195
+objects, all layouts from 4 680 to 1 936 and styled elements from 3 205 to 1 551 (counts, which do not depend on
+the machine's load as times do); Lighthouse stays at 100, and keyboard selection to the last row and back
+scrolls and draws the row (checked with End, ArrowUp and Home).
 
 **Review ↔ analysis page.** The analysis page used to be built from scratch on every switch (all its charts and
 tables over the run's shots, then a layout of the new page) and torn down on the way back. It is now built the
