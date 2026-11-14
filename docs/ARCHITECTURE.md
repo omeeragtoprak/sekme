@@ -144,6 +144,27 @@ which have not changed since they were added); the pose cache key includes each 
 another player selection at the same frames (`--player-size-from-camera`) does not reuse the poses; a labelled
 bounce on the other half of the court is scored as outside its zone, not inside it (zones are open at the net).
 
+## Radar board pairing: wide update windows without a cut (rule written 2026-11-14, before measuring)
+
+A board value is tied to a serve only when the change is seen within 4 s (`MAX_UPDATE_WINDOW_S`), so that a
+value following an edited-out serve is not given to the next one. On the US Open 2025 final 150–704 s clip, whose
+19 matched serves have the board read by eye, only 8 get an automatic value (7 agree with the eye reading); most
+of the rest are dropped for that window although the board shows the right number (the board is not on screen
+all the time). **Change:** a wider window is accepted when the serve's whole search window lies inside one span
+the pipeline could analyse (no shot cut, calibrated) and exactly one serve is a candidate, since then no
+edited-out serve can be behind the value. **Rule:** adopted if, on that clip (development data; the scaled
+60 fps run, which finds 20 of its 23 serves, and the default run), the automatic values that agree with the eye
+reading (within 1 mph) rise by at least 3 in total and no automatic value disagrees that agreed before; the
+five radar clips' table (`results/radar.txt`) is reported, not used. Otherwise the code stays and the result
+is recorded here.
+
+**Result (2026-11-14): not adopted.** Automatic values on the eye-read serves: default run 1 agreeing before
+and after; scaled run 8 agreeing and 1 disagreeing before and after (+0, the rule asked for +3); the pairs
+with a window of at most 4 s were identical to the earlier report. In highlight footage a widened window plus the
+6.5 s serve lag spans more than 10 s, which almost never lies inside one cut-free span, so the dropped updates
+stay dropped. The code was left as it was. The one disagreeing value (serve at frame 186: board read 101 mph by
+eye, paired 125) is the stale-value case noted above.
+
 ## Review Room security (security review, 2026-11-14)
 
 The Review Room is a single-user tool for this machine. A security review found no HIGH findings; it is now

@@ -41,6 +41,8 @@ clips, radar pairs, serves found.
 | Check | Before | Camera gate | Rule |
 |---|---|---|---|
 | TrackNet games 1–7: first bounces, precision, decisive calls | 220 / 329, 89.1 %, 228 / 228 | 221 / 329, 89.4 %, 229 / 229 | holds |
+
+*(Measured with the TrackNet scorer as it was then; the corrected scorer of 2026-11-14 gives the same baseline as 220 / 323 first bounces, see `docs/EVAL_TRACKNET.md`, "Two scorer corrections". Compare like with like.)*
 | Tracked share of calibrated frames, worst fall (2023 final 90–179 s, far player) | 99.0 % | 97.9 % (−1.15 points) | **fails** (limit 1 point) |
 | 2025 final 150–704 s: serve contacts within 2 frames | 6 | 8 | holds |
 

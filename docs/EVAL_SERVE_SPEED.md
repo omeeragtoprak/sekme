@@ -111,7 +111,7 @@ on 37 % of calibrated frames). A 0.6 band was tested on development data by its 
 after that, on the same data, so those clips cannot judge it: with it, no player's coverage falls on any
 of the six development clips, the near player reaches 94–97 % on the four 60 fps ones, TrackNet games
 1–7 give 221 / 329 first bounces at 89.4 % precision with 229 / 229 decisive calls consistent (baseline
-220 / 329, 89.1 %, 228 / 228), and serve contacts within 2 frames go 6 → 8.
+220 / 329, 89.1 %, 228 / 228), and serve contacts within 2 frames go 6 → 8. *(Measured with the TrackNet scorer as it was then; the corrected scorer of 2026-11-14 gives the same baseline as 220 / 323 first bounces, see `docs/EVAL_TRACKNET.md`, "Two scorer corrections". Compare like with like.)*
 
 **Labels, blind** (by the same separate labeller, after the serve labels; frames numbered by decoding each
 file in order with OpenCV, as the pipeline does; files named as in `scripts/six_videos_fetch.py`):
