@@ -81,6 +81,12 @@ is NumPy's per-call overhead on such small arrays, not arithmetic. Fewer RK4 ste
 compiled code, which means a new dependency. Nothing was changed; this is the reference for the six-video
 test's cached variant runs (five per video).
 
+**Memory (measured 2026-11-14, 554 s clip, 33 209 frames, cached detections).** Peak 711 MB in the process:
+347 MB after importing the libraries, then the detections (+300 MB, mostly the person boxes), calibration
+(+25 MB) and the rest of the analysis (+40 MB); the frame file is 4.9 MB of text. About 11 kB per frame, so a
+two-hour match at 60 fps (~430 000 frames) would need about 5 GB and a 64 MB frame file: within this machine's
+16 GB, but not tested on such a video.
+
 **Perception on 1080p60 (measured 2026-11-14, first 600 frames of the 2025 final clip, MPS).** 67 ms per frame:
 the ball network 31.7 ms (one inference per frame on a t, t+2, t+4 window), the person network (YOLO26-s at
 1280 px, tracked) 34.5 ms, decoding 0.7 ms, cut detection 0.1 ms; the court calibrator's worker thread never held
