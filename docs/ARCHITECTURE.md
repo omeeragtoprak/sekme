@@ -71,6 +71,16 @@ documented). `report.json` lists the flags a run used under `candidates`.
 | `--pin-serve-height` | the flight fit held at the serve contact height measured on the camera ray (±0.05 m) | `docs/EVAL_SERVE_SPEED.md` |
 | `--toss-bridge` | a toss run may span a missed apex; the serve contact is searched over the whole run | withdrawn from its test (`docs/EVAL_SPOT.md`); reported only |
 
+## Where the time goes (profiled 2026-11-14)
+
+A run from cached detections (`--reuse-perception --no-render`) of the 554 s, 60 fps US Open 2025 final clip
+takes 185 s: 164 s analysis, of which the 3D flight fits are about 89 % (`physics/flight.py`: 164 fits,
+~38 000 batched RK4 integrations, ~12 million acceleration evaluations on batches of about 12 rows). The cost
+is NumPy's per-call overhead on such small arrays, not arithmetic. Fewer RK4 steps would not help at 60 fps
+(already one step per frame there; only 30 fps clips take two) and would change results; larger gains need
+compiled code, which means a new dependency. Nothing was changed; this is the reference for the six-video
+test's cached variant runs (five per video).
+
 ## Frame rates
 
 The networks and most thresholds were developed on 30 fps video (TrackNet). The ball network adapts by
