@@ -251,6 +251,7 @@ export type Broadcast =
       server_sides: {
         serves: { flight_id: number; server: string; side: Side; end_changes: number; start_side: Side }[];
         consistent: boolean | null;
+        agreement?: number | null; // share of serves agreeing with each player's majority start end
         start_end: Record<string, Side> | null;
       };
     };

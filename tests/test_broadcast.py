@@ -141,3 +141,61 @@ def test_a_value_seen_briefly_between_two_sightings_of_the_same_value_is_not_an_
     # Back to the old value only after longer than two serves could take: both changes are kept.
     seq = [SpeedReading(i, i * 0.5, v) for i, v in enumerate([125] * 3 + [93] * 12 + [125] * 3)]
     assert [(u.previous, u.value) for u in speed_updates(seq)] == [(None, 125), (125, 93), (93, 125)]
+
+
+def test_start_ends_come_from_a_clear_majority_of_serves_and_truncated_names_are_matched():
+    from courtvision.broadcast.scoreboard import BroadcastScan, ScoreReading, ScoreRow
+    from courtvision.eval.broadcast_check import Serve, check
+
+    def reading(t: float, server: str, games: tuple[int, int]) -> ScoreReading:
+        return ScoreReading(int(t * 30), t, (ScoreRow("SINNER", (games[0],), "15", server == "SINNER"),
+                                             ScoreRow(server if server != "SINNER" else "ALCARAZ", (games[1],),
+                                                      "0", server != "SINNER")))
+    # Games 2-2 (2 end changes): Alcaraz started near, so he serves from the near end; one serve is read
+    # with the wrong side (a cut, a misread score), and one name comes back truncated ("CARAZ").
+    scores, serves = [], []
+    for i, (who, side) in enumerate([("ALCARAZ", "near")] * 4 + [("ALCARAZ", "far"), ("CARAZ", "near")]
+                                    + [("SINNER", "far")] * 3):
+        t = 10.0 * i
+        scores.append(reading(t, who, (2, 2)))
+        serves.append(Serve(i, t + 1.0, side, None))
+    scan = BroadcastScan(step_frames=15, frames_read=len(scores), scores=scores, names=("SINNER", "ALCARAZ"))
+    ss = check(scan, serves)["server_sides"]
+    assert ss["consistent"] is False  # the strict check still reports the disagreement
+    assert ss["start_end"] == {"ALCARAZ": "near", "SINNER": "far"}
+    assert ss["agreement"] == 8 / 9
+    # Without a clear majority nothing is assigned.
+    serves2 = [Serve(i, 10.0 * i + 1.0, side, None) for i, side in enumerate(["near", "far", "near", "far"])]
+    scan2 = BroadcastScan(step_frames=15, frames_read=4, scores=scores[:4], names=("SINNER", "ALCARAZ"))
+    assert check(scan2, serves2)["server_sides"]["start_end"] is None
+
+
+def test_names_within_a_point_are_anchored_on_its_serve_until_the_next_serve_or_cut():
+    from courtvision.eval.broadcast_check import serve_anchored_names
+
+    def fl(i, start, hitter, kind="rally"):
+        return {"id": i, "start_frame": start, "hitter": hitter, "kind": kind}
+    flights = [fl(0, 10, "far"), fl(1, 100, "near", "serve"), fl(2, 140, "far"), fl(3, 180, "near"),
+               fl(4, 300, "far", "serve"), fl(5, 340, "near"), fl(6, 500, "near")]
+    servers = {1: "ALCARAZ", 4: "SINNER"}
+    got = serve_anchored_names(flights, servers, ("SINNER", "ALCARAZ"), cuts=[0, 420])
+    assert 0 not in got  # before any serve: left to the score-graphic mapping
+    assert got[1] == got[2] == got[3] == {"near": "ALCARAZ", "far": "SINNER"}
+    assert got[4] == got[5] == {"far": "SINNER", "near": "ALCARAZ"}
+    assert 6 not in got  # after a camera cut the point may be another one
+    # A new score on the graphic ends the point even without a detected cut (a highlight edit).
+    got = serve_anchored_names(flights, servers, ("SINNER", "ALCARAZ"), cuts=[0], point_ends=[160])
+    assert 2 in got and 3 not in got and got[4] == {"far": "SINNER", "near": "ALCARAZ"}
+    # A serve whose server is unknown ends the previous anchor.
+    assert 2 not in serve_anchored_names(flights[:1] + [fl(1, 100, "near", "serve")] + flights[2:], {},
+                                         ("SINNER", "ALCARAZ"), cuts=[0])
+
+
+def test_a_single_serve_still_names_both_ends_when_nothing_contradicts_it():
+    from courtvision.broadcast.scoreboard import BroadcastScan, ScoreReading, ScoreRow
+    from courtvision.eval.broadcast_check import Serve, check
+
+    r = ScoreReading(30, 1.0, (ScoreRow("SINNER", (2,), "15", False), ScoreRow("ALCARAZ", (2,), "0", True)))
+    scan = BroadcastScan(step_frames=15, frames_read=1, scores=[r], names=("SINNER", "ALCARAZ"))
+    ss = check(scan, [Serve(0, 2.0, "near", None)])["server_sides"]
+    assert ss["consistent"] is True and ss["start_end"] == {"ALCARAZ": "near", "SINNER": "far"}

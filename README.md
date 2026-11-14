@@ -61,7 +61,7 @@ flowchart LR
 | Events | strokes = persistent reversals of travel direction; serves = toss above a baseline player after a dead ball, contact where toss and struck flight meet; one bounce per flight by a changepoint on the receiving half |
 | 3D flight | contact times free, players' court positions as anchors, serve contact height measured on the camera ray; plausibility gates (speed, height, residual, σ); rejected fits fall back to a gated image-kink bounce |
 | Call | Monte Carlo P(in) over the bounce covariance (fit + calibration term) against the zone's outer line edges; play continuing after an OUT downgrades it |
-| Self-check | Apple Vision OCR every 0.5 s: names, score, server marker, radar board; ITF Rule 10 end changes name the near/far player; never an input to a call |
+| Self-check | Apple Vision OCR every 0.5 s: names, score, server marker, radar board; within a point the marked server names the serve's end, elsewhere each player's start end (majority of their serves) and ITF Rule 10 end changes do; a board value that flips back within 4 s is dropped; never an input to a call |
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

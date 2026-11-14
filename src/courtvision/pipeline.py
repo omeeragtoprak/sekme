@@ -27,7 +27,7 @@ from courtvision.analytics.kinematics import player_kinematics
 from courtvision.api.app import link_source
 from courtvision.broadcast import ocr
 from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
-from courtvision.eval.broadcast_check import Serve, check, side_names
+from courtvision.eval.broadcast_check import Serve, check, serve_anchored_names, side_names
 from courtvision.events.flights import Flight, build_flights, measurable_segments
 from courtvision.events.hits import detect_hits_in_segments
 from courtvision.events.serves import detect_serves, merge_serves
@@ -244,17 +244,21 @@ def _broadcast_scan(video, fps: float, out: Path, video_sha: str, cfg: PipelineC
     return scan
 
 
-def _annotate_from_broadcast(flights: list[dict], broadcast: dict, scan: BroadcastScan | None, fps: float) -> None:
-    """Board speed and server name on serves; player names on every shot where the graphic allows it."""
+def _annotate_from_broadcast(flights: list[dict], broadcast: dict, scan: BroadcastScan | None, fps: float,
+                             cuts: list[int]) -> None:
+    """Board speed and server name on serves; player names on every shot where the graphic allows it: from the
+    point's serve when its server is marked, else from the start ends and the end changes on the graphic."""
     if scan is None:
         return
     pairs = {p["flight_id"]: p for p in broadcast["serve_speed"]["pairs"]}
     servers = {x["flight_id"]: x["server"] for x in broadcast["server_sides"]["serves"]}
     start_end = broadcast["server_sides"]["start_end"]
+    point_ends = [round(c["t"][1] * fps) for c in broadcast["score_changes"]]
+    anchored = serve_anchored_names(flights, servers, scan.names, cuts, point_ends)
     for f in flights:
         f["board_speed_kmh"] = pairs[f["id"]]["board_kmh"] if f["id"] in pairs else None
         f["server_name"] = servers.get(f["id"])
-        names = side_names(scan, start_end, f["start_frame"] / fps)
+        names = anchored.get(f["id"]) or side_names(scan, start_end, f["start_frame"] / fps)
         f["hitter_name"] = names.get(f["hitter"]) if names else None
         f["receiver_name"] = names.get(f["receiver"]) if names else None
 
@@ -400,7 +404,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "timings_s": {k: round(v, 2) for k, v in timings.items()},
         "limitations": LIMITATIONS,
     }
-    _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps)
+    _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
     t4 = time.time()
     report["strokes"] = _annotate_strokes(video, report["flights"], flights, ball, players, kin, out, video_sha, cfg,
                                           device)

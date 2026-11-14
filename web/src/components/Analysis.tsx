@@ -679,7 +679,13 @@ function BroadcastCheck({ report }: { report: Report }) {
         <div className="row">
           <span className="row-label">Servis tarafı tutarlılığı</span>
           <span className="row-value">
-            {sides.consistent === null ? "kontrol edilemedi" : sides.consistent ? `tutarlı (${sides.serves.length} servis)` : "tutarsız"}
+            {sides.consistent === null
+              ? "kontrol edilemedi"
+              : sides.consistent
+                ? `tutarlı (${sides.serves.length} servis)`
+                : sides.agreement != null
+                  ? `çoğunluk uyumlu: ${sides.serves.length} servisin %${fmtNum(100 * sides.agreement, 0)}'i${sides.start_end ? "" : " (taraf atanamadı)"}`
+                  : "tutarsız"}
           </span>
         </div>
         {sides.start_end && (

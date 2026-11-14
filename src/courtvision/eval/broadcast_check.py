@@ -53,6 +53,11 @@ def reading_near(scores: list[ScoreReading], t: float, window: float = 8.0) -> S
 # The board changes ~2.5-3.5 s after the serve (tight pairs on the US Open clips). When the change itself is
 # only known to within more than this, the value cannot be tied to one serve (it may follow an edited-out one).
 MAX_UPDATE_WINDOW_S = 4.0
+# When a player's serves disagree on the start end, the majority side needs at least this many serves and
+# this share of them (one misread score or a serve next to an edit flips one vote; US Open 2025 final,
+# 150-704 s: 10 of 13 and 7 of 7). Unanimous serves decide alone, even a single one.
+START_END_MIN_VOTES = 2
+START_END_MAJORITY = 2 / 3
 
 
 def check(scan: BroadcastScan, serves: list[Serve], lag: tuple[float, float] = (1.0, 6.5),
@@ -107,17 +112,31 @@ def check(scan: BroadcastScan, serves: list[Serve], lag: tuple[float, float] = (
         start = s.side if k % 2 == 0 else _flip(s.side)  # where this server stood at the start
         sides.append({"flight_id": s.flight_id, "server": name, "side": s.side, "end_changes": k,
                       "start_side": start})
+    for x in sides:
+        x["server"] = _player(x["server"], names)
     by_name: dict[str, set[str]] = {}
+    votes: dict[str, dict[str, int]] = {}
     for x in sides:
         by_name.setdefault(x["server"], set()).add(x["start_side"])
+        v = votes.setdefault(x["server"], {})
+        v[x["start_side"]] = v.get(x["start_side"], 0) + 1
+    agreement = None
     if sides:
         consistent = all(len(v) == 1 for v in by_name.values()) and len(
             {next(iter(v)) for v in by_name.values()}) == len(by_name)
-        if consistent:
-            start_end = {n: next(iter(v)) for n, v in by_name.items()}
-            if names and len(start_end) == 1:  # the other player started at the other end
-                only = next(iter(start_end))
-                start_end[names[1] if only == names[0] else names[0]] = _flip(start_end[only])
+        # One misread score or a serve next to an edit should not cost every name: each player's start end
+        # is the side a clear majority of their serves give (strict agreement is still reported above).
+        agreement = sum(max(v.values()) for v in votes.values()) / len(sides)
+        for name, v in votes.items():
+            side, n = max(v.items(), key=lambda kv: kv[1])
+            # Unanimous (even a single serve) as before; with dissent, a clear majority of at least two.
+            if len(v) == 1 or (n >= START_END_MIN_VOTES and n >= START_END_MAJORITY * sum(v.values())):
+                start_end[name] = side
+        if len(set(start_end.values())) < len(start_end) or (names and not set(start_end) <= set(names)):
+            start_end = {}  # both at one end, or a name that is not one of the two players: no assignment
+        if names and len(start_end) == 1:  # the other player started at the other end
+            only = next(iter(start_end))
+            start_end[names[1] if only == names[0] else names[0]] = _flip(start_end[only])
 
     return {
         "ocr": "apple-vision",
@@ -142,8 +161,44 @@ def check(scan: BroadcastScan, serves: list[Serve], lag: tuple[float, float] = (
             "mean_abs_error_pct": round(sum(abs(e) for e in errs) / len(errs), 1) if errs else None,
             "unmatched_updates": unmatched_updates,
         },
-        "server_sides": {"serves": sides, "consistent": consistent, "start_end": start_end or None},
+        "server_sides": {"serves": sides, "consistent": consistent, "agreement": agreement,
+                         "start_end": start_end or None},
     }
+
+
+def _player(name: str, names: tuple[str, str] | None) -> str:
+    """The player a server name read from the graphic belongs to ("CARAZ", "CARLOS ALCARAZ" -> "ALCARAZ")."""
+    if not names or name in names:
+        return name
+    hits = [n for n in names if n in name or (len(name) >= 4 and name in n)]
+    return hits[0] if len(hits) == 1 else name
+
+
+def serve_anchored_names(flights: list[dict], servers: dict[int, str], names: tuple[str, str] | None,
+                         cuts: list[int], point_ends: list[int] | None = None) -> dict[int, dict[str, str]]:
+    """{flight id: {side: name}} from a serve whose server the graphic marks, up to the next serve, camera
+    cut or score change (``point_ends``: frames where a new score was first seen; the point is over).
+
+    The server marker names the player at the serve's end directly; mapping ends to players through the
+    number of end changes depends on reading the games right on the nearest graphic, which a misread or a
+    highlight edit breaks (US Open 2025 final, 150-704 s: 3 of 21 serves named wrongly that way).
+    """
+    if not names:
+        return {}
+    out: dict[int, dict[str, str]] = {}
+    anchor: tuple[int, dict[str, str]] | None = None
+    for f in sorted(flights, key=lambda f: f["start_frame"]):
+        if f["kind"] == "serve":
+            srv = servers.get(f["id"])
+            anchor = None
+            if srv in names:
+                other = names[1] if srv == names[0] else names[0]
+                anchor = (f["start_frame"], {f["hitter"]: srv, _flip(f["hitter"]): other})
+        if anchor is not None and any(anchor[0] < c <= f["start_frame"] for c in [*cuts, *(point_ends or [])]):
+            anchor = None  # after a camera cut the point may be another one; after a new score it is
+        if anchor is not None:
+            out[f["id"]] = anchor[1]
+    return out
 
 
 def side_names(scan: BroadcastScan, start_end: dict[str, str] | None, t: float,
