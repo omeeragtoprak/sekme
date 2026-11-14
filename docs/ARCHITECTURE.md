@@ -81,6 +81,14 @@ is NumPy's per-call overhead on such small arrays, not arithmetic. Fewer RK4 ste
 compiled code, which means a new dependency. Nothing was changed; this is the reference for the six-video
 test's cached variant runs (five per video).
 
+**Review Room on a long run (measured 2026-11-14, 554 s clip, 33 209 frames, 237 shots).** Playback and frame
+steps: the timeline used to rebuild its ~600 markers on every frame (54.7 ms median per step, development
+build); it now builds them once per run, selection and zoom (3.9 ms). Opening the run takes about 2 s (warm):
+the 4.8 MB frame file parses in 11 ms; the panels' React rendering is ~2.2 s in the development build (a few
+times less in production); a layout pass over ~4 500 elements (~0.4 s) and a forced reflow (~0.4 s) account for
+much of the rest. Not changed further, since the remaining cost could not be attributed precisely; the next
+steps would be fewer elements in the shot list (rendering only the visible rows) and finding the forced reflow.
+
 ## Frame rates
 
 The networks and most thresholds were developed on 30 fps video (TrackNet). The ball network adapts by
