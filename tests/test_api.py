@@ -132,3 +132,12 @@ def test_a_ground_truth_label_is_judged_with_the_systems_rule(tmp_path: Path) ->
     assert c.post("/api/runs/clip1/labels", json={**bad, "frame": 1, "labeler": ""}).status_code == 422
     left = zone_from_name("service-near-left")
     assert left.x1 > 0 > left.x0 - 0.05 and left.y1 == 0.0  # near box left of centre, open at the net
+
+
+def test_a_report_without_frames_is_an_evaluation_output_and_is_not_listed(tmp_path: Path) -> None:
+    _make_run(tmp_path / "runs")
+    d = tmp_path / "runs" / "clip1_variant"  # e.g. a candidate's report kept for a comparison
+    d.mkdir()
+    (d / "report.json").write_text((tmp_path / "runs" / "clip1" / "report.json").read_text())
+    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"))
+    assert [r["id"] for r in c.get("/api/runs").json()] == ["clip1"]

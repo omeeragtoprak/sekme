@@ -684,7 +684,7 @@ function BroadcastCheck({ report }: { report: Report }) {
               : sides.consistent
                 ? `tutarlı (${sides.serves.length} servis)`
                 : sides.agreement != null
-                  ? `çoğunluk uyumlu: ${sides.serves.length} servisin %${fmtNum(100 * sides.agreement, 0)}'i${sides.start_end ? "" : " (taraf atanamadı)"}`
+                  ? `çoğunluk uyumlu (%${fmtNum(100 * sides.agreement, 0)}, ${sides.serves.length} servis)${sides.start_end ? "" : " · taraf atanamadı"}`
                   : "tutarsız"}
           </span>
         </div>
