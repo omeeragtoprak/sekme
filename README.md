@@ -175,8 +175,9 @@ promo/             HyperFrames promo film (footage not included)
   not hold up on the held-out games.
 - Serve detection rests on few real serves; serves struck before a camera cut cannot be recovered.
 - Lens distortion is not modelled; it is carried as uncertainty (max(court-line RMSE, 0.5 px) per call).
-- About 3× slower than real time on an M4 for 720p30 (90 s: 268 s without HUD rendering) and about 7× for
-  1080p60 (90 s: ~660 s).
+- About 2.7× slower than real time on an M4 for 720p30 (90 s: 246 s without HUD rendering) and about 6× for
+  1080p60 (90 s: 556 s), measured 2026-11-14; the ball and person networks take most of it (190 s and 483 s)
+  and are GPU-bound, while re-analysing cached detections takes 22 s and 35 s.
 - The SEKME ball network still misses some of the most motion-blurred balls right after a serve
   (one of three serves on the 2023 final clip). It was trained at 30 fps and is fed every second
   frame on 60 fps footage. Trained on 7 matches only: more data is the obvious next step.
