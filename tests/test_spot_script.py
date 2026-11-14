@@ -86,13 +86,17 @@ def test_every_run_is_checked_before_scoring(tmp_path: Path, monkeypatch) -> Non
         d = runs / c["video"]
         d.mkdir(parents=True)
         (d / "code_sha.txt").write_text(head)
+        (d / "video_sha256.txt").write_text("v")
         (d / "report.json").write_text(json.dumps({"candidates": {}, "video": {"n_frames": 50},
                                                    "models": {"ball": {"sha256": "b"}}}))
     problems, models = E.check_runs(sample, runs, [])
     assert problems == ["m: not in man.json"] and models == {"ball": "b"}
-    man = {"m": {"width": 1280, "height": 720, "fps": 25.0, "frames": 9000, "files": {"v": ["runs"]}}}
+    man = {"m": {"width": 1280, "height": 720, "fps": 25.0, "frames": 9000, "files": ["v", "w"]}}
     (tmp_path / "man.json").write_text(json.dumps(man))
     assert E.check_runs(sample, runs, [])[0] == []
+    (runs / clips[0]["video"] / "video_sha256.txt").write_text("w")  # one clip cut from another download
+    assert E.check_runs(sample, runs, [])[0] == ["m: runs clips not all cut from one recorded file of the match"]
+    (runs / clips[0]["video"] / "video_sha256.txt").write_text("v")
     assert E.check_runs(sample, runs, [], {"ball": "other"})[0] == ["runs: models are not the committed defaults"]
     bad = runs / clips[1]["video"]
     (bad / "report.json").write_text(json.dumps({"candidates": {"serve_toss_bridge_s": 0.3},
@@ -129,14 +133,12 @@ def test_a_re_encoded_download_of_the_same_upload_is_accepted_and_another_upload
     _video(b, 50, crf="20")  # the same frames, encoded again: another file
     _video(other, 60)
     _video(small, 50, size="640x360")
-    E.record_video("m", a, ["runs_spot"])
-    E.record_video("m", b, ["runs_spot_base_slot1", "runs_spot_cand_slot1"])
-    files = json.loads((tmp_path / "man.json").read_text())["m"]["files"]
-    assert sorted(map(sorted, files.values())) == [["runs_spot"], ["runs_spot_base_slot1", "runs_spot_cand_slot1"]]
+    sa, sb = E.record_video("m", a), E.record_video("m", b)
+    assert sa != sb and json.loads((tmp_path / "man.json").read_text())["m"]["files"] == [sa, sb]
     with pytest.raises(SystemExit, match="another upload"):
-        E.record_video("m", other, ["runs_spot"])
+        E.record_video("m", other)
     with pytest.raises(SystemExit, match="720p"):
-        E.record_video("n", small, ["runs_spot"])
+        E.record_video("n", small)
 
 
 def test_a_failed_baseline_fails_its_candidate_and_a_mid_run_code_change_records_nothing(tmp_path: Path,
@@ -195,6 +197,7 @@ def test_a_refused_test_score_shows_no_number(tmp_path: Path, monkeypatch, capsy
         d = tmp_path / "runs_spot" / c["video"]
         d.mkdir(parents=True)
         (d / "code_sha.txt").write_text(head)
+        (d / "video_sha256.txt").write_text("v")
         flags = {"serve_toss_bridge_s": 0.3} if i == 5 else {}  # one clip made with a candidate's flag
         (d / "report.json").write_text(json.dumps({"candidates": flags, "video": {"n_frames": 50}, "models": {},
                                                    "hits": [{"frame": 10, "side": "near", "serve": False}],
@@ -203,3 +206,13 @@ def test_a_refused_test_score_shows_no_number(tmp_path: Path, monkeypatch, capsy
     with pytest.raises(SystemExit, match="made with"):
         E.main()
     assert "recall" not in capsys.readouterr().out and not (tmp_path / "results").exists()
+    # All runs right: the result is written, but if it cannot be committed nothing is shown.
+    (tmp_path / "runs_spot" / clips[5]["video"] / "report.json").write_text(json.dumps(
+        {"candidates": {}, "video": {"n_frames": 50}, "models": {}, "flights": [], "calibration": {"valid_frames": 50},
+         "hits": [{"frame": 10, "side": "near", "serve": False}]}))
+    (tmp_path / "man.json").write_text(json.dumps({m: {"width": 1280, "height": 720, "fps": 25.0, "frames": 1,
+                                                       "files": ["v"]} for m in E.SAMPLES["test4"]["matches"]}))
+    monkeypatch.setattr(E, "ROOT", tmp_path)  # the result path is "in the repository", whose git add fails here
+    with pytest.raises(SystemExit, match="written but not committed"):
+        E.main()
+    assert "recall" not in capsys.readouterr().out and (tmp_path / "results" / "results_test4_baseline.json").exists()

@@ -212,3 +212,11 @@ share one). Also: a baseline that failed on a clip fails its candidate there too
 baseline's cache would not be comparable); the runs must use the committed default networks; a hand-edited
 sample file is refused; the comparison is printed. A candidate that fails on clips is scored as written (those
 clips have no events), without the stop that guards the baseline, since its failures are its own behaviour.
+
+A third check found no blocker or major gap. Closed from it: `score` on the test matches now writes the result
+and commits it (that one file) **before printing anything**, so a pass is spent from the moment its numbers can
+be seen; each clip's run records the SHA-256 of the match file it was cut from (instead of the manifest listing
+runs folders, which an aborted first attempt could leave ambiguous), and scoring requires every clip of a match
+in a runs folder to come from one recorded file; a missing default network is refused. Known limit, not
+changed: a re-download is recognised by its size, frame rate and container frame count, so an upload of the same
+length with shifted content would pass; the reported median timing gap per match would show such an offset.

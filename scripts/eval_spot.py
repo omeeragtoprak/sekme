@@ -137,9 +137,10 @@ def _done(run: Path) -> bool:
 
 
 def run_match(src: Path, clips: list[dict], runs: Path, tmp: Path, keep: bool,
-              cand: tuple[Path, list[str]] | None = None) -> None:
+              cand: tuple[Path, list[str]] | None = None, video_sha: str | None = None) -> None:
     """Cut and analyse every clip not done yet; with ``cand`` = (runs dir, CLI flags) also the candidate,
-    right after the baseline and before the clip is deleted."""
+    right after the baseline and before the clip is deleted. Each clip's run records the match file it was cut
+    from (``video_sha``)."""
     def done(name: str) -> bool:
         return _done(runs / name) and (cand is None or _done(cand[0] / name))
 
@@ -180,12 +181,16 @@ def run_match(src: Path, clips: list[dict], runs: Path, tmp: Path, keep: bool,
                     raise SystemExit(f"{out.name}: wrote {n + 1} frames, the file holds {got}")
                 if not _done(runs / name):
                     analyse(out, runs / name)
+                    if video_sha:
+                        (runs / name / "video_sha256.txt").write_text(video_sha)
                     failed_in_row = failed_in_row + 1 if (runs / name / "FAILED.txt").exists() else 0
                     if failed_in_row >= MAX_FAILED_IN_ROW:  # systematic, not a property of the clips
                         raise SystemExit(f"{MAX_FAILED_IN_ROW} analyses failed in a row (last {name}): stopped, "
                                          f"video kept; see the FAILED.txt files")
                 if cand is not None and not _done(cand[0] / name):
                     analyse_candidate(out, runs / name, cand[0] / name, cand[1])
+                    if video_sha:
+                        (cand[0] / name / "video_sha256.txt").write_text(video_sha)
                 if not keep:
                     out.unlink()
         i += 1
@@ -249,8 +254,9 @@ def check_sample(name: str, sample: dict) -> None:
         raise SystemExit(f"sample_{name}.json is not the plan's sample (matches or clip counts differ)")
 
 
-def record_video(m: str, src: Path, runs_dirs: list[str]) -> None:
-    """The match video's identity, before any clip is cut from it (the video is deleted afterwards)."""
+def record_video(m: str, src: Path) -> str:
+    """The match video's identity, before any clip is cut from it (the video is deleted afterwards); its SHA-256
+    is also written into every clip run cut from it."""
     cap = cv2.VideoCapture(str(src))
     w, h, fps = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), cap.get(
         cv2.CAP_PROP_FPS)
@@ -260,16 +266,17 @@ def record_video(m: str, src: Path, runs_dirs: list[str]) -> None:
         raise SystemExit(f"{m}: {w}x{h}; the plan uses the {VIDEO_HEIGHT}p upload")
     man = json.loads(VIDEO_MANIFEST.read_text()) if VIDEO_MANIFEST.exists() else {}
     sha = sha256_file(src)
-    entry = man.setdefault(m, {"width": w, "height": h, "fps": fps, "frames": n, "files": {}})
+    entry = man.setdefault(m, {"width": w, "height": h, "fps": fps, "frames": n, "files": []})
     # A later download of the same upload may be re-encoded (another SHA-256): accepted if its size, frame rate
-    # and frame count are the first one's, since the labels number its frames the same way; each runs folder
-    # records the file it used, and a slot's baseline and candidate always use one file between them.
+    # and frame count are the first one's, since the labels number its frames the same way; each clip run
+    # records the file it was cut from, and a slot's baseline and candidate are cut from one file together.
     if (entry["width"], entry["height"], entry["frames"]) != (w, h, n) or not np.isclose(entry["fps"], fps):
         raise SystemExit(f"{m}: {w}x{h}, {fps} fps, {n} frames; recorded {entry['width']}x{entry['height']}, "
                          f"{entry['fps']} fps, {entry['frames']} frames: another upload")
-    entry["files"].setdefault(sha, [])
-    entry["files"][sha] = sorted(set(entry["files"][sha]) | set(runs_dirs))
+    if sha not in entry["files"]:
+        entry["files"].append(sha)
     VIDEO_MANIFEST.write_text(json.dumps(man, indent=1))
+    return sha
 
 
 def make_sample(name: str) -> Path:
@@ -301,7 +308,10 @@ def default_models() -> dict[str, str]:
     """SHA-256 of the committed default networks (the plan runs the default system)."""
     from courtvision.pipeline import MODEL_FILES
 
-    return {k: sha256_file(ROOT / v) for k, v in MODEL_FILES.items() if (ROOT / v).exists()}
+    missing = [v for v in MODEL_FILES.values() if not (ROOT / v).exists()]
+    if missing:
+        raise SystemExit(f"default networks missing: {missing}")
+    return {k: sha256_file(ROOT / v) for k, v in MODEL_FILES.items()}
 
 
 def check_runs(sample: dict, runs: Path, flags: list[str], defaults: dict[str, str] | None = None
@@ -337,8 +347,12 @@ def check_runs(sample: dict, runs: Path, flags: list[str], defaults: dict[str, s
             problems.append(f"{mname}: not in {VIDEO_MANIFEST.name}")
         elif man[mname]["height"] != VIDEO_HEIGHT:
             problems.append(f"{mname}: {man[mname]['height']}p, not {VIDEO_HEIGHT}p")
-        elif sum(runs.name in d for d in man[mname]["files"].values()) != 1:
-            problems.append(f"{mname}: {runs.name} is not recorded with exactly one video file")
+        else:
+            got = {(runs / c["video"] / "video_sha256.txt").read_text().strip()
+                   if (runs / c["video"] / "video_sha256.txt").exists() else None
+                   for c in sample["clips"] if match_name(c["video"]) == mname}
+            if len(got) != 1 or not got <= set(man[mname]["files"]):
+                problems.append(f"{mname}: {runs.name} clips not all cut from one recorded file of the match")
     return problems, models
 
 
@@ -452,9 +466,10 @@ def main() -> None:
             if not src.exists():
                 print(f"{m}: no video yet, skipped", flush=True)
                 continue
-            record_video(m, src, [d.name for d in (runs, cand_runs) if d is not None])
+            sha = record_video(m, src)
             clips = [c for c in sample["clips"] if match_name(c["video"]) == m]
-            run_match(src, clips, runs, DATA / "clips_tmp", args.keep_clips, (cand_runs, flags) if cand_runs else None)
+            run_match(src, clips, runs, DATA / "clips_tmp", args.keep_clips, (cand_runs, flags) if cand_runs else None,
+                      video_sha=sha)
             failed = sum((runs / c["video"] / "FAILED.txt").exists() for c in clips)
             if failed > MAX_FAILED_SHARE * len(clips):
                 raise SystemExit(f"{m}: {failed} of {len(clips)} analyses failed (more than "
@@ -488,17 +503,11 @@ def main() -> None:
         print(f"WARNING (dev): {len(problems)} provenance problems, e.g. {problems[:3]}")
     results: dict = {}
     for label, (d, f, models, rows) in scored.items():
-        s, pm = report(f"{args.name} {label} ({d.name})", rows)
-        results[label] = {"runs_dir": d.name, "flags": f, "models": models, "summary": s, "per_match": pm,
-                          "clips": rows}
+        results[label] = {"runs_dir": d.name, "flags": f, "models": models, "summary": summary(rows),
+                          "per_match": per_match(rows), "clips": rows}
     if "candidate" in results:
         b, c = results["baseline"], results["candidate"]
-        results["comparison"] = cmp = compare(b["summary"], c["summary"], b["per_match"], c["per_match"])
-        print("baseline -> candidate (points; the decision is the candidate's written rule):")
-        for scope, v in [("pooled", cmp["pooled"]), *cmp["per_match"].items()]:
-            print(f"  {scope:55s} " + "  ".join(f"{k} {x['change_points']:+.1f}" for k, x in v.items()
-                                                if isinstance(x, dict))
-                  + f"  serves matched {v['serve_matched'][0]} -> {v['serve_matched'][1]} of {v['serve_labelled']}")
+        results["comparison"] = compare(b["summary"], c["summary"], b["per_match"], c["per_match"])
     man = json.loads(VIDEO_MANIFEST.read_text()) if VIDEO_MANIFEST.exists() else {}
     results["provenance"] = {
         "code_sha": head_sha(), "sample_sha256": hashlib.sha256(sample_path.read_bytes()).hexdigest(),
@@ -507,7 +516,24 @@ def main() -> None:
         "problems": problems}
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(results))
-    print(f"-> {_rel(out)}" + (" (commit it: a test result marks its pass as spent)" if test else ""))
+    committed = False
+    if test and out.resolve().is_relative_to(ROOT):  # spent from now on: committed before anything is shown
+        r = git("commit", "-q", "-m", f"E2E-Spot test result: {out.stem}", "--", _rel(out)) \
+            if git("add", "--", _rel(out)).returncode == 0 else None
+        if r is None or r.returncode != 0:
+            raise SystemExit(f"{_rel(out)} written but not committed ({r.stderr.strip() if r else 'git add failed'}); "
+                             "commit it, then read it")
+        committed = True
+    for label, (d, _, _, rows) in scored.items():
+        report(f"{args.name} {label} ({d.name})", rows)
+    if "comparison" in results:
+        cmp = results["comparison"]
+        print("baseline -> candidate (points; the decision is the candidate's written rule):")
+        for scope, v in [("pooled", cmp["pooled"]), *cmp["per_match"].items()]:
+            print(f"  {scope:55s} " + "  ".join(f"{k} {x['change_points']:+.1f}" for k, x in v.items()
+                                                if isinstance(x, dict))
+                  + f"  serves matched {v['serve_matched'][0]} -> {v['serve_matched'][1]} of {v['serve_labelled']}")
+    print(f"-> {_rel(out)}" + (" (committed: this pass is spent)" if committed else ""))
 
 if __name__ == "__main__":
     main()
