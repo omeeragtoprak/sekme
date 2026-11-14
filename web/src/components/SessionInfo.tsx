@@ -3,6 +3,12 @@ import { DASH, fmtDate, fmtNum, fmtPct } from "../geometry";
 import { playerName, SIDE_LABEL, timingLabel } from "../i18n";
 import type { ModelCard, Report, Side } from "../types";
 
+const CANDIDATE_LABELS: Record<string, [string, string]> = {
+  serve_toss_bridge_s: ["Servis atışı köprüsü", "--toss-bridge"],
+  pin_serve_height: ["Servis temas yüksekliği sabit", "--pin-serve-height"],
+  fps_scaled_thresholds: ["60 fps kare eşikleri ölçekli", "--fps-scaled-thresholds"],
+};
+
 const SIDES: Side[] = ["near", "far"];
 const MODELS: { key: keyof Report["models"]; label: string }[] = [
   { key: "court", label: "Kort anahtar noktaları" },
@@ -140,6 +146,22 @@ function SessionInfoImpl({ report }: { report: Report }) {
           ))}
         </div>
       </section>
+
+      {report.candidates && Object.keys(report.candidates).length > 0 && (
+        <section className="block">
+          <h3 className="group-title">Aday ayarları</h3>
+          <div className="group">
+            <div className="row-stack">
+              <p className="row-sub">
+                Bu analiz varsayılan sistemle değil, henüz testi yapılmamış deneme ayarlarıyla yapıldı.
+              </p>
+            </div>
+            {Object.keys(report.candidates).map((k) => (
+              <Row key={k} label={CANDIDATE_LABELS[k]?.[0] ?? k} value={CANDIDATE_LABELS[k]?.[1] ?? "açık"} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="block">
         <h3 className="group-title">İşlem süreleri</h3>

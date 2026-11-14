@@ -270,6 +270,7 @@ export type Report = {
     sha256: string;
   };
   models: Record<"court" | "ball" | "players", ModelCard> & { pose?: ModelCard };
+  candidates?: Record<string, number | boolean>; // flags of candidates not yet decided (docs/ARCHITECTURE.md)
   strokes?: { model: string; poses: number; requested: number; hands: Record<string, "right" | "left"> };
   calibration: {
     valid_frames: number;
