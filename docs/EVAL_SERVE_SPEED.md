@@ -50,6 +50,12 @@ test data. The download needs the user's explicit yes (file, source, size).
   None of them is footage the project has used (2023 men's final, 2024 men's final Sinner–Fritz, 2025
   men's final, 2025 QF Djokovic–Fritz). Each file's video id and SHA-256 are written here right after
   the download, before any labelling or analysis. Kept local, research only.
+
+  Found by that rule on 2026-11-14 from metadata only (`scripts/six_videos_fetch.py list`; nothing
+  downloaded), all "Extended Highlights" at 60 fps: 1. `6pbIaygok2E` (736 s), 2. `JP95GKqjpZk` (735 s),
+  3. `-Kw7rzkJROw` (730 s), 4. `clVU6bPiwbY` (730 s), 5. `91QiqjXzBdc` (624 s), 6. `vSqQT6A2a0o` (673 s);
+  at most ~3.5 GB of 1080p video in all. With ~4 GB free they are handled three at a time (download,
+  label, analyse, keep the caches and reports, delete the video).
 - **Labels, blind**, as in `docs/EVAL_SERVE_CONTACT.md`: a separate labeller (a fresh agent session) with
   no access to any system output for these videos marks every serve shown in real time from the main
   camera: contact bracket, server side, and the stadium board's serve speed read by eye (the first new
