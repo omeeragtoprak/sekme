@@ -208,7 +208,8 @@ promo/             HyperFrames promo film (footage not included)
 - Times are taken from frame numbers, assuming a constant frame rate. A video with irregular frame timestamps
   (a phone dropping frames) gets a warning in its report; phone videos stored sideways with a rotation tag are
   analysed upright. Below 24 fps the depth of a bounce becomes unreliable (2.5 m off on a 15 fps copy of a clip);
-  such videos get a warning too.
+  such videos get a warning too. Grainy video (sensor noise, as in low-light phone footage) is the ball network's
+  weak point: with moderate noise it finds the ball in few frames and makes no calls (it does not make wrong ones).
 
 ## License
 

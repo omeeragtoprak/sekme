@@ -333,6 +333,13 @@ now against the sideline, is still correct, but a ball landing just over the bas
 below 24 fps now get a limitation in their report and a warning on the command line; calls are not changed (no
 measured video is below 24 fps).
 
+**Light, blur and sensor noise.** Darkened (brightness −0.25, contrast 0.7) and blurred (box blur 2 px) copies keep
+all three calls within 1 cm. Temporal noise (ffmpeg `noise`, strength 5 / 10 / 15 / 25) leaves the ball found on
+114 / 81 / 5 / 0 of 119 frames: at 10 the calls stay with wider 1σ (14 → 43 cm on the second), from 15 on there are
+no calls at all. The court still calibrates on every frame. The ball network was trained on clean broadcast frames
+with motion-blur augmentation but no noise augmentation, so grainy low-light phone video is its weak point; adding
+noise to the training data is the obvious next step for it (a new network would need its own selection and test).
+
 **A fresh clone.** The weights are not in the repository. A missing checkpoint used to end in a traceback from
 hashing it, after an empty run folder had been made; `analyze` now checks the four checkpoints first and stops with
 one line naming the missing ones (`MissingModelError`; the command line exits with 2, a Review Room job shows the
