@@ -14,6 +14,7 @@ def test_probe_falls_back_when_the_average_frame_rate_is_missing(monkeypatch) ->
 
     meta = {"streams": [{"codec_type": "video", "width": 1280, "height": 720, "avg_frame_rate": "0/0",
                          "r_frame_rate": "30000/1001", "nb_frames": "300"}], "format": {"duration": "10.01"}}
+    monkeypatch.setattr(vid, "_bin", lambda name: name)  # no ffprobe needed (CI has none)
     monkeypatch.setattr(vid.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0, json.dumps(meta), ""))
     assert abs(vid.probe("x.mp4").fps - 29.97) < 0.01
