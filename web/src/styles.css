@@ -437,11 +437,12 @@ code {
   transition: background-color 0.15s, box-shadow 0.15s;
 }
 
-.segmented button:hover:not(:disabled):not([aria-pressed="true"]) {
+.segmented button:hover:not(:disabled):not([aria-pressed="true"]):not([aria-selected="true"]) {
   background: var(--fill-4);
 }
 
-.segmented button[aria-pressed="true"] {
+.segmented button[aria-pressed="true"],
+.segmented button[aria-selected="true"] {
   background: var(--thumb);
   box-shadow: var(--thumb-shadow);
   font-weight: 600;
@@ -477,6 +478,7 @@ code {
   border: 0;
   border-radius: 999px;
   background: var(--fill-3);
+  color: var(--label); /* not inherited: inside a secondary-coloured row it fell below 4.5:1 */
   font-weight: 500;
   white-space: nowrap;
   transition: background-color 0.12s, opacity 0.12s;
@@ -1394,7 +1396,7 @@ code {
 
 .tl-hint {
   font-size: 11px;
-  color: var(--label-3);
+  color: var(--label-2); /* real information (the keys): secondary label, not the tertiary one (contrast) */
   white-space: nowrap;
 }
 

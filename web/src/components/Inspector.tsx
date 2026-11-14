@@ -91,7 +91,6 @@ function InspectorImpl(p: Props) {
               type="button"
               role="tab"
               aria-selected={tab === t.key}
-              aria-pressed={tab === t.key}
               onClick={() => setTab(t.key)}
             >
               {t.label}

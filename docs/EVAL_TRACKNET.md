@@ -298,4 +298,7 @@ the same kind: one bounce labelled on two adjacent frames (game 1 clips 7, 10, 1
 old windows let the second label's track line run through the first, so both contacts landed on the first
 label and both counted as first bounces, one found and one "missed"; now the duplicate is a second bounce. 15
 of the 369 reference contacts now use the labelled point instead of crossing a neighbouring hit or bounce.
-Numbers elsewhere in these documents were measured with the old scorer and stay as recorded.
+Numbers elsewhere in these documents were measured with the old scorer and stay as recorded. A bounce labelled on two
+adjacent frames still counts as two references in the all-bounces recall (the second one usually "missed");
+no rule uses that number, and merging such labels was not part of the correction decided above, so it is only
+noted here.
