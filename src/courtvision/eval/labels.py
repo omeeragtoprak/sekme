@@ -51,6 +51,12 @@ def evaluate(world_xy: np.ndarray, call: dict) -> dict:
     zone = zone_from_name(call["zone"])
     inside = bool(zone.contains(xy[None, :], grow=FOOTPRINT_HALF)[0])
     margin, line = zone.signed_margin(xy)
+    margin_cm = 100 * (float(margin) + FOOTPRINT_HALF)
+    # The net side of a zone is open (not a line), so the zone itself would take a point on the other half; a
+    # bounce there did not reach the target half at all.
+    wrong_half = ("y0" in zone.open_sides and xy[1] < 0) or ("y1" in zone.open_sides and xy[1] > 0)
+    if wrong_half:
+        inside, line, margin_cm = False, "net", -100 * abs(float(xy[1]))
     truth = "IN" if inside else "OUT"
     system = call["verdict"]
     return {
@@ -58,7 +64,7 @@ def evaluate(world_xy: np.ndarray, call: dict) -> dict:
         "mahalanobis2": round(d2, 2),
         "inside_95": d2 <= CHI2_95_2D,
         "truth": truth,
-        "truth_margin_cm": round(100 * (float(margin) + FOOTPRINT_HALF), 1),
+        "truth_margin_cm": round(margin_cm, 1),
         "truth_line": line,
         "system": system,
         "agrees": None if system == "REVIEW" else system == truth,

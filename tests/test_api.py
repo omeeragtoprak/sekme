@@ -209,3 +209,12 @@ def test_a_source_link_is_served_only_if_it_points_at_a_video_and_broken_log_lin
     c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
     assert c.get("/api/runs/clip1/media/source").status_code == 404
     assert c.get("/api/runs/clip1/reviews").json() == [{"id": "a"}]
+
+
+def test_a_labelled_bounce_on_the_other_half_is_not_inside_the_zone() -> None:
+    from courtvision.eval.labels import evaluate
+
+    call = {"x": -1.0, "y": 3.0, "cov": [[1e-4, 0], [0, 1e-4]], "zone": "service-far-left", "verdict": "IN"}
+    r = evaluate([-1.0, -2.0], call)  # clicked on the near half: the far service box was not hit
+    assert r["truth"] == "OUT" and r["agrees"] is False and r["truth_line"] == "net" and r["truth_margin_cm"] < 0
+    assert evaluate([-1.0, 3.0], call)["truth"] == "IN"

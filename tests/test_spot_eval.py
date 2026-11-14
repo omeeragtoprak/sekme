@@ -81,3 +81,32 @@ def test_a_system_serve_before_a_labelled_serve_of_the_same_side_is_set_apart_as
     assert row["serve"]["matched"] == 1 and row["serve"]["before_label"] == 1
     s = summary([row])["serve"]
     assert s["precision"] == 1 / 3 and s["precision_excl_faults"] == 1 / 2 and s["before_label"] == 1
+
+
+def test_tolerances_are_seconds_at_the_nominal_frame_rate() -> None:
+    def clip(fps: float) -> dict:
+        return {"video": "m_0_300", "fps": fps, "num_frames": 300,
+                "events": [{"label": "near_court_swing", "frame": 100, "comment": ""}]}
+
+    rep = {"hits": [{"frame": 103, "side": "near", "serve": False}], "flights": []}  # 3 frames late
+    assert score_clip(clip(30000 / 1001), rep)["stroke"]["matched"] == 1  # 29.97 fps counts as 30: 3 frames
+    assert score_clip(clip(25.0), rep)["stroke"]["matched"] == 0  # 0.12 s
+    rep["hits"][0]["frame"] = 102
+    assert score_clip(clip(25.0), rep)["stroke"]["matched"] == 1
+
+
+def test_labels_are_validated_and_a_bounce_without_position_does_not_crash() -> None:
+    import pytest
+
+    from courtvision.eval.spot import check_clip
+
+    check_clip(_clip())
+    for bad in ({"label": "near_court_foo", "frame": 5}, {"label": "serve", "frame": 5},
+                {"label": "near_court_bounce", "frame": 300}, {"label": "near_court_bounce", "frame": -1}):
+        c = _clip()
+        c["events"] = [bad]
+        with pytest.raises(ValueError):
+            check_clip(c)
+    rep = _report()
+    rep["flights"][1]["bounce"] = {"frame": 47.0, "y": None}
+    assert score_clip(_clip(), rep)["bounce"]["system"] == 2

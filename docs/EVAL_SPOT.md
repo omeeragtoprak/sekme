@@ -164,3 +164,39 @@ hanging at the apex for 0.17 s qualifies. The serve detector's run gap (2 frames
 frame) are frame-based too. Scaling these by round(fps / 30), as the ball network's input stride already
 is, finds 20 of 23 serves at 60 fps without the bridge; it also moves some 60 fps bounces and calls, so it
 is a separate candidate for later, with its own test.
+
+## Runner and scorer corrected before any download (2026-11-14, after an independent review of the code)
+
+A review of `scripts/eval_spot.py` and `courtvision.eval.spot` against this plan, before anything was downloaded,
+found the matching and the recall / precision arithmetic as written, but nothing enforcing what surrounds them.
+Corrected; no rule changed:
+
+- **The samples are this plan's matches.** `sample --name dev3` and `--name test4` take exactly the matches of
+  the table above, with their clip counts checked against it, and a sample file is never redrawn. Labels are
+  validated (known event labels, frames inside their clip) and the label files' SHA-256 recorded.
+- **At most two candidates, enforced.** A candidate runs on the test matches only as a slot (1 or 2) of the
+  committed ledger `results/spot_test_candidates.json`, added with its rule before its run; a third slot is
+  refused. Its runs go to fixed folders: the current default from scratch (`runs_spot_base_slot<N>`) and the
+  candidate from that run's cached detections of the same clip files (`runs_spot_cand_slot<N>`), so the two
+  differ only by the candidate's code path, as described above. The baseline report of rule 1 runs to
+  `runs_spot` and decides nothing. A candidate run needs the test match videos again (they are deleted after
+  the baseline report).
+- **Every run names its code.** Runs start only from committed analysis code; each clip records the commit it
+  was analysed with (taken before its analysis; a clip during which the code changes is discarded). Scoring
+  checks every clip: made from the analysis code at HEAD, with exactly its flags, with as many frames as its
+  labels, with the same models as all other clips; refuses uncommitted scorer code; writes a test result once.
+- **A broken setup does not become missed events.** A clip whose analysis raises is recorded as failed and
+  scored as a clip with no system events, as written above; any other exit (a usage error such as a mistyped
+  flag, a killed process) stops the run and records nothing, and so do three failed clips in a row or more than
+  10 % of a match's clips, before the match video is deleted.
+- **The match videos are identified.** Each video's SHA-256, size and frame rate are recorded before its first
+  clip is cut; a video that is not 720p, or not the file recorded before, is refused.
+- **Tolerances at the nominal frame rate.** "Within 0.1 s, the TrackNet bounce tolerance" (±3 frames at 30 fps)
+  would, counted at 29.97 fps, be 2.997 frames, so a stroke 3 frames off would match on a 30 fps file and not on
+  the US Open's 29.97 fps ones. Seconds are now counted at the nominal rate (29.97 fps as 30): ±3 frames on the
+  US Open matches, ±2.5 on Wimbledon's 25 fps, ±15 and ±12.5 for serves; the 30 s fault window likewise.
+- A bounce without a court position no longer stops scoring (its side is "unknown"); matched counts are printed.
+
+For a candidate, `score --name test4 --slot N` also prints the baseline-against-candidate numbers its rule uses
+(pooled and per match, in points, with matched counts); the decision is the candidate's written rule applied to
+them.

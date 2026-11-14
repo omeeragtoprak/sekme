@@ -14,7 +14,7 @@ import pickle
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -96,10 +96,33 @@ def _own_arch(path: str) -> str | None:
     return ckpt.get("arch") if isinstance(ckpt, dict) else None
 
 
+# Settings the cached perception depends on besides the networks: the calibrator's keyframe interval, the shot-cut
+# threshold (cuts, and the person tracker reset at each cut) and the person detector's input size.
+PERCEPTION_SETTINGS = ("keyframe_interval", "cut_threshold", "player_imgsz")
+
+
 def perception_key(video_sha: str, cfg: PipelineConfig) -> dict:
-    """What cached detections depend on: the video, the court/ball/person networks and the ball stride."""
+    """What cached detections depend on: the video, the court/ball/person networks, the ball stride and the
+    perception settings."""
     return {"video_sha256": video_sha, "ball_stride": cfg.ball_stride,
-            "models": {k: _sha256(cfg.models[k]) for k in ("court", "ball", "players")}}
+            "models": {k: _sha256(cfg.models[k]) for k in ("court", "ball", "players")},
+            "settings": {k: getattr(cfg, k) for k in PERCEPTION_SETTINGS}}
+
+
+def same_perception_key(cached: dict, key: dict) -> bool:
+    """A cache written before the settings were part of its key was made with their defaults, which have not
+    changed since the settings were introduced (2026-10-27): it is read as such, not recomputed."""
+    defaults = {f.name: f.default for f in fields(PipelineConfig) if f.name in PERCEPTION_SETTINGS}
+    return {"settings": defaults, **cached} == key
+
+
+def pose_key(video_sha: str, model_sha: str, reqs: list[tuple[int, str, np.ndarray]]) -> dict:
+    """What cached poses depend on: the video, the pose network, and for each request the frame, the hitter's side
+    and the box the crop is cut from (another player selection at the same frame must not reuse the pose)."""
+    def box(b: np.ndarray) -> list[float | None]:
+        return [round(float(v), 1) if np.isfinite(v) else None for v in np.asarray(b, dtype=float)]
+    return {"video_sha256": video_sha, "model_sha256": model_sha,
+            "requests": [(int(f), side, box(b)) for f, side, b in reqs]}
 
 
 def _model_card(key: str, path: str) -> dict:
@@ -276,7 +299,8 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
     idx = [i for i, fl in enumerate(flights) if fl.contact_time is not None or fl.kind == "serve"]
     reqs = [(flights[i].start_frame, players[flights[i].hitter].boxes[flights[i].start_frame]) for i in idx]
     cache = out / "pose.pkl"
-    key = {"video_sha256": video_sha, "model_sha256": _sha256(cfg.models["pose"]), "frames": [r[0] for r in reqs]}
+    key = pose_key(video_sha, _sha256(cfg.models["pose"]),
+                   [(flights[i].start_frame, flights[i].hitter, r[1]) for i, r in zip(idx, reqs, strict=True)])
     poses = None
     if cfg.reuse_perception and cache.is_file():
         with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
@@ -338,7 +362,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     if cfg.reuse_perception and cache.is_file():
         with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
             cached = pickle.load(f)
-        if cached.get("key") != perc_key:  # other video, other networks or other ball stride: recompute
+        if not same_perception_key(cached.get("key", {}), perc_key):  # other video, networks or settings: recompute
             cached = None
     if cached is not None:
         meas, dets, cuts, cands, n = cached["meas"], cached["dets"], cached["cuts"], cached["cands"], cached["n"]
@@ -404,7 +428,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "players": {
             side: {"label": "P1" if side == "near" else "P2", "track_ids": players[side].track_ids,
                    "coverage": _f(np.isfinite(players[side].world[:, 0]).mean()),
-                   "distance_m": _f(kin[side].distance_m[-1], 1), "peak_kmh": _f(kin[side].peak_kmh, 1),
+                   "distance_m": _f(kin[side].distance_m[-1] if len(kin[side].distance_m) else None, 1),
+                   "peak_kmh": _f(kin[side].peak_kmh, 1),
                    "mean_kmh": _f(kin[side].mean_kmh, 1)}
             for side in players
         },

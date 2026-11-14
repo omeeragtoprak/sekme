@@ -13,8 +13,30 @@ from dataclasses import dataclass
 import numpy as np
 
 # Matching windows in seconds: 0.1 s is the TrackNet bounce tolerance (3 frames at 30 fps); a serve is
-# matched as in the Review Room's serve labels (SERVE_TOL_S in courtvision.api.app).
+# matched as in the Review Room's serve labels (SERVE_TOL_S in courtvision.api.app). Seconds are counted at the
+# nominal frame rate (29.97 fps as 30), so 0.1 s is 3 frames on the US Open matches, as on TrackNet, and not
+# 2.997 (docs/EVAL_SPOT.md, amendment of 2026-11-14).
 TOL_S = {"bounce": 0.1, "stroke": 0.1, "serve": 0.5, "serve_toss": 0.5}
+LABELS = {f"{side}_court_{kind}" for side in ("near", "far") for kind in ("bounce", "swing", "serve")}
+
+
+def nominal_fps(fps: float) -> int:
+    """25 for 25 fps, 30 for 29.97 fps: the rate the tolerances in seconds are counted at."""
+    return int(round(fps))
+
+
+def check_clip(clip: dict) -> None:
+    """A labelled clip: known event labels, frames inside the clip, a frame count matching its name."""
+    n = int(clip["num_frames"])
+    start, end = (int(v) for v in clip["video"].rsplit("_", 2)[1:])
+    if end - start != n:
+        raise ValueError(f"{clip['video']}: name says {end - start} frames, num_frames {n}")
+    for e in clip["events"]:
+        if e.get("label") not in LABELS:
+            raise ValueError(f"{clip['video']}: unknown label {e.get('label')!r}")
+        f = e.get("frame")
+        if not isinstance(f, int) or isinstance(f, bool) or not 0 <= f < n:
+            raise ValueError(f"{clip['video']}: frame {f!r} outside the clip's {n} frames")
 # A serve the system finds before a labelled serve of the same side, in the same clip and within this time,
 # is most likely a fault the labels leave out: precision is also given without such serves (EVAL_SPOT.md).
 FAULT_WINDOW_S = 30.0
@@ -72,9 +94,10 @@ def system_events(report: dict) -> list[Event]:
         if f.get("kind") == "serve":
             fr = f["contact_frame"] if f.get("contact_frame") is not None else f["start_frame"]
             out.append(Event("serve", str(f["hitter"]), float(fr)))
-        if f.get("bounce"):
+        if f.get("bounce") and f["bounce"].get("frame") is not None:
             b = f["bounce"]
-            out.append(Event("bounce", "far" if b["y"] > 0 else "near", float(b["frame"])))
+            side = "unknown" if b.get("y") is None else ("far" if b["y"] > 0 else "near")
+            out.append(Event("bounce", side, float(b["frame"])))
     return sorted(out, key=lambda e: e.frame)
 
 
@@ -95,6 +118,7 @@ def score_clip(clip: dict, report: dict | None) -> dict:
     """Per kind: labelled, system, matched, side agreement, timing gaps (frames); first-bounce counts and
     the tolerance sweep for bounces and strokes. ``report=None`` is a failed analysis: no system events."""
     fps = float(clip["fps"])
+    nf = nominal_fps(fps)  # tolerances and the fault window count seconds at this rate
     ref_all = label_events(clip)
     sys_all = system_events(report) if report is not None else []
     out = {"video": clip["video"], "fps": fps, "failed": report is None}
@@ -104,16 +128,16 @@ def score_clip(clip: dict, report: dict | None) -> dict:
     for kind, tol in TOL_S.items():
         ref = [e for e in ref_all if e.kind == kind]
         sys = [e for e in sys_all if e.kind == kind]
-        pairs = match_events(ref, sys, tol * fps)
+        pairs = match_events(ref, sys, tol * nf)
         row = {"labelled": len(ref), "system": len(sys), "matched": len(pairs),
                "same_side": sum(ref[i].side == sys[j].side for i, j in pairs),
                "dt": [sys[j].frame - ref[i].frame for i, j in pairs]}
         if kind in ("bounce", "stroke"):
-            row["sweep"] = {f"{t:g}": len(match_events(ref, sys, t * fps)) for t in SWEEP_S}
+            row["sweep"] = {f"{t:g}": len(match_events(ref, sys, t * nf)) for t in SWEEP_S}
         if kind in ("serve", "serve_toss"):
             used = {j for _, j in pairs}
             row["before_label"] = sum(
-                j not in used and any(r.side == e.side and 0 < r.frame - e.frame <= FAULT_WINDOW_S * fps for r in ref)
+                j not in used and any(r.side == e.side and 0 < r.frame - e.frame <= FAULT_WINDOW_S * nf for r in ref)
                 for j, e in enumerate(sys))
         if kind == "bounce":
             first = first_bounce_flags(ref_all)

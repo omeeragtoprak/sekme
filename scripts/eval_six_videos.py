@@ -24,7 +24,6 @@ labels, uncommitted changes to the analysis or the scorer, and an existing resul
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import json
 import shutil
@@ -39,6 +38,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from six_videos_fetch import MATCHES  # noqa: E402
 
+from courtvision.eval.provenance import (  # noqa: E402
+    analysis_code,
+    clean,
+    code_unchanged_since,
+    head_sha,
+    same_code,
+    tracked_and_clean,
+)
 from courtvision.eval.six_videos import (  # noqa: E402
     call_changes,
     check_player_labels,
@@ -67,67 +74,6 @@ FLAGS = {"default": set(), "scaled": {"fps_scaled_thresholds"},
 CACHES = ("perception.pkl", "broadcast.pkl", "pose.pkl")
 SCORER_CODE = ["src", "scripts/eval_six_videos.py", "scripts/six_videos_fetch.py"]
 PLAYER_FILES = ("_presence", "_presence_frames", "_disagree", "_disagree_frames")
-
-
-def git(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True)
-
-
-def head_sha() -> str:
-    r = git("rev-parse", "HEAD")
-    if r.returncode != 0 or not r.stdout.strip():
-        raise SystemExit(f"git rev-parse HEAD failed: {r.stderr.strip()}")
-    return r.stdout.strip()
-
-
-def clean(paths: list[str]) -> bool:
-    """No uncommitted change (staged, unstaged or untracked) under these paths; a failing git is not clean."""
-    r = git("status", "--porcelain", "--", *paths)
-    return r.returncode == 0 and r.stdout.strip() == ""
-
-
-def analysis_code() -> list[str]:
-    """The source files ``sekme analyze`` can load: cli.py and the import closure of what its analyze command
-    imports (every import statement, also those inside functions, and the packages' __init__ files). Only these
-    decide whether two runs come from the same code: a commit to the API, the web app or the scorer between two
-    batches of videos does not make the earlier batch stale."""
-    src = ROOT / "src"
-
-    def file_of(mod: str) -> Path | None:
-        p = src / Path(*mod.split("."))
-        return next((c for c in (p.with_suffix(".py"), p / "__init__.py") if c.exists()), None)
-
-    files = {src / "courtvision" / "cli.py"}
-    todo = ["courtvision.pipeline", "courtvision.events.serves"]  # what cli._analyze imports
-    seen: set[str] = set()
-    while todo:
-        mod = todo.pop()
-        if mod in seen:
-            continue
-        seen.add(mod)
-        f = file_of(mod)
-        if f is None:
-            continue
-        files.add(f)
-        parts = mod.split(".")
-        todo += [".".join(parts[:i]) for i in range(1, len(parts))]  # parent packages run their __init__
-        for node in ast.walk(ast.parse(f.read_text())):
-            if isinstance(node, ast.ImportFrom) and node.level > 0:
-                raise SystemExit(f"{f}: relative import; analysis_code() resolves absolute imports only")
-            if isinstance(node, ast.Import):
-                todo += [a.name for a in node.names if a.name.startswith("courtvision")]
-            elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("courtvision"):
-                todo.append(node.module)
-                todo += [f"{node.module}.{a.name}" for a in node.names]  # "from pkg import module"
-    return sorted(str(f.relative_to(ROOT)) for f in files)
-
-
-def same_code(run: Path) -> bool:
-    """The run was made from a commit whose analysis code equals HEAD's."""
-    marker = run / "code_sha.txt"
-    if not marker.exists():
-        return False
-    return git("diff", "--quiet", marker.read_text().strip(), "HEAD", "--", *analysis_code()).returncode == 0
 
 
 def videos_in(videos: Path) -> list[Path]:
@@ -173,7 +119,7 @@ def analyse(video: Path, out: Path, extra: list[str]) -> None:
                        capture_output=True, text=True)
     if r.returncode != 0:
         raise SystemExit(f"{video.name} {out.name}: analysis failed: {r.stderr.strip().splitlines()[-1:]}")
-    if not clean(code) or git("diff", "--quiet", sha, "HEAD", "--", *code).returncode != 0:
+    if not code_unchanged_since(sha, code):
         (out / "report.json").unlink()  # which code it ran is unclear: it is made again on the next call
         raise SystemExit(f"{video.name} {out.name}: the analysis code changed during the run; run again")
     (out / "code_sha.txt").write_text(sha)
@@ -247,9 +193,7 @@ def _check_frames(labels: list[dict], listed: Path, n: str) -> None:
 
 def committed(labels_dir: Path) -> bool:
     """Every label file is tracked by git and unchanged since its commit (labels are committed before scoring)."""
-    files = sorted(labels_dir.glob("*.json"))
-    tracked = git("ls-files", "--error-unmatch", "--", *map(str, files))
-    return bool(files) and tracked.returncode == 0 and clean([str(f) for f in files])
+    return tracked_and_clean(sorted(labels_dir.glob("*.json")))
 
 
 def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:

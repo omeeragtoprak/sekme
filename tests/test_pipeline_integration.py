@@ -72,3 +72,35 @@ def test_model_card_reads_our_checkpoints_with_numpy_scores(tmp_path):
     card = _model_card("ball", str(path))  # a report must not fail on the checkpoint's own metadata
     assert card["trained_on"] == "TrackNet tennis games 1-7" and card["epoch"] == 10
     assert card["source"].startswith("this project")
+
+
+def test_perception_cache_key_covers_the_settings_and_reads_old_caches_as_defaults(tmp_path):
+    from courtvision.pipeline import PipelineConfig, perception_key, same_perception_key
+
+    a = tmp_path / "a.pt"
+    a.write_bytes(b"one")
+    cfg = PipelineConfig()
+    cfg.models = {"court": str(a), "ball": str(a), "players": str(a), "pose": str(a)}
+    k = perception_key("video", cfg)
+    old = {kk: v for kk, v in k.items() if kk != "settings"}  # a cache written before the settings were keyed
+    assert same_perception_key(old, k) and same_perception_key(k, k)
+    for name, value in (("keyframe_interval", 30), ("cut_threshold", 0.6), ("player_imgsz", 960)):
+        c = PipelineConfig()
+        c.models = cfg.models
+        setattr(c, name, value)
+        assert not same_perception_key(k, perception_key("video", c))
+        assert not same_perception_key(old, perception_key("video", c))  # an old cache had the defaults
+
+
+def test_pose_cache_key_covers_the_hitter_and_its_box():
+    import numpy as np
+
+    from courtvision.pipeline import pose_key
+
+    box = np.array([10.0, 20.0, 60.0, 180.0])
+    k = pose_key("video", "model", [(100, "near", box)])
+    assert k == pose_key("video", "model", [(100, "near", box.copy())])
+    assert k != pose_key("video", "model", [(100, "far", box)])
+    assert k != pose_key("video", "model", [(100, "near", box + 30)])  # another player picked at that frame
+    nan = np.full(4, np.nan)
+    assert pose_key("v", "m", [(5, "near", nan)]) == pose_key("v", "m", [(5, "near", nan.copy())])

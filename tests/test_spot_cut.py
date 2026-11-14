@@ -88,3 +88,29 @@ def test_clips_start_and_end_on_their_labelled_frames(tmp_path: Path, monkeypatc
     with pytest.raises(SystemExit, match="not the labelled upload"):
         eval_spot.run_match(src, [{"video": "m_0_10", "fps": 25.0, "num_frames": 10}], tmp_path / "r3",
                             tmp_path / "tmp", keep=False)
+
+
+def test_three_failed_analyses_in_a_row_stop_the_match(tmp_path: Path, monkeypatch) -> None:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import eval_spot
+
+    src = tmp_path / "match.mp4"
+    p = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}",
+                          "-r", "25", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(src)],
+                         stdin=subprocess.PIPE)
+    for i in range(60):
+        p.stdin.write(_bars(i).tobytes())
+    p.stdin.close()
+    assert p.wait() == 0
+    clips = [{"video": f"m_{a}_{a + 10}", "fps": 25.0, "num_frames": 10} for a in (0, 10, 20, 30)]
+    done = []
+
+    def failing(clip: Path, run: Path, extra: tuple[str, ...] = ()) -> None:
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "FAILED.txt").write_text("boom")
+        done.append(run.name)
+
+    monkeypatch.setattr(eval_spot, "analyse", failing)
+    with pytest.raises(SystemExit, match="3 analyses failed in a row"):
+        eval_spot.run_match(src, clips, tmp_path / "runs", tmp_path / "tmp", keep=False)
+    assert done == ["m_0_10", "m_10_20", "m_20_30"]  # stopped before the fourth

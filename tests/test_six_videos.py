@@ -269,14 +269,16 @@ def test_a_failing_git_is_never_clean_and_labels_outside_the_repo_are_not_commit
 
     import pytest
 
+    import courtvision.eval.provenance as pv
+
     e = _script()
-    real = e.git
+    real = pv.git
     try:
-        e.git = lambda *a: subprocess.CompletedProcess(a, 128, "", "fatal: not a git repository")
+        pv.git = lambda *a: subprocess.CompletedProcess(a, 128, "", "fatal: not a git repository")
         assert e.clean(["src"]) is False
         with pytest.raises(SystemExit):
             e.head_sha()
     finally:
-        e.git = real
+        pv.git = real
     (tmp_path / "a.json").write_text("{}")
     assert e.committed(tmp_path) is False

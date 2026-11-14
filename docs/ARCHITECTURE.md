@@ -101,6 +101,19 @@ read and that can only be checked by re-reading every clip:
 - `broadcast/scoreboard.py`: a graphic without a point column whose last set reads "0 0" is taken as
   showing points, so that frame's end-change count is one short (it can only mislabel names, never a call).
 
+Also from the pipeline review (2026-11-14), checked and left:
+
+- The serving hand is voted per player name; without names (no OCR), per side, which pools two players
+  across an end change and can mislabel a left-hander's forehand and backhand (strokes only, never a call).
+- Poses are read by seeking to each hit frame; on the 60 fps 1080p footage 25 of 25 sampled frames were
+  identical to sequential decoding, so this was not changed.
+
+Fixed in the same review: the perception cache key now includes the calibrator's keyframe interval, the
+shot-cut threshold and the person detector's input size (older caches are read as made with the defaults,
+which have not changed since they were added); the pose cache key includes each hit's side and player box, so
+another player selection at the same frames (`--player-size-from-camera`) does not reuse the poses; a labelled
+bounce on the other half of the court is scored as outside its zone, not inside it (zones are open at the net).
+
 ## Review Room security (security review, 2026-11-14)
 
 The Review Room is a single-user tool for this machine. A security review found no HIGH findings; it is now

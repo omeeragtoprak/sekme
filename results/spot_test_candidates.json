@@ -1,0 +1,4 @@
+{
+ "note": "Candidates run on the E2E-Spot test matches (docs/EVAL_SPOT.md, rule 3): at most two slots, ever. An entry is added and committed together with the candidate's rule, before its run; scripts/eval_spot.py runs and scores a test candidate only from here. The withdrawn toss bridge (the plan's 'Candidate 1') never ran and holds no slot.",
+ "candidates": []
+}
