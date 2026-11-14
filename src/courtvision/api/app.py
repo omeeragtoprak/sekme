@@ -193,6 +193,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         for d in sorted(runs_root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
             if not d.is_dir() or not RUN_ID.match(d.name) or not (d / "report.json").is_file():
                 continue
+            if d.resolve().parent != runs_root:
+                continue  # linked from elsewhere: run_dir refuses it, so it is not listed either
             if not (d / "frames.json").is_file():
                 continue  # a report kept on its own (an evaluation output) has nothing to review
             try:

@@ -309,4 +309,7 @@ frame-count thresholds discussed above apply four times more strongly there.
 hashing it, after an empty run folder had been made; `analyze` now checks the four checkpoints first and stops with
 one line naming the missing ones (`MissingModelError`; the command line exits with 2, a Review Room job shows the
 line and keeps the upload). Without a built web app, `sekme serve` answers `/` with a page that says how to build
-it instead of a JSON 404.
+it instead of a JSON 404. Runs with no calibrated frame and no flight (black, portrait test pattern, one frame) open
+in the Review Room with its empty states ("Vuruş bulunamadı", empty analysis cards) and no console error. A run
+folder linked into the runs folder from elsewhere is no longer listed: the server never opened it (it only opens
+folders that are really inside the runs folder) and used to list it anyway.

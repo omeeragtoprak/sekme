@@ -272,3 +272,13 @@ def test_without_a_built_web_app_the_root_page_says_how_to_build_it(tmp_path: Pa
     assert "npm run build" in r.text
     assert c.head("/").status_code == 200
     assert c.get("/api/health").status_code == 200  # the API itself still works
+
+
+def test_the_run_list_shows_only_runs_that_can_be_opened(tmp_path: Path) -> None:
+    _make_run(tmp_path / "runs")
+    elsewhere = _make_run(tmp_path / "other")  # a run folder outside the runs root, linked into it
+    (tmp_path / "runs" / "linked").symlink_to(elsewhere)
+    c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "no-dist"), base_url="http://127.0.0.1")
+    ids = [r["id"] for r in c.get("/api/runs").json()]
+    assert ids == ["clip1"]
+    assert all(c.get(f"/api/runs/{i}/report").status_code == 200 for i in ids)
