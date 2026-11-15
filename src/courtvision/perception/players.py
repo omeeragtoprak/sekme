@@ -38,8 +38,9 @@ class YoloPersonTracker:
 
     def __call__(self, frame: np.ndarray) -> list[PersonDet]:
         # fp16 on GPU/MPS: 43 -> 34 ms/frame at 1080p, the same boxes (median shift 0.13 px over 1221 boxes).
-        res: Any = self.model.track(frame, persist=True, classes=[0], tracker="bytetrack.yaml", imgsz=self.imgsz,
-                               conf=self.conf, device=self.device, verbose=False, half=self.device != "cpu")[0]
+        out: Any = self.model.track(frame, persist=True, classes=[0], tracker="bytetrack.yaml", imgsz=self.imgsz,
+                                    conf=self.conf, device=self.device, verbose=False, half=self.device != "cpu")
+        res = out[0]  # (ultralytics versions annotate the result as a list or an iterator; it is a list)
         out: list[PersonDet] = []
         if res.boxes is None or len(res.boxes) == 0:
             return out
