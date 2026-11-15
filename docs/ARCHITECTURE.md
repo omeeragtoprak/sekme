@@ -303,8 +303,8 @@ Re-scored with those 20 flights corrected:
 | clothing (candidate) | 259 | 20 (7.2 %) | 0 |
 
 (a) fails: 7.2 % against at most 2 %. The flaw is in the test's design (the reference shared the candidate's
-stretches), not in the candidate's favour, so the honest reading is that the bar is not met. It stays off
-(`--appearance-identity`), although it removes most of the graphic's wrong names. What would fix the
+stretches), not in the candidate's favour, so the honest reading is that the bar is not met. It stayed off
+(`--appearance-identity`, removed after version 2 below), although it removes most of the graphic's wrong names. What would fix the
 20: deciding per flight, or splitting a stretch where its flights' own clothing changes side, which the per-flight
 margins above make easy, and a cut detector that catches these edits. That is a new version, and the 2025 final is
 now spent for this question (its crops and frames have been looked at), so it needs footage not used yet (the six
