@@ -422,7 +422,9 @@ histogram test finds 5 (1.7 %), with the candidate 289 (98.3 %); it fires on non
 the five broadcast runs it adds two cuts, both in the 2025 run at 234.3 and 234.4 s: the two middle frames of a
 dissolve between two moments filmed from the main camera (the second moment shows through the first), so an
 edit. With fewer than five, (c) is not applied. (D) TrackNet games 1–7 (65 clips): no cut added, no call
-changed. (a), (b) and (d) hold.
+changed. (a), (b) and (d) hold. Checked afterwards on all six broadcast runs (`devir/scratch/cut_effect.py`, from their cached
+detections, without and with the edits): no flight and no call changes; the 2025 dissolve lies outside every
+flight.
 
 What it does and does not do on broadcast footage, as seen in the identity test: the edits that were missed
 there switch to or from another camera (the side camera at 140 s). Right after such an edit the calibration

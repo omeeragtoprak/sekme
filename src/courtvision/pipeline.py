@@ -119,22 +119,28 @@ def _own_arch(path: str) -> str | None:
 PERCEPTION_SETTINGS = ("keyframe_interval", "cut_threshold", "player_imgsz")
 
 
-def perception_key(video_sha: str, cfg: PipelineConfig) -> dict:
-    """What cached detections depend on: the video, the court/ball/person networks, the ball stride and the
-    perception settings."""
-    return {"video_sha256": video_sha, "ball_stride": cfg.ball_stride,
-            "models": {k: _sha256(cfg.models[k]) for k in ("court", "ball", "players")},
-            "settings": {k: getattr(cfg, k) for k in PERCEPTION_SETTINGS}}
+def perception_key(video_sha: str, cfg: PipelineConfig, ball_step: int | None = None) -> dict:
+    """What cached detections depend on: the video, the court/ball/person networks, the ball stride (as set, and
+    `ball_step`, the one used: it follows the frame rate read from the file) and the perception settings."""
+    key = {"video_sha256": video_sha, "ball_stride": cfg.ball_stride,
+           "models": {k: _sha256(cfg.models[k]) for k in ("court", "ball", "players")},
+           "settings": {k: getattr(cfg, k) for k in PERCEPTION_SETTINGS}}
+    if ball_step is not None:
+        key["ball_step"] = ball_step
+    return key
 
 
 def same_perception_key(cached: dict | None, key: dict) -> bool:
     """A cache written before the settings were part of its key was made with their defaults, which have not
-    changed since the settings were introduced (2026-10-27): it is read as such, not recomputed. A cache without a
-    usable key (none, or null) is recomputed."""
+    changed since the settings were introduced (2026-10-27): it is read as such, not recomputed. One written before
+    the ball step was part of it (2026-11-15) is taken as made with today's step: the frame rate it follows was read
+    the same way for every video analysed before then but one WebM. A cache without a usable key (none, or null) is
+    recomputed."""
     if not cached:
         return False
     defaults = {f.name: f.default for f in fields(PipelineConfig) if f.name in PERCEPTION_SETTINGS}
-    return {"settings": defaults, **cached} == key
+    step = {"ball_step": key["ball_step"]} if "ball_step" in key else {}
+    return {"settings": defaults, **step, **cached} == key
 
 
 def pose_key(video_sha: str, model_sha: str, reqs: list[tuple[int, str, np.ndarray]]) -> dict:
@@ -520,7 +526,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         t0 = time.time()
     video_sha = source_sha if copy_info is None else copy_info["sha256"]  # what the detections are computed on
     cache = out / "perception.pkl"
-    perc_key = perception_key(video_sha, cfg)
+    perc_key = perception_key(video_sha, cfg, cfg.ball_stride or frame_scale(info.fps))
     cached = None
     if cfg.reuse_perception and cache.is_file():
         with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)

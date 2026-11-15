@@ -154,3 +154,13 @@ def test_pose_cache_key_covers_the_hitter_and_its_box():
     assert k != pose_key("video", "model", [(100, "near", box + 30)])  # another player picked at that frame
     nan = np.full(4, np.nan)
     assert pose_key("v", "m", [(5, "near", nan)]) == pose_key("v", "m", [(5, "near", nan.copy())])
+
+
+def test_cached_detections_are_not_reused_with_another_ball_step():
+    from courtvision.pipeline import PipelineConfig, perception_key, same_perception_key
+
+    cfg = PipelineConfig()
+    k30, k60 = perception_key("video", cfg, 1), perception_key("video", cfg, 2)
+    assert same_perception_key(k30, k30) and not same_perception_key(k30, k60)  # e.g. the frame rate read anew
+    old = {k: v for k, v in k60.items() if k != "ball_step"}  # written before the step was part of the key
+    assert same_perception_key(old, k60) and same_perception_key(old, k30)
