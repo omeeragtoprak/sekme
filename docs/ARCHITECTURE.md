@@ -394,8 +394,8 @@ of another is an edit at a known frame (326 such pairs); the histogram test find
 let a measurable segment, a flight's hits, a marked server's names and a clothing stretch run across two
 moments; the identity test above met three in one 2025 run.
 
-**Candidate** (`perception/court.py` `frame_differences`, `same_angle_edits`; `PipelineConfig.same_angle_edits`,
-`--same-angle-edits`, off by default). An extra decoding pass gives each frame's mean absolute grey difference from
+**Candidate** (`perception/court.py` `frame_differences`, `same_angle_edits`; `PipelineConfig.same_angle_edits`;
+tested behind a `--same-angle-edits` flag, off by default; adopted below, the flag is gone and the setting is on). An extra decoding pass gives each frame's mean absolute grey difference from
 the one before (160 × 90). A frame starts a new shot if that difference is at least 2.5 grey levels and at least 3
 times the median of the 6 before it (a camera move builds up over frames), and both frames are calibrated (a
 same-angle edit only matters where something is measured: elsewhere, in close-ups, fast moves set it off and split

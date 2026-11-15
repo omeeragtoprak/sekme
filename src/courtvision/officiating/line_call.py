@@ -50,6 +50,8 @@ def with_play_evidence(call: LineCall, play_continued: bool | None) -> LineCall:
 
 def call_bounce(xy: np.ndarray, cov: np.ndarray, zone: Zone, footprint: float = FOOTPRINT_HALF,
                 decisive: float = 0.95, n_samples: int = 40000, seed: int = 0) -> LineCall:
+    if not (np.all(np.isfinite(xy)) and np.all(np.isfinite(cov))):  # one error for any non-finite input
+        raise FloatingPointError("non-finite bounce position or covariance for line call")
     cov = 0.5 * (cov + cov.T)
     w, V = np.linalg.eigh(cov)
     cov = V @ np.diag(np.clip(w, 1e-8, None)) @ V.T
