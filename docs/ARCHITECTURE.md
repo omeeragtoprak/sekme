@@ -313,6 +313,33 @@ US Open videos awaiting a download yes) and a reference labelled per flight. Sep
 names are wrong on about a quarter of the flights in this match and a fifth in the development runs (whole
 stretches, from misread games); the README says so.
 
+## End changes only from plausible score readings (rule written 2026-11-15, before the test below was run)
+
+**Candidate** (`eval/broadcast_check.py` `plausible`, `PipelineConfig.plausible_scores`, `--plausible-scores`, off by
+default). The end changes behind the graphic's names (each player's start end from the marked servers' serves,
+then the near and far names of every shot) are counted only from readings whose games can be a tennis score:
+the same number of sets, 1 to 5, in both rows; at most 7 games a set; every set but the last finished (6 against
+at most 4, 7-5 or 7-6); the last under way or just won. A shot with no such reading within 8 s gets no names
+rather than names from a misread. Development (the two runs above, against their clothing names, where no flight's
+own crops contradict its stretch; `devir/scratch/plausible_dev.py`): 2024 final highlights, near-player names right
+62 → 56, wrong 23 → 0, none 0 → 29; 2023 final unchanged (46 right, 3 wrong, 17 none: those three are not from
+a misread). Start ends unchanged in both.
+
+**Test**: the 2025 final, both runs, against the per-flight reference of the identity test above (the labeller's
+stretches with the 20 flights corrected from the full frames: 279 flights). That reference was built for another
+question; this run's score readings have not been looked at. **Adopted, on by default, if** (a) the candidate's
+wrong near-player names are at most half the graphic's (72, so at most 36) and (b) its right ones at least 85 %
+of the graphic's (205, so at least 175). Otherwise it stays off and the result is recorded here.
+
+**Result (2026-11-15): rejected; the code is removed** (it was 5c45ccb; `devir/scratch/plausible_eval.py`). On the
+279 reference flights the near player's name was right on 205 → 207, wrong on 72 → 62, missing on 2 → 10: (b)
+holds, (a) fails (62 against at most 36). The 2025 run's start ends are the same either way. Looked at afterwards:
+59 of the 62 remaining wrong names come from readings that pass the check, 29 of them in one stretch (329.7–397.3
+s) where the fourth set's column is most likely missed. "2-6, 6-3, 1-6" is a valid score with odd parity, while
+the true "2-6, 6-3, 1-6, 1-0" is even. Single readings cannot catch that. A reading's sets never decrease within a
+match, so a check across time could catch it, but that is another candidate and needs footage not used yet. The
+clothing candidate above gets those flights right.
+
 ## Review Room security (security review, 2026-11-14)
 
 The Review Room is a single-user tool for this machine. A security review found no HIGH findings; it is now
