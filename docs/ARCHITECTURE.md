@@ -670,7 +670,10 @@ frame-count thresholds discussed above apply four times more strongly there.
 **Other shapes and sizes.** The same 4 s excerpt (1280 × 720, three IN calls at +1.46, +2.78, +1.09 m, 1σ 2, 14,
 9 cm): centre-cropped to 4:3 (960 × 720), every frame still calibrates (line RMSE 0.31 px) and the calls are
 +1.45, +2.78, +1.10 m; scaled down to 640 × 360, the calls are +1.46, +2.74, +1.08 m with 1σ 4, 28, 16 cm, about
-twice as wide as the pixels are twice as large.
+twice as wide as the pixels are twice as large. Scaled up to 3840 × 2160 (4K, as phones record; checked 2026-11-15),
+every frame calibrates (line RMSE 0.81 px, a third of a 720p pixel), the ball is found on the same 115 of 119
+frames and the three calls stay (bounces within 1.1 cm, margins within 0.6 cm); perception takes about 82 ms a
+frame on the M4 and the process peaks at 1.4 GB.
 
 Compressed harder (x264, same excerpt; calls as bounce frame, margin, 1σ):
 
