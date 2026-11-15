@@ -399,6 +399,21 @@ with the size and frame count `probe` reports, and play in the Review Room. The 
 as `video/mp4` whatever its container (Chrome played a WebM anyway by sniffing it); it is now served with its
 container's type (`video/webm`, `video/quicktime`, `video/x-matroska`).
 
+**HDR (2026-11-15).** Phones record HDR by default (iPhone: HLG, 10-bit HEVC, BT.2020); the frames are decoded as
+they are, without tone mapping (this ffmpeg build has no `zscale`, and OpenCV converts to 8-bit as stored). To see
+what that does, the 4 s excerpt was converted to HLG and to PQ (HDR10) as a phone would store it
+(`devir/scratch/hdr_make.py`: BT.709 → BT.2020, SDR white at HLG signal 0.75 and at 203 cd/m², BT.2408; x265
+10-bit, tagged) and analysed (`devir/scratch/hdr_check.py`). As decoded, HLG looks flatter (99th grey percentile
+183 against 236, mean saturation 59 against 81) and PQ washed out (grey 52–143, saturation 29). HLG: the ball is
+found on 115 of 119 frames, as in the SDR excerpt, the court calibrates on every frame and the three calls are
+the same (bounces within 1.4 cm). PQ: the ball is found on 98 frames; the three calls stay (within 3.1 cm). With
+the `burst20` gaps added (HDR and variable rate together, as on a phone), the constant-rate copy keeps the HDR
+tags (8-bit H.264, so the browser still shows it right) and all three calls stay: HLG 91 frames with the ball
+(20 repeated frames ignored by design), bounces within 3.7 cm; PQ 74 frames, within 6.4 cm. So HLG needs nothing;
+PQ costs a sixth of the ball detections, which matters most when another weakness (noise, gaps) is added. A
+PQ-to-SDR conversion before analysis is the possible fix; it is not made (one excerpt is no test, and PQ is not
+a phone default).
+
 **120 fps.** A 2 s excerpt of the 2023 final interpolated to 120 fps (ffmpeg `minterpolate`, blended frames, so
 not real slow motion) runs to the end: all 240 frames calibrated, ball network stride 4, and its first call is
 the 30 fps excerpt's (IN, +147 cm against +146 cm). Real high-frame-rate footage has not been tested; the

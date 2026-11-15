@@ -317,6 +317,33 @@ def test_link_source_replaces_links_to_another_video_but_never_deletes_a_file(tm
     assert (run / "source.webm").read_bytes() == b"a copied source"
 
 
+def test_where_links_are_unsupported_link_source_replaces_its_own_copies_only(monkeypatch, tmp_path) -> None:
+    import courtvision.io.video as vid
+
+    def no_links(self, target):
+        raise OSError("links unsupported")
+
+    monkeypatch.setattr(Path, "symlink_to", no_links)
+    run = tmp_path / "run"
+    run.mkdir()
+    a, b = tmp_path / "a.mov", tmp_path / "b.mp4"
+    a.write_bytes(b"video a")
+    b.write_bytes(b"video b")
+    vid.link_source(a, run)
+    assert (run / "source.mov").read_bytes() == b"video a"
+    vid.link_source(a, run)  # the same video again: the copy is kept
+    assert json.loads((run / vid.SOURCE_COPY_RECORD).read_text())["file"] == "source.mov"
+    vid.link_source(b, run)  # another video: the old copy (first in name order) must not be offered instead
+    assert sorted(p.name for p in run.glob("source.*")) == ["source.mp4"]
+    b.write_bytes(b"video b, analysed again after it changed")  # same name, new content: copied again
+    vid.link_source(b, run)
+    assert (run / "source.mp4").read_bytes().startswith(b"video b, analysed again")
+    (run / "source.webm").write_bytes(b"a file put here by hand")
+    vid.link_source(a, run)
+    assert (run / "source.webm").read_bytes() == b"a file put here by hand"  # not made by link_source: kept
+    assert sorted(p.name for p in run.glob("source.*")) == ["source.mov", "source.webm"]
+
+
 def test_a_variable_rate_video_is_analysed_from_one_reused_constant_rate_copy(monkeypatch, tmp_path) -> None:
     from fractions import Fraction
 

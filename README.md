@@ -208,8 +208,9 @@ promo/             HyperFrames promo film (footage not included)
 - Times are taken from frame numbers. A video with irregular frame timestamps (a phone dropping frames) is
   analysed, and played in the Review Room, from a constant-rate copy, with a frame repeated where the source
   has a gap (the ball is ignored on the repeated frames and filled in like a missed detection); phone videos
-  stored sideways with a rotation tag are analysed upright. Below 24 fps the depth of a bounce becomes unreliable (2.5 m off on a 15 fps copy of a clip);
-  such videos get a warning too. Grainy video (sensor noise, as in low-light phone footage) is the ball network's
+  stored sideways with a rotation tag are analysed upright, HLG HDR (the phone default) as it is (calls unchanged
+  on a converted clip; PQ/HDR10 loses a sixth of the ball detections). Below 24 fps the depth of a bounce
+  becomes unreliable (2.5 m off on a 15 fps copy of a clip); such videos get a warning too. Grainy video (sensor noise, as in low-light phone footage) is the ball network's
   weak point: with moderate noise it finds the ball in few frames and makes no calls (it does not make wrong ones).
   Two networks trained with added noise held up under it but lost accuracy on clean video, so neither replaced it.
 

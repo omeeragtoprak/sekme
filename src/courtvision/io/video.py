@@ -223,18 +223,35 @@ def iter_frames(path: str | Path, start: int = 0, end: int | None = None) -> Ite
         cap.release()
 
 
+SOURCE_COPY_RECORD = ".source_copy.json"  # names the copy link_source made where links are unsupported
+
+
 def link_source(video: Path, run: Path) -> None:
-    """Expose the analysed video inside the run folder (symlink; copy when links are unsupported)."""
+    """Expose the analysed video inside the run folder (symlink; copy when links are unsupported). A link or a
+    copy of another video (or of an older state of this one) is replaced; a file it did not make is never removed."""
     dest = run / f"source{video.suffix.lower()}"
     for old in run.glob("source.*"):  # re-analysed from another video (or its constant-rate copy): do not show
         if old.is_symlink() and (old != dest or old.resolve() != video.resolve()):  # the old one beside the new
-            old.unlink()  # report; only links are removed, never a file
+            old.unlink()  # report
+    st = video.stat()
+    this = {"of": str(video.resolve()), "size": st.st_size, "mtime_ns": st.st_mtime_ns}
+    record = run / SOURCE_COPY_RECORD
+    try:
+        made = json.loads(record.read_text()) if record.is_file() else None
+        made_file = run / Path(str(made["file"])).name if isinstance(made, dict) else None
+    except (OSError, ValueError, KeyError):
+        made, made_file = None, None
+    if made_file is not None and ({**this, "file": dest.name} != made or not made_file.is_file()):
+        if made_file.is_file() and not made_file.is_symlink():
+            made_file.unlink()  # our copy of something else: it would be offered instead of the new video
+        record.unlink(missing_ok=True)
     if dest.exists() or dest.is_symlink():
         return
     try:
         dest.symlink_to(video.resolve())
     except OSError:
         shutil.copy2(video, dest)
+        record.write_text(json.dumps({**this, "file": dest.name}))
 
 
 def extract_audio(path: str | Path, sample_rate: int = 22050) -> np.ndarray:
