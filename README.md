@@ -205,9 +205,10 @@ promo/             HyperFrames promo film (footage not included)
   footage.
 - Ball footprint is a fixed 2 cm half-length; point/score inference from play is not implemented (the
   score is read from the broadcast).
-- Times are taken from frame numbers, assuming a constant frame rate. A video with irregular frame timestamps
-  (a phone dropping frames) gets a warning in its report; phone videos stored sideways with a rotation tag are
-  analysed upright. Below 24 fps the depth of a bounce becomes unreliable (2.5 m off on a 15 fps copy of a clip);
+- Times are taken from frame numbers. A video with irregular frame timestamps (a phone dropping frames) is
+  analysed, and played in the Review Room, from a constant-rate copy, with a frame repeated where the source
+  has a gap (in the repeated frame the ball has no new position); phone videos stored sideways with a rotation
+  tag are analysed upright. Below 24 fps the depth of a bounce becomes unreliable (2.5 m off on a 15 fps copy of a clip);
   such videos get a warning too. Grainy video (sensor noise, as in low-light phone footage) is the ball network's
   weak point: with moderate noise it finds the ball in few frames and makes no calls (it does not make wrong ones).
 

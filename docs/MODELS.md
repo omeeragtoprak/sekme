@@ -316,26 +316,6 @@ games 8–10 do not decide, and reversing the decision because of them would mak
 again, so v4 stays the default; v3 is one file copy away (`models/sekme_ball_v3.pt`). The next ball
 network change needs data that has not been used yet.
 
-### Ball network v5 candidate: sensor-noise augmentation (rule written 2026-11-14, before training)
-
-Why: on a 4 s broadcast excerpt with temporal noise added, v4 finds the ball on 81 of 119 frames at a moderate
-level and on 5 at a stronger one, and then makes no calls (`docs/ARCHITECTURE.md`, "Light, blur and sensor
-noise"); grainy low-light phone video is its weak point. Recipe: v4's (20 epochs, batch 8, lr 1e-3, games 1–7
-without the selection clips, motion blur 0.3, centred labels) plus `--noise 0.5` (Gaussian, 1σ 0.01–0.06 drawn
-per frame, on half the training windows); the epoch is chosen on the selection clips as before.
-
-**v4 on the selection clips** (`eval_ball.py --selection --centred-truth`, production detector; `--noise-sigma`
-adds the same seeded Gaussian noise for every network), F1 at 4 px: clean 0.943; σ 0.02: 0.929; σ 0.04: 0.848
-(recall 0.754); σ 0.06: 0.619 (recall 0.457).
-
-**Rule.** v5 becomes a candidate only if all hold on the selection clips: (a) clean F1 at 4 px (centred) at least
-0.938, at most half a point below v4; (b) its mean offset from the centred positions within ±0.3 px on both axes;
-(c) at σ 0.04, F1 at 4 px (centred) at least 0.898, five points above v4. σ 0.02 and 0.06 are reported. The same
-clips choose v5's epoch, so the comparison is somewhat optimistic for v5. Passing makes it a candidate, not the
-default: TrackNet games 8–10 are used up and are not run; the default changes only after a test on data not used
-yet (an E2E-Spot test slot or the six US Open videos, with its own rule written there first). Failing is recorded
-here and v5 is dropped.
-
 **Real broadcast and radar with v4** (`runs/<id>_v4`, `results/radar.txt`). US Open 2023 final, 90 s:
 53 calls on 66 shots (v3: 54 on 65), the same OUT ball and the same 2 of 3 serves. 2025 final: 22 calls
 on 43 shots (v3: 26 on 42). Serves recognised on the five clips: 13 (v3 11, v1 13). Radar on 5 timed
@@ -358,6 +338,44 @@ correct contact timing does not make that serve's speed right. The test also mea
 loses the nearly still ball at the toss apex for 0.2 s and the struck ball (flying away from the camera)
 is slow enough in the image to pass for the toss; that is a detector problem, not a ball-net one, and the
 next thing to fix.
+
+### Ball network v5 candidate: sensor-noise augmentation (rule written 2026-11-14, before training)
+
+Why: on a 4 s broadcast excerpt with temporal noise added, v4 finds the ball on 81 of 119 frames at a moderate
+level and on 5 at a stronger one, and then makes no calls (`docs/ARCHITECTURE.md`, "Light, blur and sensor
+noise"); grainy low-light phone video is its weak point. Recipe: v4's (20 epochs, batch 8, lr 1e-3, games 1–7
+without the selection clips, motion blur 0.3, centred labels) plus `--noise 0.5` (Gaussian, 1σ 0.01–0.06 drawn
+per frame, on half the training windows); the epoch is chosen on the selection clips as before.
+
+**v4 on the selection clips** (`eval_ball.py --selection --centred-truth`, production detector; `--noise-sigma`
+adds the same seeded Gaussian noise for every network), F1 at 4 px: clean 0.943; σ 0.02: 0.929; σ 0.04: 0.848
+(recall 0.754); σ 0.06: 0.619 (recall 0.457).
+
+**Rule.** v5 becomes a candidate only if all hold on the selection clips: (a) clean F1 at 4 px (centred) at least
+0.938, at most half a point below v4; (b) its mean offset from the centred positions within ±0.3 px on both axes;
+(c) at σ 0.04, F1 at 4 px (centred) at least 0.898, five points above v4. σ 0.02 and 0.06 are reported. The same
+clips choose v5's epoch, so the comparison is somewhat optimistic for v5. Passing makes it a candidate, not the
+default: TrackNet games 8–10 are used up and are not run; the default changes only after a test on data not used
+yet (an E2E-Spot test slot or the six US Open videos, with its own rule written there first). Failing is recorded
+here and v5 is dropped.
+
+**Result (2026-11-15): v5 is not a candidate; v4 stays.** Trained as written (best epoch 17 of 20 on the
+selection clips, F1 at 4 px 0.907 in training, the same as v4's best), then scored on the selection clips
+(3 012 frames, `data/tracknet/eval_v5_noise.log`; v4 reproduced its baseline exactly):
+
+| F1 at 4 px (centred) | clean | σ 0.02 | σ 0.04 | σ 0.06 |
+|---|---|---|---|---|
+| v4 | **0.943** | 0.929 | 0.848 | 0.619 |
+| v5 (noise) | 0.928 | 0.928 | **0.925** | **0.915** |
+| v5 recall | 0.891 | 0.892 | 0.888 | 0.872 |
+
+(a) fails: clean 0.928 against at least 0.938 (1.5 points below v4, three times the allowance); (b) holds
+(offset −0.05, −0.02 px); (c) holds (0.925 against at least 0.898). The noise augmentation does what it was
+for: v5 is almost unaffected by noise that halves v4's recall. It costs clean accuracy, mostly recall (0.913
+→ 0.891), and clean broadcast video is what every call so far comes from, so it is dropped as the rule says.
+The weights stay local (`models/sekme_ball_v5_noise.pt`, not a default and not a candidate). Any later attempt
+(a smaller noise share, or noise only in fine-tuning) is a new network with its own rule written before it is
+trained.
 
 ## SEKME court network
 

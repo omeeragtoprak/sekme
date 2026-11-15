@@ -51,8 +51,10 @@ export const MEDIA_LABEL: Record<MediaName, string> = { source: "Kaynak", classi
 
 const STAGES: Record<string, string> = {
   queued: "Sırada",
+  constant_rate_copy: "Sabit kare hızlı kopya hazırlanıyor",
   perception: "Görüntü işleniyor",
   analysis: "Analiz ediliyor",
+  broadcast: "Yayın grafiği okunuyor",
   render: "Videolar hazırlanıyor",
   done: "Tamamlandı",
 };
@@ -62,11 +64,13 @@ export function stageLabel(stage: string): string {
 }
 
 const TIMINGS: Record<string, string> = {
+  constant_rate_copy_s: "Sabit hızlı kopya",
   perception_s: "Görüntü işleme",
   calibration_s: "Kalibrasyon",
   analysis_s: "Analiz",
   render_s: "Video hazırlama",
   broadcast_s: "Yayın okuma (OCR)",
+  pose_s: "Vuruş türü (poz)",
 };
 
 export function timingLabel(key: string): string {

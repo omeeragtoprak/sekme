@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -214,3 +215,142 @@ def test_video_notes_warn_about_irregular_timing_and_low_frame_rates() -> None:
     assert video_notes(30.0, 3) == [VFR_NOTE.format(n=3)]
     assert video_notes(15.0, 0) == [LOW_FPS_NOTE.format(fps=15.0)]
     assert len(video_notes(12.0, 2)) == 2
+
+
+def test_nominal_rate_prefers_the_stated_rate_when_it_agrees_with_the_timestamps(monkeypatch) -> None:
+    from fractions import Fraction
+
+    import courtvision.io.video as vid
+
+    monkeypatch.setattr(vid, "_bin", lambda name: name)
+
+    def rate(times: list, stated: str) -> Fraction | None:
+        packets = "\n".join(str(t) for t in times) + "\n"
+
+        def run(cmd, **k):
+            out = stated + "\n" if "stream=r_frame_rate" in cmd else packets
+            return subprocess.CompletedProcess(cmd, 0, out, "")
+
+        monkeypatch.setattr(vid.subprocess, "run", run)
+        return vid.nominal_rate("x.mp4")
+
+    ntsc = [i * 1001 / 30000 for i in range(120)]
+    gappy = [t for i, t in enumerate(ntsc) if not (40 <= i < 100 and i % 3 == 1)]  # a stretch at 20 fps
+    assert rate(gappy, "30000/1001") == Fraction(30000, 1001)  # the median interval is still the 29.97 fps one
+    assert rate(gappy, "90000/1") == Fraction(30000, 1001)  # a timebase, not a frame rate: the median's rate
+    assert rate(gappy, "N/A") == Fraction(30000, 1001)
+    assert rate([0.0], "30/1") is None
+
+
+def test_constant_rate_copy_runs_ffmpegs_fps_filter_and_leaves_no_partial_file(monkeypatch, tmp_path) -> None:
+    from fractions import Fraction
+
+    import courtvision.io.video as vid
+
+    monkeypatch.setattr(vid, "_bin", lambda name: name)
+    seen = []
+
+    def run(cmd, **k):
+        seen.append(cmd)
+        if fail:
+            return subprocess.CompletedProcess(cmd, 1, "", f"{tmp_path / 'in.mov'}: Invalid data found")
+        Path(cmd[-1]).write_bytes(b"copy")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(vid.subprocess, "run", run)
+    fail = False
+    dest = vid.constant_rate_copy(tmp_path / "in.mov", tmp_path / "constant_rate.mp4", Fraction(30000, 1001))
+    assert dest.read_bytes() == b"copy" and "fps=30000/1001," in seen[-1][seen[-1].index("-vf") + 1]
+    assert seen[-1][seen[-1].index("0:V:0") - 1] == "-map"  # never the cover art
+    with pytest.raises(ValueError, match="overwrite its source"):
+        vid.constant_rate_copy(dest, dest, Fraction(30))
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["constant_rate.mp4"]
+    fail = True
+    with pytest.raises(vid.UnreadableVideoError, match="in.mov: sabit kare hızlı kopya yapılamadı"):
+        vid.constant_rate_copy(tmp_path / "in.mov", tmp_path / "other.mp4", Fraction(30))
+    assert not (tmp_path / "other.mp4").exists() and not (tmp_path / "other.part.mp4").exists()
+
+
+def test_link_source_replaces_links_to_another_video_but_never_deletes_a_file(tmp_path) -> None:
+    from courtvision.io.video import link_source
+
+    run = tmp_path / "run"
+    run.mkdir()
+    original, copy = tmp_path / "phone.mov", run / "constant_rate.mp4"
+    original.write_bytes(b"mov")
+    copy.write_bytes(b"mp4")
+    link_source(original, run)
+    assert (run / "source.mov").resolve() == original.resolve()
+    link_source(copy, run)  # re-analysed through its constant-rate copy: only the copy is offered
+    assert sorted(p.name for p in run.glob("source.*")) == ["source.mp4"]
+    assert (run / "source.mp4").resolve() == copy.resolve() and original.read_bytes() == b"mov"
+    (run / "source.mp4").unlink()
+    (run / "source.webm").write_bytes(b"a copied source")  # made where links are unsupported: kept
+    link_source(copy, run)
+    assert (run / "source.webm").read_bytes() == b"a copied source"
+
+
+def test_a_variable_rate_video_is_analysed_from_one_reused_constant_rate_copy(monkeypatch, tmp_path) -> None:
+    from fractions import Fraction
+
+    import courtvision.pipeline as pipeline
+    from courtvision.io.video import VideoInfo
+
+    made = []
+
+    def fake_copy(src, dest, rate):
+        made.append(rate)
+        dest.write_bytes(b"copy at " + str(rate).encode())
+        return dest
+
+    monkeypatch.setattr(pipeline, "constant_rate_copy", fake_copy)
+    monkeypatch.setattr(pipeline, "nominal_rate", lambda p: Fraction(30000, 1001))
+    monkeypatch.setattr(pipeline, "probe", lambda v: VideoInfo(str(v), 1280, 720, 29.97, 119, 3.97, False))
+    src = tmp_path / "phone.mov"
+    src.write_bytes(b"source")
+    info = VideoInfo(str(src), 1280, 720, 24.9, 99, 3.97, False)
+    path, rec = pipeline._constant_rate_source(src, "abc", info, tmp_path)
+    assert path == tmp_path / "constant_rate.mp4" and made == [Fraction(30000, 1001)]
+    assert rec["frames"] == 119 and rec["source_frames"] == 99 and rec["added_frames"] == 20
+    assert rec["sha256"] == pipeline._sha256(path)
+    pipeline._constant_rate_source(src, "abc", info, tmp_path)  # re-analysis: the copy is reused
+    assert len(made) == 1
+    pipeline._constant_rate_source(src, "other source", info, tmp_path)  # another video in the same folder
+    assert len(made) == 2
+    path.write_bytes(b"changed by hand")  # a copy that no longer matches its record is remade
+    pipeline._constant_rate_source(src, "other source", info, tmp_path)
+    assert len(made) == 3 and path.read_bytes().startswith(b"copy at")
+
+    def crash(src, dest, rate):
+        dest.write_bytes(b"half written")
+        raise OSError("killed")
+
+    monkeypatch.setattr(pipeline, "constant_rate_copy", crash)
+    with pytest.raises(OSError):
+        pipeline._constant_rate_source(src, "abc", info, tmp_path)  # source A again, crashing mid-copy
+    assert not (tmp_path / "constant_rate.json").exists()  # so the next run cannot take this copy for A's
+    note = pipeline.video_notes(29.97, 20, rec)[0]
+    assert "29.97 fps" in note and "net 20 kare" in note
+
+
+@pytest.mark.skipif(not all(__import__("shutil").which(b) for b in ("ffmpeg", "ffprobe")),
+                    reason="needs ffmpeg and ffprobe (CI has none)")
+def test_the_constant_rate_copy_restores_even_timestamps_on_a_real_file(tmp_path) -> None:
+    import courtvision.io.video as vid
+
+    src = tmp_path / "gappy.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=160x90:rate=30:duration=2",
+                    "-vf", "select='not(between(n\\,20\\,49)*eq(mod(n\\,3)\\,1))'", "-fps_mode", "passthrough",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(src)], check=True)
+    assert vid.irregular_frame_intervals(src) == 10 and vid.probe(src).n_frames == 50
+    rate = vid.nominal_rate(src)
+    assert rate == 30
+    copy = vid.constant_rate_copy(src, tmp_path / "constant_rate.mp4", rate)
+    info = vid.probe(copy)
+    assert vid.irregular_frame_intervals(copy) == 0 and info.n_frames == 60 and abs(info.fps - 30) < 1e-6
+
+    odd = tmp_path / "odd.mp4"  # an odd size (x264 4:2:0 needs even ones) and no audio
+    subprocess.run(["ffmpeg", "-v", "error", "-i", str(src), "-vf", "pad=161:91", "-fps_mode", "passthrough",
+                    "-c:v", "libx264", "-pix_fmt", "yuv444p", str(odd)], check=True)
+    info = vid.probe(vid.constant_rate_copy(odd, tmp_path / "odd_copy.mp4", rate))
+    assert (info.width, info.height, info.n_frames, info.has_audio) == (160, 90, 60, False)

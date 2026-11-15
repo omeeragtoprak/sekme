@@ -52,9 +52,13 @@ def _analyze(args: argparse.Namespace) -> int:
     if 0 < report["video"]["fps"] < 24:
         print(f"uyarı: kare hızı düşük ({report['video']['fps']:.0f} fps); sekmelerin derinliği güvenilmez",
               file=sys.stderr)
-    if report["video"].get("irregular_frame_intervals"):
-        print(f"uyarı: değişken kare hızı ({report['video']['irregular_frame_intervals']} düzensiz kare aralığı); "
-              "hızlar ve işaretler kayabilir", file=sys.stderr)
+    if (n_irregular := report["video"].get("irregular_frame_intervals")) and (copy := report["video"].get(
+            "constant_rate_copy")):
+        print(f"not: değişken kare hızı ({n_irregular} düzensiz kare aralığı); sabit {copy['fps']:.2f} fps'lik "
+              f"kopyadan analiz edildi ({copy['file']}, net {copy['added_frames']} kare eklendi)", file=sys.stderr)
+    elif n_irregular:
+        print(f"uyarı: değişken kare hızı ({n_irregular} düzensiz kare aralığı); hızlar ve işaretler kayabilir",
+              file=sys.stderr)
     cal = report["calibration"]
     print(f"calibrated frames {cal['valid_frames']}/{cal['total_frames']}, line rmse {cal['line_rmse_px_median']} px")
     for f in report["flights"]:

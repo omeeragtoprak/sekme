@@ -16,6 +16,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
+from fractions import Fraction
 from pathlib import Path
 
 import cv2
@@ -33,7 +34,16 @@ from courtvision.events.hits import detect_hits_in_segments
 from courtvision.events.serves import detect_serves, merge_serves
 from courtvision.events.strokes import classify, serve_hand, vote_hand
 from courtvision.geometry.court import CourtModel
-from courtvision.io.video import VideoWriter, irregular_frame_intervals, iter_frames, link_source, probe
+from courtvision.io.video import (
+    VideoInfo,
+    VideoWriter,
+    constant_rate_copy,
+    irregular_frame_intervals,
+    iter_frames,
+    link_source,
+    nominal_rate,
+    probe,
+)
 from courtvision.perception.ball import BallDetector, ball_arch, drop_court_fixed, track_ball
 from courtvision.perception.court import (
     CourtCalibrator,
@@ -150,9 +160,18 @@ LOW_FPS_NOTE = ("Kare hızı düşük ({fps:.0f} fps): sekme anı iki kare aras�
                 "indirilmiş bir klipte 2,5 m, 1σ 0,73 m). Dip ve servis çizgisi kararlarına temkinli bakın.")
 
 
-def video_notes(fps: float, irregular: int) -> list[str]:
+VFR_COPY_NOTE = ("Videonun kare hızı değişken ({n} kare aralığı ortancadan %25'ten fazla sapıyor); zamanlar doğru "
+                 "olsun diye sabit {fps:.2f} fps'lik bir kopyadan analiz edildi ve oynatılan o kopya. Kaynakta eksik "
+                 "olan yerlerde önceki kare tekrarlandı (net {added} kare eklendi): o karelerde top ve oyuncu yeni "
+                 "konum vermez.")
+
+
+def video_notes(fps: float, irregular: int, copy: dict | None = None) -> list[str]:
     """Limitations that depend on the video itself, added to the general ones."""
-    notes = [VFR_NOTE.format(n=irregular)] if irregular else []
+    if irregular and copy is not None:
+        notes = [VFR_COPY_NOTE.format(n=irregular, fps=fps, added=copy["added_frames"])]
+    else:
+        notes = [VFR_NOTE.format(n=irregular)] if irregular else []
     if 0 < fps < LOW_FPS:
         notes.append(LOW_FPS_NOTE.format(fps=fps))
     return notes
@@ -203,6 +222,7 @@ class PipelineConfig:
     pin_serve_height: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md)
     fps_scaled_thresholds: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): 60 fps frame counts
     player_size_from_camera: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): camera size gate
+    constant_rate_copy: bool = True  # variable-rate video analysed from a constant-rate copy (docs/ARCHITECTURE.md)
     models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
@@ -368,6 +388,33 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
             "hands": {k.removeprefix("side:"): v for k, v in hands.items()}}
 
 
+CONSTANT_RATE_FILE = "constant_rate.mp4"
+
+
+def _constant_rate_source(source: Path, source_sha: str, info: VideoInfo, out: Path) -> tuple[Path, dict]:
+    """The run's constant-rate copy of a variable-rate `source` (made once; reused while its record names the same
+    source, the same rate and the copy's current hash) and what the report says about it."""
+    rate = nominal_rate(source) or Fraction(info.fps).limit_denominator(1001)
+    dest, record = out / CONSTANT_RATE_FILE, out / "constant_rate.json"
+    want = {"source_sha256": source_sha, "rate": f"{rate.numerator}/{rate.denominator}"}
+    try:
+        have = json.loads(record.read_text()) if record.is_file() and dest.is_file() else None
+    except (OSError, ValueError):
+        have = None
+    copy_sha = _sha256(dest) if isinstance(have, dict) else None  # a copy changed since its record is remade
+    if not (isinstance(have, dict) and have == {**want, "sha256": copy_sha}):
+        record.unlink(missing_ok=True)  # a crash while the copy is replaced must not leave the old record behind
+        constant_rate_copy(source, dest, rate)
+        have = {**want, "sha256": _sha256(dest)}
+        tmp = record.with_name(record.name + ".part")
+        tmp.write_text(json.dumps(have))
+        tmp.replace(record)
+    n_copy = probe(dest).n_frames
+    return dest, {"file": CONSTANT_RATE_FILE, "fps": round(float(rate), 6), "sha256": have["sha256"],
+                  "frames": n_copy, "source_frames": info.n_frames,
+                  "added_frames": n_copy - info.n_frames}  # repeated minus dropped (denser parts of the source)
+
+
 def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None = None,
             progress: Callable[[str, float], None] | None = None) -> dict:
     cfg = cfg or PipelineConfig()
@@ -384,7 +431,21 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     device = pick_device(cfg.device)
 
     t0 = time.time()
-    video_sha = _sha256(video)
+    source = Path(video)
+    source_sha = _sha256(source)
+    irregular = irregular_frame_intervals(source)
+    copy_info = None
+    copy_error = None
+    if irregular and cfg.constant_rate_copy:  # frame index / rate must be the real time for everything below
+        prog("constant_rate_copy", 0.0)
+        try:
+            video, copy_info = _constant_rate_source(source, source_sha, info, out)
+            info = probe(video)
+        except (UnreadableVideoError, RuntimeError, OSError, ValueError) as exc:  # no ffmpeg, an encoder error, the
+            video, copy_info, copy_error = source, None, str(exc)  # source itself: analysed as it is, with the warning
+        timings["constant_rate_copy_s"] = time.time() - t0
+        t0 = time.time()
+    video_sha = source_sha if copy_info is None else copy_info["sha256"]  # what the detections are computed on
     cache = out / "perception.pkl"
     perc_key = perception_key(video_sha, cfg)
     cached = None
@@ -432,14 +493,14 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
 
     valid = [c for c in calib if c.valid]
     cams = [c.camera for c in valid if c.camera is not None]
-    irregular = irregular_frame_intervals(video)
     report = {
         "schema": "courtvision.report/1",
         "version": __version__,
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
-        "video": {"file": Path(video).name, "width": info.width, "height": info.height, "fps": info.fps,
-                  "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": video_sha,
-                  "irregular_frame_intervals": irregular},
+        "video": {"file": source.name, "width": info.width, "height": info.height, "fps": info.fps,
+                  "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": source_sha,
+                  "irregular_frame_intervals": irregular, "constant_rate_copy": copy_info,
+                  **({"constant_rate_copy_error": copy_error} if copy_error else {})},
         "models": {k: _model_card(k, v) for k, v in cfg.models.items()},
         "candidates": {k: v for k, v in (("serve_toss_bridge_s", cfg.serve_toss_bridge_s),
                                          ("pin_serve_height", cfg.pin_serve_height),
@@ -470,7 +531,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "flights": [_flight_json(i, fl, info.fps) for i, fl in enumerate(flights)],
         "broadcast": broadcast,
         "timings_s": {k: round(v, 2) for k, v in timings.items()},
-        "limitations": video_notes(info.fps, irregular) + LIMITATIONS,  # this video's own first
+        "limitations": video_notes(info.fps, irregular, copy_info) + LIMITATIONS,  # this video's own first
     }
     _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
     t4 = time.time()

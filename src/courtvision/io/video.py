@@ -102,27 +102,77 @@ def probe(path: str | Path) -> VideoInfo:
     return VideoInfo(p, width, height, fps, n, duration, has_audio)
 
 
-def irregular_frame_intervals(path: str | Path) -> int:
-    """Frame intervals that differ from the video's median interval by more than 25 % (variable frame rate, e.g.
-    a phone dropping frames in low light), from the packets' timestamps. 0 when they cannot be read."""
+def _frame_intervals(path: str | Path) -> np.ndarray | None:
+    """Positive intervals between the video packets' timestamps (in presentation order), or None when they cannot
+    be read."""
     try:  # "V": video streams that are not attached pictures (cover art)
         out = subprocess.run([_bin("ffprobe"), "-v", "error", "-select_streams", "V:0", "-show_entries",
                               "packet=pts_time", "-of", "csv=p=0", str(path)],
                              check=True, capture_output=True, text=True, timeout=120).stdout
     except (OSError, RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return 0
+        return None
     times = []
     for field_ in out.split():
         try:
             times.append(float(field_.strip(",")))
         except ValueError:  # "N/A": a packet without a timestamp; the spacing cannot be judged
-            return 0
+            return None
     d = np.diff(np.sort(np.array(times)))
     d = d[d > 0]  # duplicated timestamps say nothing about the spacing
-    if len(d) < 2 or not np.median(d) > 0:
+    return d if len(d) >= 2 and np.median(d) > 0 else None
+
+
+def irregular_frame_intervals(path: str | Path) -> int:
+    """Frame intervals that differ from the video's median interval by more than 25 % (variable frame rate, e.g.
+    a phone dropping frames in low light), from the packets' timestamps. 0 when they cannot be read."""
+    d = _frame_intervals(path)
+    if d is None:
         return 0
     r = d / np.median(d)
     return int(((r > 1.25) | (r < 0.75)).sum())
+
+
+def nominal_rate(path: str | Path) -> Fraction | None:
+    """The rate a variable-rate video was meant to run at: its stream's `r_frame_rate` when that is within 5 % of
+    the rate of its median frame interval, else the median's rate. None when the timestamps cannot be read."""
+    d = _frame_intervals(path)
+    if d is None:
+        return None
+    median_rate = 1.0 / float(np.median(d))
+    try:
+        out = subprocess.run([_bin("ffprobe"), "-v", "error", "-select_streams", "V:0", "-show_entries",
+                              "stream=r_frame_rate", "-of", "csv=p=0", str(path)],
+                             check=True, capture_output=True, text=True, timeout=60).stdout.strip().strip(",")
+        stated = Fraction(out)
+    except (OSError, RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError,
+            ZeroDivisionError):
+        stated = None
+    if stated is not None and stated > 0 and abs(float(stated) / median_rate - 1) <= 0.05:
+        return stated
+    rate = Fraction(median_rate).limit_denominator(1001)
+    return rate if rate > 0 else None
+
+
+def constant_rate_copy(src: str | Path, dest: str | Path, rate: Fraction) -> Path:
+    """Re-encode `src` at a constant `rate` with ffmpeg's `fps` filter: each output frame is the source frame
+    nearest its time, so a gap repeats a frame and index / rate is the real time again. Upright (rotation applied),
+    H.264 for the browser (an odd last pixel row or column is cropped: 4:2:0 needs even sizes), audio kept as AAC.
+    Written to a temporary name first: `dest` is complete or absent."""
+    dest = Path(dest)
+    tmp = dest.with_name(dest.stem + ".part" + dest.suffix)
+    if Path(src).resolve() in (dest.resolve(), tmp.resolve()):
+        raise ValueError(f"{dest.name}: the copy would overwrite its source")
+    vf = f"fps={rate.numerator}/{rate.denominator},crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0"
+    cmd = [_bin("ffmpeg"), "-v", "error", "-y", "-i", str(src), "-map", "0:V:0", "-map", "0:a:0?",
+           "-vf", vf, "-c:v", "libx264", "-crf", "17", "-preset", "veryfast",
+           "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(tmp)]
+    res = subprocess.run(cmd, check=False, capture_output=True, text=True)
+    if res.returncode != 0:
+        tmp.unlink(missing_ok=True)
+        raise UnreadableVideoError(f"{Path(src).name}: sabit kare hızlı kopya yapılamadı "
+                                   f"({_reason(res.stderr, str(src), Path(src).name)})")
+    tmp.replace(dest)
+    return dest
 
 
 def open_video(path: str | Path) -> cv2.VideoCapture:
@@ -155,8 +205,9 @@ def iter_frames(path: str | Path, start: int = 0, end: int | None = None) -> Ite
 def link_source(video: Path, run: Path) -> None:
     """Expose the analysed video inside the run folder (symlink; copy when links are unsupported)."""
     dest = run / f"source{video.suffix.lower()}"
-    if dest.is_symlink() and dest.resolve() != video.resolve():
-        dest.unlink()  # re-analysed from another video: do not show the old one beside the new report
+    for old in run.glob("source.*"):  # re-analysed from another video (or its constant-rate copy): do not show
+        if old.is_symlink() and (old != dest or old.resolve() != video.resolve()):  # the old one beside the new
+            old.unlink()  # report; only links are removed, never a file
     if dest.exists() or dest.is_symlink():
         return
     try:

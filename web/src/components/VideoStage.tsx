@@ -579,7 +579,9 @@ export default function VideoStage({
     report.video.fps > 0 && report.video.fps < 24
       ? `Düşük kare hızı (${Math.round(report.video.fps)} fps) · sekme derinliği güvenilmez`
       : irregular > 0
-        ? "Değişken kare hızı · işaretler kayabilir"
+        ? report.video.constant_rate_copy
+          ? "Değişken kare hızı · sabit hızlı kopyadan analiz edildi"
+          : "Değişken kare hızı · işaretler kayabilir"
         : null;
   const t = currentFrame / fps;
 

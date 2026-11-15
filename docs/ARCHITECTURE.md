@@ -293,7 +293,51 @@ the packet timestamps); a re-encoded excerpt with three dropped frames shows thr
 Each report now counts the intervals more than 25 % off the median (`video.irregular_frame_intervals`, read with
 ffprobe in well under a second) and, when there are any, adds a limitation in Turkish that the Review Room shows
 and the command line repeats as a warning. Using the real timestamps throughout would be the fix; it touches
-every time computation and is not done.
+every time computation and is not done (a constant-rate copy does it instead, below).
+
+**Rule for a constant-rate copy (written 2026-11-15, before any of the copies below was analysed).** Fix: a
+video with irregular intervals is analysed from a constant-rate copy made by ffmpeg's `fps` filter at its
+nominal rate (`r_frame_rate` when within 5 % of the median interval's rate, else that rate), so each frame of
+the copy is the source frame nearest its time: a gap repeats a frame, frame index over rate is the real time
+again, and the Review Room plays the copy. Videos without irregular intervals are analysed exactly as before.
+Test inputs, both from the 4 s excerpt below (three IN calls) with frames removed and their timestamps kept:
+`burst20` (frames 40–99 at 20 fps, 99 frames, 20 irregular intervals) and `drop5` (every fifth frame removed,
+95 frames, 24 irregular). Each is analysed as it is and through the copy, and compared with the excerpt's own
+analysis: its three called bounces matched by real time (within 0.3 s), then (i) the summed distance of the
+matched bounces from the excerpt's, (ii) their time error, (iii) the error of the matched flights' hit and
+bounce speeds. Adopted if on both inputs (i) is smaller through the copy (or within 1 cm), (ii) and (iii) are
+not larger, no call that matches the excerpt's verdict as it is loses it through the copy, and no broadcast or
+TrackNet video has an irregular interval (so none of them changes). Otherwise the warning stays as the
+handling and the result is recorded here.
+
+**Result (2026-11-15): adopted, on by default** (`PipelineConfig.constant_rate_copy`; check
+`devir/scratch/vfr_copy_check.py`, outputs kept locally). The excerpt's own analysis: bounces at 0.913, 2.183,
+3.457 s, IN +1.458, +2.782, +1.094 m, hit / bounce speeds —/58.6, 114.2/73.6, 139.0/85.9 km/h. Both copies
+have nominal rate 30000/1001 (the stated rate, the median interval's), so the constant-rate copy has the
+excerpt's 119 frames (20 and 24 of them repeated):
+
+| input | calls | (i) bounce distance, summed | (ii) time error, summed | (iii) speed error, summed |
+|---|---|---|---|---|
+| `burst20` as it is | 2 (third lost) | 3.1 cm (two bounces) | 0.263 s | 64.8 km/h |
+| `burst20` through the copy | 3 | 2.7 cm | 0.015 s | 9.4 km/h |
+| `drop5` as it is | 3 | 15.8 cm | 0.025 s | 7.7 km/h |
+| `drop5` through the copy | 3 | 4.6 cm | 0.001 s | 7.1 km/h |
+
+All four conditions hold, and no verdict differs from the excerpt's. The 20 fps stretch is what variable rate
+does when frame index over the average rate is taken as time: there the clip runs at 20 fps but is read at
+24.9, so the second flight's hit speed reads 147.3 km/h against the excerpt's 114.2 (through the copy 110.6),
+its bounce is put 0.08 s early and the third flight gets no call. Spread evenly (`drop5`) the time error stays
+small, but bounce positions still move up to 8 cm. None of the 106 broadcast and TrackNet videos has an
+irregular interval, so none of them is analysed differently. Making the copy took 0.6 s for these 4 s at
+720p (x264 `veryfast`, CRF 17); the report records it (`video.constant_rate_copy`: rate, frames, frames added,
+its SHA-256; `video.file` and `video.sha256` stay the source's), the Review Room plays the copy and its badge
+says so, and the limitation in the report says frames were repeated. Repeated frames give the ball tracker
+a still frame; both copies here kept every call, but a long gap (several frames) is not covered by this test.
+An independent code review then hardened it (results above unchanged, re-run with the final code): the copy is
+re-hashed before reuse and its record removed before it is remade (a crash mid-copy cannot leave another
+video's copy behind a matching record); an odd pixel row or column is cropped (x264 4:2:0 needs even sizes);
+the copy never overwrites its source; if ffmpeg is missing or fails, the video is analysed as it is, with the
+old warning and the reason in `video.constant_rate_copy_error`.
 
 **Codecs.** One-second excerpts re-encoded as HEVC (MP4), VP9 (WebM and MP4) and AV1 (MP4) probe and decode
 with the size and frame count `probe` reports, and play in the Review Room. The source video used to be served
