@@ -55,6 +55,7 @@ flowchart LR
 
 | Stage | How |
 |---|---|
+| Shots | a cut where the colour histogram changes; an edit between two moments from the same camera position where the picture jumps between two calibrated frames; variable-frame-rate video analysed from a constant-rate copy, the ball ignored on its repeated frames |
 | Court | keypoint heatmaps on keyframes and cuts → homography → sub-pixel refit on the painted line ridges → pinhole camera (focal length and pose) per frame; frames the lines do not back are not measured |
 | Ball | three-frame heatmap network, sliding window; track with gating across short misses, removal of detections that stay on one spot of the court (line marks), short-gap fill |
 | Players | person detector + ByteTrack, near/far selection on the court plane, speed and size gates; pose at contacts for stroke type |
@@ -208,8 +209,9 @@ promo/             HyperFrames promo film (footage not included)
   score is read from the broadcast).
 - Player names on shots come from the broadcast graphic: from a marked server's serve, else from the end changes
   counted from the games it shows. OCR misreads those games in highlight footage, so whole stretches can carry
-  the two names the wrong way round (a quarter of the flights in the 2025 final highlights). A clothing-based
-  candidate (`--appearance-identity`) cuts that to 7 % but is not the default yet (docs/ARCHITECTURE.md).
+  the two names the wrong way round (a quarter of the flights in the 2025 final highlights). Telling the players
+  apart by clothing helped where outfits differ but failed where they are alike, and was dropped
+  (docs/ARCHITECTURE.md).
 - Times are taken from frame numbers. A video with irregular frame timestamps (a phone dropping frames) is
   analysed, and played in the Review Room, from a constant-rate copy, with a frame repeated where the source
   has a gap (the ball is ignored on the repeated frames and filled in like a missed detection); phone videos

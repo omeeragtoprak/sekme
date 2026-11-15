@@ -201,9 +201,6 @@ export type Flight = {
   /** Players named from the score graphic and the ends-change rule, when the graphic is near in time. */
   hitter_name?: string | null;
   receiver_name?: string | null;
-  hitter_id?: "A" | "B" | null; // the person seen (clothing), where the candidate is on
-  receiver_id?: "A" | "B" | null;
-  name_source?: "grafik" | "görünüm" | null;
   /** Stroke type from the hitter's pose and the ball's side at contact. */
   stroke?: "serve" | "forehand" | "backhand" | "volley" | "overhead" | null;
   stroke_wing?: "forehand" | "backhand" | null;

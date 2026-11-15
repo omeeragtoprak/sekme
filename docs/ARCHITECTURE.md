@@ -71,7 +71,6 @@ documented). `report.json` lists the flags a run used under `candidates`.
 | `--player-size-from-camera` | the player size gate from the calibrated camera (band 0.5–1.6 of a standing 1.85 m player) instead of one track's median height | `docs/EVAL_SERVE_SPEED.md`, third candidate |
 | `--pin-serve-height` | the flight fit held at the serve contact height measured on the camera ray (±0.05 m) | `docs/EVAL_SERVE_SPEED.md` |
 | `--toss-bridge` | a toss run may span a missed apex; the serve contact is searched over the whole run | withdrawn from its test (`docs/EVAL_SPOT.md`); reported only |
-| `--appearance-identity` | who is who from clothing in every stretch of play; names from the graphic attached to the two people by majority | "Player identity from clothing" below |
 
 ## Where the time goes (profiled 2026-11-14)
 
@@ -312,6 +311,51 @@ now spent for this question (its crops and frames have been looked at), so it ne
 US Open videos awaiting a download yes) and a reference labelled per flight. Separately, the graphic's default
 names are wrong on about a quarter of the flights in this match and a fifth in the development runs (whole
 stretches, from misread games); the README says so.
+
+### Player identity from clothing, version 2 (rule written 2026-11-15, before its test data was looked at)
+
+**Changes** (code 3396e23 with the fixes of an independent review in b6e1b4f, made before scoring; `--appearance-identity`, still off). Two fixes for what the first test showed. First,
+stretches also end where a flight starts in another measurable segment: the calibration broke in between, as it
+does when the picture switches to another camera. Second, A and B are estimated again with every flight as a unit,
+starting from the stretch estimate, so a stretch that hides an end change no longer blurs them, and the stretches
+are compared against them. A flight whose own crops clearly show the other way round takes their verdict: both
+sides seen must differ from the other person by at least 0.15, and the two sides must agree. So does a flight
+whose stretch is undecided. **Development evidence, not a test:** the development runs are unchanged (11 stretches;
+one more flight named, by its own crops, the same as the graphic). On the 2025 final, now spent for this question
+and only a diagnostic, v2 has 275 right and 4 wrong of the 279 reference flights, against version 1's 259 and 20.
+
+**Test** (`devir/scratch/identity_flight_sheets.py`, `identity_eval_v2.py`): the 2025 quarter-final highlights
+(`usopen2025_qf_djokovic_fritz_hl_v4`, 198 s, 105 flights), used before for OCR and serve speeds but never for
+player names or identity. The reference is per flight this time. A separate labeller, who has not seen the
+method's output, reads sheets that show each flight as three crops of the near player and three of the far
+player, with no names and no stretches. The labeller names the two outfits P and Q and says, for every flight,
+which one is near, or "unclear". P and Q are tied to names by the flights the marked-server serves name if at
+least five such flights are labelled; otherwise by the graphic's majority over all labelled flights. Counted on
+the labelled flights for the graphic (the default) and for version 2: the near player's name right, wrong or
+none. **Adopted, on by default, if** (a) version 2's wrong names are at most 2 % of the labelled flights; (b) it
+has no more wrong and no fewer right names than the graphic; (c) it names at least 85 % of the labelled flights
+by clothing (`name_source` "görünüm"). Otherwise it stays off and the result is recorded here.
+
+**Result (2026-11-15): rejected; the candidate is removed** (`devir/scratch/identity_eval_v2.py`; the code is in
+the history up to b6e1b4f). In this match both players wear nearly the same dark clothes. The labeller described a
+plain black shirt and shorts (P) and a navy-black one with white wristbands on both wrists (Q), labelled 54 of 104
+flights (14 P, 40 Q) and left 50 unclear. The marked-server serves tied P to FRITZ and Q to DJOKOVIC (27 flights,
+all agreeing).
+
+| near player's name, 54 labelled flights | right | wrong |
+|---|---|---|
+| graphic (default) | 50 | 4 |
+| version 2 | 14 | 40 |
+
+(a) and (b) fail; (c) holds (it named all 54 by clothing). Version 2 was confidently wrong, not undecided: all
+seven stretches cleared the margin (0.17 to 0.61), yet every flight had person A near. With nearly the same
+clothes the two-person split learned the two views instead (near: from behind and large; far: from the front
+and small), and A took the graphic's majority name for the near side. So the clothing histogram cannot tell
+persons from views when outfits are alike, and its margin does not show it. A third version would at least have
+to abstain when one person is never seen at the far end, since a match with end changes must show both ways
+round. It would need features that do not change with the view, and footage not used yet. The first version
+(not adopted) fails the same way. Both are removed, as rejected candidates are. The finding that the graphic's
+names are often swapped in highlight footage stands (README).
 
 ## End changes only from plausible score readings (rule written 2026-11-15, before the test below was run)
 
