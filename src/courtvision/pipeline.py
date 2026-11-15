@@ -172,14 +172,29 @@ VFR_COPY_NOTE = ("Videonun kare hızı değişken ({n} kare aralığı ortancada
                  "olan yerlerde önceki kare tekrarlandı (net {added} kare eklendi): o karelerde top ve oyuncu yeni "
                  "konum vermez.")
 VFR_REPEATS_NOTE = (" Tekrarlanan {r} karede top yok sayıldı; top izi orada kaçırılmış bir kare gibi dolduruldu.")
+NO_CALIBRATION_NOTE = ("Kort hiçbir karede kalibre edilemedi: SEKME kortun tamamını arkadan ve yüksekten gösteren tek "
+                       "bir yayın kamerası açısı için tasarlandı; bu videoda çizgiler yeterince görünmüyor ya da açı "
+                       "farklı. Bu yüzden ölçüm ve karar yok.")
+LOW_CALIBRATION_SHARE = 0.25  # highlights from the broadcast camera calibrate about 70 % of their frames
+LOW_CALIBRATION_NOTE = ("Kort karelerin yalnızca %{pct} kadarında kalibre edilebildi (yayın özetlerinde tipik oran "
+                        "%70 civarı): ölçüm ve kararlar yalnız o karelerden; geri kalanında kort görünmüyor ya da açı "
+                        "farklı.")
 INTERLACED_NOTE = ("Video geçmeli (interlaced, alan sırası {order}): her karesi 1/{rate} saniye arayla iki alan "
                    "taşıyor; hareket eden top ve oyuncular ikisinin karışımı görünür, bu yüzden zamanlar yarım kare "
                    "kadar kayabilir ve hızlar şaşabilir.")
 
 
-def video_notes(fps: float, irregular: int, copy: dict | None = None, field_order: str | None = None) -> list[str]:
-    """Limitations that depend on the video itself, added to the general ones."""
+def video_notes(fps: float, irregular: int, copy: dict | None = None, field_order: str | None = None,
+                calibrated: tuple[int, int] | None = None) -> list[str]:
+    """Limitations that depend on the video itself, added to the general ones. `calibrated`: (calibrated frames,
+    frames)."""
     notes: list[str] = []
+    if calibrated is not None and calibrated[1] > 0:
+        share = calibrated[0] / calibrated[1]
+        if calibrated[0] == 0:
+            notes.append(NO_CALIBRATION_NOTE)
+        elif share < LOW_CALIBRATION_SHARE:
+            notes.append(LOW_CALIBRATION_NOTE.format(pct=round(100 * share)))
     if field_order in INTERLACED_ORDERS:
         notes.append(INTERLACED_NOTE.format(order=field_order, rate=f"{2 * fps:.2f}".replace(".", ",")))
     if irregular and copy is not None:
@@ -608,7 +623,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "flights": [_flight_json(i, fl, info.fps) for i, fl in enumerate(flights)],
         "broadcast": broadcast,
         "timings_s": {k: round(v, 2) for k, v in timings.items()},
-        "limitations": video_notes(info.fps, irregular, copy_info, field_ord) + LIMITATIONS,  # this video's own first
+        # this video's own limitations first
+        "limitations": video_notes(info.fps, irregular, copy_info, field_ord, (len(valid), n)) + LIMITATIONS,
     }
     _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
     t4 = time.time()

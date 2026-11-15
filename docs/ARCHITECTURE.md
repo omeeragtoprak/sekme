@@ -707,6 +707,15 @@ their saved states still resume). Two networks were trained with it, each under 
 both lose 1 to 1.5 points on clean frames (0.928 and 0.933 against 0.943), so both were dropped and the default
 is unchanged. Grainy video stays a limitation.
 
+**Another camera position and surface (2026-11-15).** The only local footage not from the US Open broadcast
+camera, 20 s of a 2018 Davis Cup match on clay filmed from a corner of the stands (part of the court in view),
+calibrates on none of its 600 frames, so nothing is measured and no call is made: the system abstains rather than
+guessing. Such a run used to look merely empty; a report whose court calibrates on no frame now says why
+(SEKME is built for one broadcast camera showing the whole court from behind and above), and one calibrated on
+under a quarter of its frames says that its calls come from those frames only (broadcast highlights calibrate
+about 70 %; none of the local runs is under 40 %). The command line warns when no frame calibrates. Clay and grass
+seen from the broadcast position have not been tested.
+
 **A fresh clone.** The weights are not in the repository. A missing checkpoint used to end in a traceback from
 hashing it, after an empty run folder had been made; `analyze` now checks the four checkpoints first and stops with
 one line naming the missing ones (`MissingModelError`; the command line exits with 2, a Review Room job shows the

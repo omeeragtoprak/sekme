@@ -206,6 +206,8 @@ promo/             HyperFrames promo film (footage not included)
   camera-based size gate fixed that but failed its rule elsewhere ([EVAL_PLAYERS.md](docs/EVAL_PLAYERS.md));
   a version with a wider band (`--player-size-from-camera`, off by default) waits for its test on unused
   footage.
+- Built for one broadcast camera showing the whole court from behind and above; tested on US Open hard courts
+  only. Other camera positions do not calibrate, and the report then says that nothing could be measured.
 - Ball footprint is a fixed 2 cm half-length; point/score inference from play is not implemented (the
   score is read from the broadcast).
 - Player names on shots come from the broadcast graphic: from a marked server's serve, else from the end changes

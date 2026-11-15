@@ -481,3 +481,18 @@ def test_interlaced_files_are_recognised(tmp_path) -> None:
     assert vid.field_order(prog) == "progressive" and vid.field_order(inter) in vid.INTERLACED_ORDERS
     assert vid.probe(inter).n_frames == 30
     assert vid.field_order(tmp_path / "missing.mp4") is None
+
+
+def test_a_video_whose_court_cannot_be_calibrated_says_why(monkeypatch, tmp_path, capsys) -> None:
+    import courtvision.cli as cli
+    import courtvision.pipeline as pipeline
+
+    assert pipeline.video_notes(29.97, 0, calibrated=(0, 600)) == [pipeline.NO_CALIBRATION_NOTE]
+    assert pipeline.video_notes(29.97, 0, calibrated=(60, 600)) == [pipeline.LOW_CALIBRATION_NOTE.format(pct=10)]
+    assert pipeline.video_notes(29.97, 0, calibrated=(420, 600)) == []  # a usual highlight share
+    assert pipeline.video_notes(29.97, 0, calibrated=(0, 0)) == []
+    rep = {"video": {"fps": 29.97, "irregular_frame_intervals": 0, "constant_rate_copy": None},
+           "calibration": {"valid_frames": 0, "total_frames": 600, "line_rmse_px_median": None}, "flights": []}
+    monkeypatch.setattr(pipeline, "analyze", lambda *a, **k: rep)
+    assert cli.main(["analyze", str(tmp_path / "x.webm"), "--out", str(tmp_path / "run"), "--fit-workers", "1"]) == 0
+    assert "uyarı: kort hiçbir karede kalibre edilemedi; ölçüm ve karar yok" in capsys.readouterr().err

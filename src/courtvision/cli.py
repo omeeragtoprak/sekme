@@ -66,6 +66,9 @@ def _analyze(args: argparse.Namespace) -> int:
         print(f"uyarı: değişken kare hızı ({n_irregular} düzensiz kare aralığı); hızlar ve işaretler kayabilir",
               file=sys.stderr)
     cal = report["calibration"]
+    if cal["total_frames"] and not cal["valid_frames"]:
+        print("uyarı: kort hiçbir karede kalibre edilemedi; ölçüm ve karar yok (SEKME kortu arkadan gösteren yayın "
+              "kamerası açısı için)", file=sys.stderr)
     print(f"calibrated frames {cal['valid_frames']}/{cal['total_frames']}, line rmse {cal['line_rmse_px_median']} px")
     for f in report["flights"]:
         call = f["call"]
