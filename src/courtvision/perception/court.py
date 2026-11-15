@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -11,6 +12,7 @@ import torch
 from courtvision.calib.camera import Camera, apply_h, camera_from_homography, fit_homography
 from courtvision.calib.line_refine import refine_homography
 from courtvision.geometry.court import CourtModel
+from courtvision.io.video import iter_frames
 from courtvision.models.court_net import CourtKeypointNet
 from courtvision.models.court_unet import ARCH as COURT_UNET_ARCH
 from courtvision.models.court_unet import CourtUNet
@@ -97,6 +99,49 @@ def detect_shot_cuts(hists: list[np.ndarray], threshold: float = 0.55) -> list[i
         if cv2.compareHist(hists[i - 1], hists[i], cv2.HISTCMP_CORREL) < threshold:
             cuts.append(i)
     return cuts
+
+
+def grey_thumb(frame: np.ndarray) -> np.ndarray:
+    """The 160 x 90 grey copy frame differences are measured on."""
+    small = cv2.resize(frame, (160, 90), interpolation=cv2.INTER_AREA)
+    return cv2.cvtColor(small, cv2.COLOR_BGR2GRAY).astype(np.int16)
+
+
+def thumb_difference(a: np.ndarray | None, b: np.ndarray) -> float:
+    """Mean absolute grey-level difference (0-255) of two `grey_thumb`s; 0 without a frame before."""
+    return 0.0 if a is None else float(np.abs(b - a).mean())
+
+
+def frame_differences(video: str | Path) -> np.ndarray:
+    """Each frame's `thumb_difference` from the one before, 0 for the first. One decoding pass, nothing else (for
+    detections cached before perception measured it on the way)."""
+    out: list[float] = []
+    prev = None
+    for _, frame in iter_frames(video):
+        g = grey_thumb(frame)
+        out.append(thumb_difference(prev, g))
+        prev = g
+    return np.array(out, dtype=np.float32)
+
+
+STILL_DIFF = 0.05  # floor for the median of the differences before (a perfectly still picture)
+
+
+def same_angle_edits(diffs: np.ndarray, valid: list[bool], threshold: float = 2.5, ratio: float = 3.0,
+                     past: int = 6) -> list[int]:
+    """Frames that start a new shot from the same camera position, which the colour histogram cannot see (the court
+    and the boards look the same; the crowd and the players do not): the frame differs from the one before by at
+    least ``threshold`` grey levels on average and by ``ratio`` times the median of the ``past`` differences before
+    it (camera moves change gradually). Only where both frames are calibrated: elsewhere nothing measured is split.
+    Blind spots: the first 3 frames (too little before them), and a second edit within about 3 frames of another
+    (the first one's jump is then among the differences before it)."""
+    out = []
+    for i in range(1, len(diffs)):
+        before = diffs[max(1, i - past):i]
+        if (len(before) >= 3 and valid[i] and valid[i - 1] and diffs[i] >= threshold
+                and diffs[i] >= ratio * max(float(np.median(before)), STILL_DIFF)):
+            out.append(i)
+    return out
 
 
 @dataclass

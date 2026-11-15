@@ -42,6 +42,16 @@ def test_pipeline_end_to_end_on_real_clip(tmp_path: Path) -> None:
     assert f["call"]["verdict"] == "IN"  # play continued: the umpire did not call it out
     assert 60 < f["hit_speed_kmh"] < 180 and 0.0 < f["hit_height_m"] < 3.3 and f["net_clearance_m"] > 0
     assert json.loads((tmp_path / "run" / "frames.json").read_text())["n"] == cal["total_frames"]
+    # Frame differences are measured during perception, the same as a pass of their own; one shot, no edit.
+    import pickle
+
+    import numpy as np
+
+    from courtvision.perception.court import frame_differences
+    with open(tmp_path / "run" / "perception.pkl", "rb") as fh:  # written by this test
+        diffs = pickle.load(fh)["diffs"]
+    assert np.array_equal(diffs, frame_differences(clip)) and cal["same_angle_edits"] == []
+    assert not (tmp_path / "run" / "frame_diffs.pkl").exists()  # no extra pass when perception measured them
 
 
 @pytest.mark.skipif(not SAMPLE.exists() or not all(w.exists() for w in WEIGHTS) or not shutil.which("ffmpeg"),

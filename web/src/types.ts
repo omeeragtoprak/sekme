@@ -286,6 +286,8 @@ export type Report = {
     valid_frames: number;
     total_frames: number;
     shot_cuts: number[];
+    same_angle_edits?: number[]; // edits from one camera position, included in shot_cuts
+    same_angle_edits_measured?: boolean | null;
     line_support_median: number | null;
     line_rmse_px_median: number | null;
     focal_px_median: number | null;

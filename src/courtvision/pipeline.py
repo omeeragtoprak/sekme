@@ -51,8 +51,12 @@ from courtvision.perception.court import (
     CourtCalibrator,
     CourtKeypointDetector,
     calibrate_sequence,
+    frame_differences,
     frame_hist,
+    grey_thumb,
     pick_device,
+    same_angle_edits,
+    thumb_difference,
 )
 from courtvision.perception.players import person_tracker, select_players
 from courtvision.perception.pose import pose_estimator, poses_at
@@ -229,6 +233,7 @@ class PipelineConfig:
     constant_rate_copy: bool = True  # variable-rate video analysed from a constant-rate copy (docs/ARCHITECTURE.md)
     drop_repeated_ball: bool = True  # no ball on the frames the copy repeats (docs/ARCHITECTURE.md, adopted 2026-11-15)
     appearance_identity: bool = False  # candidate, off by default (docs/ARCHITECTURE.md): who is who from clothing
+    same_angle_edits: bool = True  # edits from one camera position count as cuts (docs/ARCHITECTURE.md, adopted)
     models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
@@ -285,7 +290,8 @@ def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog)
     ball_det.start((info.width, info.height), stride)
     people = person_tracker(cfg.models["players"], device.type, imgsz=cfg.player_imgsz)
     pending, dets, cuts = [], [], [0]
-    prev_hist = None
+    prev_hist = prev_thumb = None
+    diffs: list[float] = []
     n = 0
     # The court calibrator (mostly CPU line fitting, ~21 ms/frame) runs in one worker thread, in frame order,
     # while the ball and person networks run here.
@@ -295,6 +301,9 @@ def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog)
                 raise UnreadableVideoError(f"{Path(video).name}: kareler {frame.shape[1]}×{frame.shape[0]} çözülüyor, "
                                            f"video {info.width}×{info.height} bildiriyor (döndürme?)")
             hist = frame_hist(frame)
+            thumb = grey_thumb(frame)
+            diffs.append(thumb_difference(prev_thumb, thumb))
+            prev_thumb = thumb
             is_cut = prev_hist is not None and cv2.compareHist(prev_hist, hist, cv2.HISTCMP_CORREL) < cfg.cut_threshold
             if is_cut:
                 cuts.append(i)
@@ -308,7 +317,7 @@ def _perceive(video, info, cfg: PipelineConfig, court: CourtModel, device, prog)
             if i % 10 == 0:
                 prog("perception", i / max(info.n_frames, 1))
         meas = [f.result() for f in pending]
-    return meas, dets, cuts, ball_det.finish(n), n
+    return meas, dets, cuts, ball_det.finish(n), n, np.array(diffs, dtype=np.float32)
 
 
 def _broadcast_scan(video, fps: float, out: Path, video_sha: str, cfg: PipelineConfig) -> BroadcastScan:
@@ -342,6 +351,31 @@ def _annotate_from_broadcast(flights: list[dict], broadcast: dict, scan: Broadca
         names = anchored.get(f["id"]) or side_names(scan, start_end, f["start_frame"] / fps)
         f["hitter_name"] = names.get(f["hitter"]) if names else None
         f["receiver_name"] = names.get(f["receiver"]) if names else None
+
+
+def _frame_diffs(video, video_sha: str, n: int, out: Path, reuse: bool,
+                 measured: np.ndarray | None) -> np.ndarray | None:
+    """Each frame's difference from the one before: as perception measured it, else from frame_diffs.pkl (same
+    video), else from a decoding pass of its own, cached. None when they do not cover the video's n frames."""
+    if measured is not None:
+        return measured if len(measured) == n else None
+    cache = out / "frame_diffs.pkl"
+    if reuse and cache.is_file():
+        try:
+            with open(cache, "rb") as fh:  # local cache written by this pipeline (trusted)
+                c = pickle.load(fh)
+            if isinstance(c, dict) and c.get("video_sha256") == video_sha and len(c.get("diffs", ())) == n:
+                return c["diffs"]
+        except (OSError, EOFError, pickle.UnpicklingError, AttributeError, TypeError, ValueError):
+            pass  # a damaged cache is read again, not fatal
+    diffs = frame_differences(video)
+    if len(diffs) != n:
+        return None
+    tmp = cache.with_name(cache.name + ".part")
+    with open(tmp, "wb") as fh:
+        pickle.dump({"video_sha256": video_sha, "diffs": diffs}, fh)
+    tmp.replace(cache)
+    return diffs
 
 
 def _annotate_identity(video, fjson: list[dict], players, cuts: list[int], fps: float, n_frames: int, out: Path,
@@ -544,15 +578,28 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
             cached = None
     if cached is not None:
         meas, dets, cuts, cands, n = cached["meas"], cached["dets"], cached["cuts"], cached["cands"], cached["n"]
+        diffs = cached.get("diffs")  # caches written before 2026-11-15 lack them: read in a pass of their own
     else:
-        meas, dets, cuts, cands, n = _perceive(video, info, cfg, court, device, prog)
+        meas, dets, cuts, cands, n, diffs = _perceive(video, info, cfg, court, device, prog)
         with open(cache, "wb") as f:
-            pickle.dump({"key": perc_key, "meas": meas, "dets": dets, "cuts": cuts, "cands": cands, "n": n}, f)
+            pickle.dump({"key": perc_key, "meas": meas, "dets": dets, "cuts": cuts, "cands": cands, "n": n,
+                         "diffs": diffs}, f)
     timings["perception_s"] = time.time() - t0
 
     t1 = time.time()
     prog("analysis", 0.0)
     calib = calibrate_sequence(meas, cuts, (info.width, info.height), court)
+    edits: list[int] = []
+    edits_measured = None
+    if cfg.same_angle_edits:  # after calibration, which the same camera position does not disturb
+        t6 = time.time()
+        diffs = _frame_diffs(video, video_sha, n, out, cfg.reuse_perception, diffs)
+        edits_measured = diffs is not None
+        if diffs is not None:  # (the person tracker was reset only at the histogram cuts, during perception)
+            seen = set(cuts)
+            edits = [i for i in same_angle_edits(diffs, [c.valid for c in calib]) if i not in seen]
+            cuts = sorted(seen | set(edits))
+        timings["same_angle_edits_s"] = time.time() - t6
     # Frame counts below were set on 30 fps video; the candidate scales them like the ball net's input stride.
     fscale = frame_scale(info.fps) if cfg.fps_scaled_thresholds else 1
     if copy_info is not None:
@@ -601,7 +648,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
                                          ("player_size_from_camera", cfg.player_size_from_camera),
                                          ("appearance_identity", cfg.appearance_identity)) if v},
         "calibration": {
-            "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts,
+            "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts, "same_angle_edits": edits,
+            "same_angle_edits_measured": edits_measured,
             "line_support_median": _f(np.median([c.support for c in valid]) if valid else None),
             "line_rmse_px_median": _f(np.nanmedian([c.line_rmse_px for c in valid]) if valid else None, 2),
             "focal_px_median": _f(np.median([c.focal for c in cams]) if cams else None, 1),

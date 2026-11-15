@@ -340,6 +340,61 @@ the true "2-6, 6-3, 1-6, 1-0" is even. Single readings cannot catch that. A read
 match, so a check across time could catch it, but that is another candidate and needs footage not used yet. The
 clothing candidate above gets those flights right.
 
+## Edits from the same camera position (rule written 2026-11-15, before the test below was run)
+
+**Finding.** Shot cuts are found where the colour histograms of two frames correlate below 0.55. An edit between
+two moments filmed from the same camera position (common in highlights: one rally, then the next) leaves the
+court and the boards in place, so the histograms hardly change. Synthetic edits show it: in TrackNet games 1–4
+every clip comes from the same broadcast camera of its game, so the last frame of one clip followed by the first
+of another is an edit at a known frame (326 such pairs); the histogram test finds 19.9 % of them. Missed edits
+let a measurable segment, a flight's hits, a marked server's names and a clothing stretch run across two
+moments; the identity test above met three in one 2025 run.
+
+**Candidate** (`perception/court.py` `frame_differences`, `same_angle_edits`; `PipelineConfig.same_angle_edits`,
+`--same-angle-edits`, off by default). An extra decoding pass gives each frame's mean absolute grey difference from
+the one before (160 × 90). A frame starts a new shot if that difference is at least 2.5 grey levels and at least 3
+times the median of the 6 before it (a camera move builds up over frames), and both frames are calibrated (a
+same-angle edit only matters where something is measured: elsewhere, in close-ups, fast moves set it off and split
+nothing). The new cuts are added after calibration (the same camera position does not disturb it) and used by
+everything after: measurable segments, hits and flights, the graphic's names, the clothing stretches; the report
+lists them (`calibration.same_angle_edits`). Chosen on games 1–4 (`devir/scratch/cut_features.py`): with the
+histogram test it finds 96.3 % of the 326 synthetic edits and fires on none of 8 178 consecutive in-clip frame
+pairs; on the two development broadcast runs it fires 18 times, all but one in close-ups (not calibrated).
+
+**Test.** (A) TrackNet games 5–7 (not used for this question; games 8–10 are not used): every ordered pair of
+clips of a game as a synthetic edit (294), every consecutive in-clip pair as none. (B) The five broadcast runs
+(2023 final, both parts; 2024 final highlights; 2025 final, both runs): each cut the candidate adds is shown to a
+separate labeller as the frame before and the frame after, who says whether a new shot starts there or the same
+shot continues, or that they cannot tell. (C) TrackNet games 1–7 end to end from their cached detections
+(continuous clips, so any added cut is a false one): the calls with and without the candidate. **Adopted, on by
+default, if** (a) with the histogram test it finds at least 90 % of the synthetic edits of (A); (b) it fires on
+at most one in-clip pair of (A); (c) at least 80 % of the cuts it adds in (B) are new shots by the labeller
+(those it cannot tell left out; with fewer than five cuts (c) is not applied and they are described); (d) at most
+one call of (C) changes (lost, new or another verdict). Otherwise it stays off and the result is recorded here.
+
+**Result (2026-11-15): adopted, on by default** (`PipelineConfig.same_angle_edits`; candidate code 9ac60d4; checks
+`devir/scratch/cut_test_a.py`, `cut_test_b.py`, `cut_test_c.py`). (A) Of the 294 synthetic edits of games 5–7 the
+histogram test finds 5 (1.7 %), with the candidate 289 (98.3 %); it fires on none of 5 806 in-clip pairs. (B) On
+the five broadcast runs it adds two cuts, both in the 2025 run at 234.3 and 234.4 s: the two middle frames of a
+dissolve between two moments filmed from the main camera (the second moment shows through the first), so an
+edit. With fewer than five, (c) is not applied. (D) TrackNet games 1–7 (65 clips): no cut added, no call
+changed. (a), (b) and (d) hold.
+
+What it does and does not do on broadcast footage, as seen in the identity test: the edits that were missed
+there switch to or from another camera (the side camera at 140 s). Right after such an edit the calibration
+breaks for a few frames, so the measurable segments, and with them hits and flights, already end there. The
+candidate, which only looks between calibrated frames, does not fire there. The clothing stretches and the
+marked-server names do not look at calibration gaps, only at cuts, pauses and score changes. Ending them at
+segment boundaries too is the next step for both (a change to the default naming, with its own rule and data
+not used yet). Cost: the differences are measured on the frames perception decodes anyway. Detections cached
+before this change are read again in a pass of their own (68 s for the 554 s 1080p60 run), cached as
+`frame_diffs.pkl`. After an independent review: that cache is written atomically, and a damaged one is read again,
+not fatal. The report says whether the differences were measured (`calibration.same_angle_edits_measured`)
+so that "none found" is not confused with "not looked for". Known blind spots: the first 3 frames, and a
+second edit within about 3 frames of another. The person tracker is still reset only at histogram cuts.
+`calibration.shot_cuts` now includes these edits, so the Review Room's count of camera changes can differ from
+older reports.
+
 ## Review Room security (security review, 2026-11-14)
 
 The Review Room is a single-user tool for this machine. A security review found no HIGH findings; it is now
