@@ -156,10 +156,13 @@ def test_pose_cache_key_covers_the_hitter_and_its_box():
     assert pose_key("v", "m", [(5, "near", nan)]) == pose_key("v", "m", [(5, "near", nan.copy())])
 
 
-def test_cached_detections_are_not_reused_with_another_ball_step():
+def test_cached_detections_are_not_reused_with_another_ball_step(tmp_path):
     from courtvision.pipeline import PipelineConfig, perception_key, same_perception_key
 
+    weights = tmp_path / "w.pt"
+    weights.write_bytes(b"weights")  # (the real checkpoints are not in the repository)
     cfg = PipelineConfig()
+    cfg.models = {k: str(weights) for k in ("court", "ball", "players", "pose")}
     k30, k60 = perception_key("video", cfg, 1), perception_key("video", cfg, 2)
     assert same_perception_key(k30, k30) and not same_perception_key(k30, k60)  # e.g. the frame rate read anew
     old = {k: v for k, v in k60.items() if k != "ball_step"}  # written before the step was part of the key
