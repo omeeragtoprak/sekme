@@ -582,7 +582,9 @@ export default function VideoStage({
         ? report.video.constant_rate_copy
           ? "Değişken kare hızı · sabit hızlı kopyadan analiz edildi"
           : "Değişken kare hızı · işaretler kayabilir"
-        : null;
+        : ["tt", "bb", "tb", "bt"].includes(report.video.field_order ?? "")
+          ? "Geçmeli video · zamanlar ve hızlar kayabilir"
+          : null;
   const t = currentFrame / fps;
 
   if (!tab) {

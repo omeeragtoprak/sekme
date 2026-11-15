@@ -165,6 +165,21 @@ def repeated_frames(showinfo_log: str) -> tuple[int, list[int]]:
     return n, [i for i in range(1, n) if i in sums and sums[i] == sums.get(i - 1)]
 
 
+INTERLACED_ORDERS = frozenset({"tt", "bb", "tb", "bt"})  # ffprobe field_order values of interlaced video
+
+
+def field_order(path: str | Path) -> str | None:
+    """The video stream's field order as ffprobe reports it ("progressive", "tt", "bb", ...; "unknown" when the file
+    does not say), None when it cannot be read."""
+    try:
+        out = subprocess.run([_bin("ffprobe"), "-v", "error", "-select_streams", "V:0", "-show_entries",
+                              "stream=field_order", "-of", "csv=p=0", str(path)],
+                             check=True, capture_output=True, text=True, timeout=60).stdout.strip().strip(",")
+    except (OSError, RuntimeError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    return out or None
+
+
 def constant_rate_copy(src: str | Path, dest: str | Path, rate: Fraction) -> tuple[Path, list[int] | None]:
     """Re-encode `src` at a constant `rate` with ffmpeg's `fps` filter: each output frame is the source frame
     nearest its time, so a gap repeats a frame and index / rate is the real time again. Upright (rotation applied),

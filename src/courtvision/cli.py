@@ -59,7 +59,10 @@ def _analyze(args: argparse.Namespace) -> int:
                    if copy.get("repeated_ball_dropped") else "")
         print(f"not: değişken kare hızı ({n_irregular} düzensiz kare aralığı); sabit {rate} fps'lik kopyadan analiz "
               f"edildi ({copy['file']}, net {copy['added_frames']} kare eklendi){repeats}", file=sys.stderr)
-    elif n_irregular:
+    if report["video"].get("field_order") in ("tt", "bb", "tb", "bt"):
+        print(f"uyarı: video geçmeli (interlaced, alan sırası {report['video']['field_order']}); zamanlar yarım kare "
+              "kayabilir, hızlar şaşabilir", file=sys.stderr)
+    if not report["video"].get("constant_rate_copy") and n_irregular:
         print(f"uyarı: değişken kare hızı ({n_irregular} düzensiz kare aralığı); hızlar ve işaretler kayabilir",
               file=sys.stderr)
     cal = report["calibration"]

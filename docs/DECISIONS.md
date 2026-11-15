@@ -7,7 +7,7 @@ documented: a rejected pipeline change is removed from the code, and a rejected 
 defaults. Numbers are as measured, failures included. Each
 row links to the section that holds the rule, the result and what was learned.
 
-31 decisions: 12 adopted, 8 rejected, 6 not adopted, 3 open, 1 adopted as a correctness fix, 1 withdrawn.
+32 decisions: 12 adopted, 9 rejected, 6 not adopted, 3 open, 1 adopted as a correctness fix, 1 withdrawn.
 
 | Date | Change | Outcome | Evidence | Where |
 |---|---|---|---|---|
@@ -42,6 +42,7 @@ row links to the section that holds the rule, the result and what was learned.
 | 2026-11-15 | Constant-rate copy for variable frame rate | adopted | burst20 speed error 64.8 → 9.4 km/h, time error 0.263 → 0.015 s; drop5 speed error 7.7 → 7.1 km/h | [ARCHITECTURE.md](ARCHITECTURE.md), Variable frame rate |
 | 2026-11-15 | Ignoring ball on repeated frames | adopted | (iii) speed error 408.3 → 208.7 km/h (0.51 times, allowed 0.8); all 30 reference calls matched with their verdict in both arms | [ARCHITECTURE.md](ARCHITECTURE.md), Variable frame rate |
 | 2026-11-15 | Ball network v6 fine-tuned noise | not adopted | (a) fails: clean 0.933 against at least 0.938 | [MODELS.md](MODELS.md), Ball network v6 candidate: v4 fine-tuned with sensor noise (rule written 2026-11-15, before training) |
+| 2026-11-15 | Interlaced video analysed field by field | rejected | summed speed error 74.8 → 86.9 km/h (needed at most half); time 77 → 10 ms, bounce distance 49.9 → 18.2 cm; two window-start calls drive the sum | [ARCHITECTURE.md](ARCHITECTURE.md), Interlaced video |
 
 Outcomes: *adopted* (now the default); *not adopted* (the rule was not met, or, in the first clothing
 identity test, a flaw found in the reference showed it was not met); *rejected* (failed and dropped);

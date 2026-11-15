@@ -270,6 +270,7 @@ export type Report = {
     sha256: string;
     /** Frame intervals more than 25 % off the median (variable frame rate); absent in older reports. */
     irregular_frame_intervals?: number;
+    field_order?: string | null; // ffprobe: progressive, tt, bb, ... or unknown
     /** Set when such a video was analysed (and is played) from a constant-rate copy. */
     constant_rate_copy?: {
       file: string; fps: number; frames: number; source_frames: number; added_frames: number;

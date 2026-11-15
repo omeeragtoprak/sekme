@@ -594,6 +594,54 @@ at a bounce) changes nothing: the tracker already discarded the stale detections
 on how many repeated frames the ball was ignored, and `PipelineConfig(drop_repeated_ball=False)` restores the
 earlier handling.
 
+**Interlaced video (rule written 2026-11-15, before the test inputs below were made).** Television recordings and
+older cameras store 1080i: each frame carries two fields 1/59.94 s apart. Decoded as it is, a moving ball or
+player shows both. Development (the 2024 window of the repeated-frame test, 59.94p, five IN calls, made 1080i the
+usual way: ffmpeg `tinterlace=interleave_top`, x264 top field first, CRF 17; `devir/scratch/interlace_check.py`):
+
+- Analysed as it is: the ball on 163 of 180 frames. All five calls are kept, with bounces within 5.4 cm of the
+  progressive original, but the times are 7–13 ms late (half a frame, the fields' mean) and the speeds are up to
+  16.3 km/h off.
+- From a progressive 29.97 copy of the same moments, for comparison: within 3.4 cm, 0–2 ms, 6.0 km/h.
+- Split field by field (ffmpeg `bwdif`, 59.94 frames a second): the ball on 334 of 360 (original 339), bounces
+  mostly within 2 cm, 0–1 ms, speeds within 1.5 km/h.
+
+**Candidate** (`PipelineConfig.deinterlace`, `--deinterlace`, off by default; code ea42ef4): a video whose stream
+is tagged interlaced (ffprobe field order tt, bb, tb or bt) is analysed from the constant-rate copy made
+field by field (`bwdif`, twice the frame rate), which the Review Room then plays. Every report now records the
+field order. None of the 109 local broadcast and TrackNet videos is tagged interlaced, so none changes.
+
+**Test**: two windows not used for this question, by the window rule of the repeated-frame test:
+1. that test's 2025 final window (frames 206–566);
+2. the first such window of the 2025 quarter-final highlights run.
+
+Each window is analysed progressive as the reference, made 1080i as above, and analysed as it is and with the
+candidate. Scored as there: called bounces matched by time (within 0.3 s), with (i) summed distance, (ii) summed
+time error and (iii) summed hit and bounce speed error. **Adopted, on by default, if summed over both windows**:
+
+- (a) (iii) with the candidate is at most half of (iii) as it is;
+- (b) (ii) is not larger;
+- (c) (i) is not larger by more than 1 cm per reference call;
+- (d) no reference call that is matched with its verdict as it is gets lost or changes verdict with the candidate.
+
+Otherwise it stays off and the result is recorded here.
+
+**Result (2026-11-15): rejected; the field-by-field copy is removed** (`devir/scratch/interlace_test.py`; code up
+to 04464b5). Quarter-final window: frames 161–521 (2.69–8.69 s), four IN calls; 2025 final window as before, five.
+Summed over both: (i) bounce distance 49.9 → 18.2 cm, (ii) time error 77 → 10 ms, (iii) speed error 74.8 → 86.9
+km/h. (a) fails, (b), (c) and (d) hold. As it is, the 2025 window's first call (0.09 s) was lost; field by field
+it came back. Looked at afterwards, per call: on every call found both ways and away from a window's start the
+fields are much closer: 2025 4.1 → 1.3, 21.5 → 0.2, 9.4 → 2.0, 3.5 → 0.5 km/h; quarter-final 6.1 → 0.4, 0.6 → 0.3,
+4.1 → 0.3. The sum is driven by two calls at a window's start: the recovered 0.09 s call (its bounce 155 against the
+reference's 101 km/h; that reference speed was already unstable in the repeated-frame test) and the quarter-final's
+1.10 s call, whose hit is not in its window (28.0 against 25.5 km/h). Summed errors that let one call at a
+window's edge dominate, and that charge a recovered call its error while a lost one costs nothing, were a weakness
+of this rule's design (the repeated-frame test had the same weakness, in the candidate's favour). The rule stands:
+the candidate is dropped. A later rule should leave out calls within 0.5 s of a window's ends and count recovered
+calls separately. What stays: every report records the stream's field order (`video.field_order`); a video tagged
+interlaced gets a limitation in Turkish, which the command line and the Review Room repeat, saying that speeds and
+times can be off. A stream tagged "unknown" (MPEG-TS often reports that until decoding) is not taken as interlaced.
+
 **Codecs.** One-second excerpts re-encoded as HEVC (MP4), VP9 (WebM and MP4) and AV1 (MP4) probe and decode
 with the size and frame count `probe` reports, and play in the Review Room. The source video used to be served
 as `video/mp4` whatever its container (Chrome played a WebM anyway by sniffing it); it is now served with its

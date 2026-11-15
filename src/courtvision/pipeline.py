@@ -36,9 +36,11 @@ from courtvision.events.serves import detect_serves, merge_serves
 from courtvision.events.strokes import classify, serve_hand, vote_hand
 from courtvision.geometry.court import CourtModel
 from courtvision.io.video import (
+    INTERLACED_ORDERS,
     VideoInfo,
     VideoWriter,
     constant_rate_copy,
+    field_order,
     irregular_frame_intervals,
     iter_frames,
     link_source,
@@ -170,15 +172,21 @@ VFR_COPY_NOTE = ("Videonun kare hızı değişken ({n} kare aralığı ortancada
                  "olan yerlerde önceki kare tekrarlandı (net {added} kare eklendi): o karelerde top ve oyuncu yeni "
                  "konum vermez.")
 VFR_REPEATS_NOTE = (" Tekrarlanan {r} karede top yok sayıldı; top izi orada kaçırılmış bir kare gibi dolduruldu.")
+INTERLACED_NOTE = ("Video geçmeli (interlaced, alan sırası {order}): her karesi 1/{rate} saniye arayla iki alan "
+                   "taşıyor; hareket eden top ve oyuncular ikisinin karışımı görünür, bu yüzden zamanlar yarım kare "
+                   "kadar kayabilir ve hızlar şaşabilir.")
 
 
-def video_notes(fps: float, irregular: int, copy: dict | None = None) -> list[str]:
+def video_notes(fps: float, irregular: int, copy: dict | None = None, field_order: str | None = None) -> list[str]:
     """Limitations that depend on the video itself, added to the general ones."""
+    notes: list[str] = []
+    if field_order in INTERLACED_ORDERS:
+        notes.append(INTERLACED_NOTE.format(order=field_order, rate=f"{2 * fps:.2f}".replace(".", ",")))
     if irregular and copy is not None:
-        notes = [VFR_COPY_NOTE.format(n=irregular, fps=f"{fps:.2f}".replace(".", ","), added=copy["added_frames"])
+        notes += [VFR_COPY_NOTE.format(n=irregular, fps=f"{fps:.2f}".replace(".", ","), added=copy["added_frames"])
                  + (VFR_REPEATS_NOTE.format(r=copy["repeated_frames"]) if copy.get("repeated_ball_dropped") else "")]
-    else:
-        notes = [VFR_NOTE.format(n=irregular)] if irregular else []
+    elif irregular:
+        notes.append(VFR_NOTE.format(n=irregular))
     if 0 < fps < LOW_FPS:
         notes.append(LOW_FPS_NOTE.format(fps=fps))
     return notes
@@ -482,6 +490,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     source = Path(video)
     source_sha = _sha256(source)
     irregular = irregular_frame_intervals(source)
+    field_ord = field_order(source)  # reported; an interlaced one gets a limitation (field by field was rejected)
     copy_info = None
     copy_error = None
     repeated: list[int] | None = None
@@ -566,7 +575,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "created": datetime.now(UTC).isoformat(timespec="seconds"),
         "video": {"file": source.name, "width": info.width, "height": info.height, "fps": info.fps,
                   "n_frames": n, "duration_s": round(n / info.fps, 3), "sha256": source_sha,
-                  "irregular_frame_intervals": irregular, "constant_rate_copy": copy_info,
+                  "irregular_frame_intervals": irregular, "field_order": field_ord, "constant_rate_copy": copy_info,
                   **({"constant_rate_copy_error": copy_error} if copy_error else {})},
         "models": {k: _model_card(k, v) for k, v in cfg.models.items()},
         "candidates": {k: v for k, v in (("serve_toss_bridge_s", cfg.serve_toss_bridge_s),
@@ -599,7 +608,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "flights": [_flight_json(i, fl, info.fps) for i, fl in enumerate(flights)],
         "broadcast": broadcast,
         "timings_s": {k: round(v, 2) for k, v in timings.items()},
-        "limitations": video_notes(info.fps, irregular, copy_info) + LIMITATIONS,  # this video's own first
+        "limitations": video_notes(info.fps, irregular, copy_info, field_ord) + LIMITATIONS,  # this video's own first
     }
     _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
     t4 = time.time()

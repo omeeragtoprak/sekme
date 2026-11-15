@@ -445,3 +445,39 @@ def test_the_command_line_says_how_a_variable_rate_video_was_handled(monkeypatch
     assert cli.main(args) == 0
     assert "uyarı: değişken kare hızı (20 düzensiz kare aralığı); hızlar ve işaretler kayabilir" in \
         capsys.readouterr().err
+
+
+def test_an_interlaced_video_gets_a_limitation(monkeypatch, tmp_path, capsys) -> None:
+    import courtvision.cli as cli
+    import courtvision.pipeline as pipeline
+
+    notes = pipeline.video_notes(29.97, 0, None, "tt")
+    assert notes == [pipeline.INTERLACED_NOTE.format(order="tt", rate="59,94")]
+    assert pipeline.video_notes(29.97, 0, None, "progressive") == []
+    assert pipeline.video_notes(29.97, 0, None, "unknown") == []  # (MPEG-TS often says so before decoding)
+    both = pipeline.video_notes(29.97, 12, None, "bb")
+    assert both[0].startswith("Video geçmeli (interlaced, alan sırası bb)")
+    assert both[1] == pipeline.VFR_NOTE.format(n=12)
+    rep = {"video": {"fps": 29.97, "irregular_frame_intervals": 0, "constant_rate_copy": None, "field_order": "tt"},
+           "calibration": {"valid_frames": 1, "total_frames": 1, "line_rmse_px_median": 0.3}, "flights": []}
+    monkeypatch.setattr(pipeline, "analyze", lambda *a, **k: rep)
+    assert cli.main(["analyze", str(tmp_path / "x.ts"), "--out", str(tmp_path / "run"), "--fit-workers", "1"]) == 0
+    err = capsys.readouterr().err
+    assert "uyarı: video geçmeli (interlaced, alan sırası tt); zamanlar yarım kare kayabilir" in err
+
+
+@pytest.mark.skipif(not all(__import__("shutil").which(b) for b in ("ffmpeg", "ffprobe")),
+                    reason="needs ffmpeg and ffprobe (CI has none)")
+def test_interlaced_files_are_recognised(tmp_path) -> None:
+    import courtvision.io.video as vid
+
+    prog = tmp_path / "p60.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=160x96:rate=60:duration=1",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(prog)], check=True)
+    inter = tmp_path / "i30.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-i", str(prog), "-vf", "tinterlace=mode=interleave_top,setfield=tff",
+                    "-c:v", "libx264", "-flags", "+ilme+ildct", "-x264-params", "tff=1", "-pix_fmt", "yuv420p",
+                    str(inter)], check=True)
+    assert vid.field_order(prog) == "progressive" and vid.field_order(inter) in vid.INTERLACED_ORDERS
+    assert vid.probe(inter).n_frames == 30
+    assert vid.field_order(tmp_path / "missing.mp4") is None
