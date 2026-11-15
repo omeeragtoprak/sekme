@@ -209,6 +209,14 @@ Also from the pipeline review (2026-11-14), checked and left:
 
 - The serving hand is voted per player name; without names (no OCR), per side, which pools two players
   across an end change and can mislabel a left-hander's forehand and backhand (strokes only, never a call).
+- `perception/ball.py`: the tracker keeps predicting across at most 5 missed frames (`i - last <= max_gap`, the
+  frame of the miss's end counted), while gap filling fills up to 6. Found by a test review (2026-11-15) and
+  pinned by a test (`tests/test_ball_tracking_edges.py`); making the two agree changes the tracker, so it needs
+  its own rule and was left.
+- `events/hits.py`: a direction reversal within about 5 frames of a measurable segment's edge is not detected (the
+  direction window is cut off there), and one exactly on a boundary is found by neither side; so a stroke right
+  next to a camera cut or a calibration gap is missed. Found by a test review (2026-11-15) and pinned
+  (`tests/test_events_edges.py`); changing it changes the event detection and needs its own rule.
 - Poses are read by seeking to each hit frame; on the 60 fps 1080p footage 25 of 25 sampled frames were
   identical to sequential decoding, so this was not changed.
 
