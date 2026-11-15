@@ -136,6 +136,7 @@ contacts bracketed by eye: every serve the pipeline found has its contact within
 ```bash
 uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
 # model weights go to models/ (not in the repository, see docs/MODELS.md and docs/LICENSES.md)
+sekme doctor                                             # ffmpeg, OpenCV, GPU, weights, OCR, web build, disk
 sekme analyze data/videos/<clip>.mp4 --out runs/<id>     # report.json, HUD videos
 cd web && npm install && npm run build && cd ..
 sekme serve --runs runs                                  # Review Room on http://127.0.0.1:8765

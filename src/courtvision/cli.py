@@ -1,4 +1,4 @@
-"""Command line: analyse a video, serve the review room, run the simulation benchmark."""
+"""Command line: analyse a video, serve the review room, check the setup, run the simulation benchmark."""
 
 from __future__ import annotations
 
@@ -93,6 +93,14 @@ def _serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _doctor(args: argparse.Namespace) -> int:
+    from courtvision.doctor import report, run_checks
+
+    text, code = report(run_checks(runs=Path(args.runs)))
+    print(text)
+    return code
+
+
 def _benchmark(args: argparse.Namespace) -> int:
     import numpy as np
 
@@ -150,6 +158,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--port", type=int, default=8765)
     s.add_argument("--device", default="auto")
     s.set_defaults(fn=_serve)
+    d = sub.add_parser("doctor", help="check that this machine can analyse videos and serve the review room")
+    d.add_argument("--runs", default="runs", help="where analyses are written (its free disk space is checked)")
+    d.set_defaults(fn=_doctor)
     b = sub.add_parser("benchmark", help="simulated accuracy for a camera setup")
     b.add_argument("--fps", type=float, default=30.0)
     b.add_argument("--noise", type=float, default=1.5, help="ball detection noise (px)")
