@@ -64,7 +64,8 @@ flowchart LR
 | Call | Monte Carlo P(in) over the bounce covariance (fit + calibration term) against the zone's outer line edges; play continuing after an OUT downgrades it |
 | Self-check | Apple Vision OCR every 0.5 s: names, score, server marker, radar board; within a point the marked server names the serve's end, elsewhere each player's start end (majority of their serves) and ITF Rule 10 end changes do; a board value that flips back within 4 s is dropped; never an input to a call |
 
-More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Every change judged by a rule written before its result, and
+its outcome: [docs/DECISIONS.md](docs/DECISIONS.md).
 
 ## Models
 
