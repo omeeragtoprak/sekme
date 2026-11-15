@@ -191,7 +191,10 @@ def test_range_requests_are_clamped_or_refused_without_reading_past_the_file(
     _run(tmp_path / "runs")
     c = TestClient(create_app(tmp_path / "runs", web_dist=tmp_path / "x"), base_url=LOCAL)
     r = c.get("/api/runs/clip1/media/pro", headers={"Range": rng})
-    assert r.status_code == status and r.headers.get("content-range") == content_range and len(r.content) == size
+    got = r.headers.get("content-range", "")
+    if status == 416:  # Starlette versions differ: "*/10240" or the RFC 9110 form "bytes */10240"
+        got = got.removeprefix("bytes ")
+    assert r.status_code == status and got == content_range and len(r.content) == size
     if status == 206:
         assert r.content == (bytes(range(256)) * 40)[int(r.headers["content-range"].split()[1].split("-")[0]):][:size]
 
