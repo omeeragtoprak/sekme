@@ -142,8 +142,10 @@ class _WebFiles(StaticFiles):
 
 def display_name(filename: str | None) -> str:
     """The name a user picked, for messages: its last path segment (either separator), without control
-    characters, at most 80 characters."""
-    picked = re.sub(r"[\x00-\x1f\x7f]", "", (filename or "").replace("\\", "/").rsplit("/", 1)[-1])
+    characters or the invisible marks that reorder text (so "x<RLO>4pm.exe" cannot show as "xexe.mp4"), at most
+    80 characters."""
+    picked = re.sub(r"[\x00-\x1f\x7f\u200e\u200f\u202a-\u202e\u2066-\u2069]", "",
+                    (filename or "").replace("\\", "/").rsplit("/", 1)[-1])
     return picked[:79] + "…" if len(picked) > 80 else picked
 
 
