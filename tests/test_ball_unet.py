@@ -137,6 +137,32 @@ def test_training_state_resumes_exactly_and_refuses_another_recipe(tmp_path):
     assert rec["noise"] == 0.0 and load_state(older, *fresh(), rec)[0] == 1
     with pytest.raises(SystemExit):
         load_state(older, *fresh(), {**rec, "noise": 0.3})
+    assert rec["init"] is None  # written before fine-tuning existed: trained from scratch
+    with pytest.raises(SystemExit):
+        load_state(older, *fresh(), {**rec, "init": "models/sekme_ball.pt"})
+
+
+def test_fine_tuning_starts_from_a_saved_ball_network_and_refuses_another_arch(tmp_path):
+    import sys
+    from pathlib import Path
+
+    import pytest
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from train_ball import ARCH, BallUNet, init_from
+
+    torch.manual_seed(3)
+    saved = BallUNet()
+    torch.save({"arch": ARCH, "model": saved.state_dict()}, tmp_path / "v4.pt")
+    torch.manual_seed(4)
+    net = BallUNet()
+    sha = init_from(net, tmp_path / "v4.pt")
+    assert len(sha) == 64
+    for a, b in zip(saved.parameters(), net.parameters(), strict=True):
+        assert torch.equal(a, b)
+    torch.save({"arch": "sekme-court-unet", "model": {}}, tmp_path / "court.pt")
+    with pytest.raises(SystemExit, match="expected"):
+        init_from(net, tmp_path / "court.pt")
 
 
 def test_sensor_noise_keeps_the_frame_in_range_and_the_ball_where_it_was():

@@ -161,7 +161,7 @@ LOW_FPS_NOTE = ("Kare hızı düşük ({fps:.0f} fps): sekme anı iki kare aras�
 
 
 VFR_COPY_NOTE = ("Videonun kare hızı değişken ({n} kare aralığı ortancadan %25'ten fazla sapıyor); zamanlar doğru "
-                 "olsun diye sabit {fps:.2f} fps'lik bir kopyadan analiz edildi ve oynatılan o kopya. Kaynakta eksik "
+                 "olsun diye sabit {fps} fps'lik bir kopyadan analiz edildi ve oynatılan o kopya. Kaynakta eksik "
                  "olan yerlerde önceki kare tekrarlandı (net {added} kare eklendi): o karelerde top ve oyuncu yeni "
                  "konum vermez.")
 
@@ -169,7 +169,7 @@ VFR_COPY_NOTE = ("Videonun kare hızı değişken ({n} kare aralığı ortancada
 def video_notes(fps: float, irregular: int, copy: dict | None = None) -> list[str]:
     """Limitations that depend on the video itself, added to the general ones."""
     if irregular and copy is not None:
-        notes = [VFR_COPY_NOTE.format(n=irregular, fps=fps, added=copy["added_frames"])]
+        notes = [VFR_COPY_NOTE.format(n=irregular, fps=f"{fps:.2f}".replace(".", ","), added=copy["added_frames"])]
     else:
         notes = [VFR_NOTE.format(n=irregular)] if irregular else []
     if 0 < fps < LOW_FPS:

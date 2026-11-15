@@ -377,6 +377,48 @@ The weights stay local (`models/sekme_ball_v5_noise.pt`, not a default and not a
 (a smaller noise share, or noise only in fine-tuning) is a new network with its own rule written before it is
 trained.
 
+### Ball network v6 candidate: v4 fine-tuned with sensor noise (rule written 2026-11-15, before training)
+
+Why: v5 shows the noise augmentation works (σ 0.04: 0.925 against v4's 0.848) but, trained from scratch, it
+lost 1.5 points on clean frames. Starting from v4's weights and training briefly at a low rate may keep v4's
+clean accuracy while learning the noise. Recipe: `scripts/train_ball.py --init models/sekme_ball.pt --epochs 4
+--batch 8 --lr 2e-4 --train-games 7 --blur 0.3 --centre-labels --noise 0.5 --out
+models/sekme_ball_v6_ft.pt` (one-cycle schedule peaking at a fifth of v4's rate; the same training clips;
+the epoch with the best clean F1 at 4 px on the selection clips is kept, as for every ball network). A
+three-step smoke run from v4 scored 0.905 on the selection clips (v4's own best there: 0.907), so the weights
+do carry over.
+
+**Rule** (the same as v5's, the same evaluation, v4 as the reference): v6 becomes a candidate only if on the
+selection clips (a) clean F1 at 4 px (centred) is at least 0.938; (b) its mean offset from the centred
+positions is within ±0.3 px on both axes; (c) at σ 0.04 F1 at 4 px (centred) is at least 0.898; σ 0.02 and
+0.06 are reported. These clips have now chosen and judged v4 and v5 as well, so this is development evidence,
+not a test. Passing makes v6 a candidate, not the default (that needs data not used yet, with its own rule);
+failing is recorded here and v6 is dropped. No further noise variant is tried on these clips after v6.
+
+**Result (2026-11-15): v6 is not a candidate; v4 stays.** Trained as written (4 epochs from v4, 14 min each;
+the best epoch in training was the last, F1 at 4 px 0.908 against v4's 0.907), then scored on the selection
+clips (3 012 frames, `data/tracknet/eval_v6_ft.log`):
+
+| F1 at 4 px (centred) | clean | σ 0.02 | σ 0.04 | σ 0.06 |
+|---|---|---|---|---|
+| v4 | **0.943** | 0.929 | 0.848 | 0.619 |
+| v5 (noise, from scratch) | 0.928 | 0.928 | 0.925 | 0.915 |
+| v6 (noise, fine-tuned from v4) | 0.933 | 0.934 | 0.925 | 0.913 |
+| v6 recall | 0.896 | 0.899 | 0.887 | 0.866 |
+
+(a) fails: clean 0.933 against at least 0.938 (1.0 point below v4, twice the allowance); (b) holds (offset
+−0.07, −0.02 px); (c) holds (0.925 against at least 0.898). Starting from v4 kept half a point more of the
+clean accuracy than training from scratch, and the same robustness to noise, but not enough: the loss is again
+in recall (v4 0.913, v6 0.896, v5 0.891). As the rule says, v6 is dropped, its weights stay local
+(`models/sekme_ball_v6_ft.pt`), and no further noise variant is tried on these clips. Grainy low-light video
+stays a documented limitation of v4.
+
+One thing both attempts show: the score each training run uses to choose its epoch (`train_ball.py`
+`validate`: the middle frame of every fourth window, the heatmap's maximum above 0.5) put v4, v5 and v6 level
+(0.907, 0.907, 0.908), while the production detector used for every rule (`eval_ball.py`: sliding three-frame
+window, averaged heatmaps, connected-component centroids) separates them by 1 to 1.5 points. A later ball
+network should choose its epoch with the production detector; that is part of its own rule, written first.
+
 ## SEKME court network
 
 A 5-level U-Net (`src/courtvision/models/court_unet.py`; 32-64-128-256-256 channels, 22×40 bottleneck)

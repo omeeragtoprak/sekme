@@ -330,7 +330,7 @@ def test_a_variable_rate_video_is_analysed_from_one_reused_constant_rate_copy(mo
         pipeline._constant_rate_source(src, "abc", info, tmp_path)  # source A again, crashing mid-copy
     assert not (tmp_path / "constant_rate.json").exists()  # so the next run cannot take this copy for A's
     note = pipeline.video_notes(29.97, 20, rec)[0]
-    assert "29.97 fps" in note and "net 20 kare" in note
+    assert "29,97 fps" in note and "net 20 kare" in note
 
 
 @pytest.mark.skipif(not all(__import__("shutil").which(b) for b in ("ffmpeg", "ffprobe")),
@@ -354,3 +354,23 @@ def test_the_constant_rate_copy_restores_even_timestamps_on_a_real_file(tmp_path
                     "-c:v", "libx264", "-pix_fmt", "yuv444p", str(odd)], check=True)
     info = vid.probe(vid.constant_rate_copy(odd, tmp_path / "odd_copy.mp4", rate))
     assert (info.width, info.height, info.n_frames, info.has_audio) == (160, 90, 60, False)
+
+
+def test_the_command_line_says_how_a_variable_rate_video_was_handled(monkeypatch, tmp_path, capsys) -> None:
+    import courtvision.cli as cli
+    import courtvision.pipeline as pipeline
+
+    def report(copy):
+        return {"video": {"fps": 29.97, "irregular_frame_intervals": 20, "constant_rate_copy": copy},
+                "calibration": {"valid_frames": 1, "total_frames": 1, "line_rmse_px_median": 0.3}, "flights": []}
+
+    args = ["analyze", str(tmp_path / "x.mp4"), "--out", str(tmp_path / "run"), "--fit-workers", "1"]
+    monkeypatch.setattr(pipeline, "analyze", lambda *a, **k: report({"file": "constant_rate.mp4", "fps": 29.97003,
+                                                                      "added_frames": 20}))
+    assert cli.main(args) == 0
+    assert "sabit 29,97 fps'lik kopyadan analiz edildi (constant_rate.mp4, net 20 kare eklendi)" in \
+        capsys.readouterr().err
+    monkeypatch.setattr(pipeline, "analyze", lambda *a, **k: report(None))  # the copy failed: the old warning
+    assert cli.main(args) == 0
+    assert "uyarı: değişken kare hızı (20 düzensiz kare aralığı); hızlar ve işaretler kayabilir" in \
+        capsys.readouterr().err

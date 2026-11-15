@@ -54,8 +54,9 @@ def _analyze(args: argparse.Namespace) -> int:
               file=sys.stderr)
     if (n_irregular := report["video"].get("irregular_frame_intervals")) and (copy := report["video"].get(
             "constant_rate_copy")):
-        print(f"not: değişken kare hızı ({n_irregular} düzensiz kare aralığı); sabit {copy['fps']:.2f} fps'lik "
-              f"kopyadan analiz edildi ({copy['file']}, net {copy['added_frames']} kare eklendi)", file=sys.stderr)
+        rate = f"{copy['fps']:.2f}".replace(".", ",")
+        print(f"not: değişken kare hızı ({n_irregular} düzensiz kare aralığı); sabit {rate} fps'lik kopyadan analiz "
+              f"edildi ({copy['file']}, net {copy['added_frames']} kare eklendi)", file=sys.stderr)
     elif n_irregular:
         print(f"uyarı: değişken kare hızı ({n_irregular} düzensiz kare aralığı); hızlar ve işaretler kayabilir",
               file=sys.stderr)

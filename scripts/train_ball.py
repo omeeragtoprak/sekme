@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import io
 import json
 import sys
 import time
@@ -181,8 +183,18 @@ def validate(net: torch.nn.Module, loader: DataLoader, dev: torch.device, thr: f
     return detection_scores(pred, truth)
 
 
-RESUME_KEYS = ("epochs", "batch", "lr", "train_games", "blur", "centre_labels", "noise")
-RECIPE_DEFAULTS = {"noise": 0.0}  # a state written before a key existed was trained without it
+RESUME_KEYS = ("epochs", "batch", "lr", "train_games", "blur", "centre_labels", "noise", "init")
+RECIPE_DEFAULTS = {"noise": 0.0, "init": None}  # a state written before a key existed was trained without it
+
+
+def init_from(net: torch.nn.Module, path: str | Path) -> str:
+    """Load a saved ball network's weights into ``net`` (fine-tuning starts there); returns their SHA-256."""
+    data = Path(path).read_bytes()
+    ck = torch.load(io.BytesIO(data), map_location="cpu", weights_only=False)
+    if ck.get("arch") != ARCH:
+        raise SystemExit(f"{path}: arch {ck.get('arch')!r}, expected {ARCH!r}")
+    net.load_state_dict(ck["model"])
+    return hashlib.sha256(data).hexdigest()
 
 
 def state_path(out: Path) -> Path:
@@ -237,6 +249,8 @@ def main() -> None:
                     help="probability of sensor-noise augmentation (per window; off by default)")
     ap.add_argument("--centre-labels", action="store_true",
                     help="targets at the ball's image centre (labels minus LABEL_OFFSET, pixel-centre mapping)")
+    ap.add_argument("--init", default=None,
+                    help="start from this saved ball network's weights (fine-tuning) instead of from scratch")
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--resume", action="store_true",
                     help="continue from <out stem>.state.pt (written after every epoch) if it exists")
@@ -266,6 +280,10 @@ def main() -> None:
                      persistent_workers=True)
     out = Path(args.out)
     net = BallUNet().to(dev)
+    if args.init:
+        sha = init_from(net, args.init)
+        trained_on += f"; fine-tuned from {Path(args.init).name} (sha256 {sha[:16]})"
+        print(f"initialised from {args.init} (sha256 {sha[:16]})", flush=True)
     opt = torch.optim.AdamW(net.parameters(), lr=args.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=args.lr, total_steps=args.epochs * len(train),
                                                 pct_start=0.1)

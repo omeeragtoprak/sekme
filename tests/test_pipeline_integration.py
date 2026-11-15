@@ -44,6 +44,32 @@ def test_pipeline_end_to_end_on_real_clip(tmp_path: Path) -> None:
     assert json.loads((tmp_path / "run" / "frames.json").read_text())["n"] == cal["total_frames"]
 
 
+@pytest.mark.skipif(not SAMPLE.exists() or not all(w.exists() for w in WEIGHTS) or not shutil.which("ffmpeg"),
+                    reason="sample clip / model weights / ffmpeg not available")
+def test_a_variable_rate_clip_is_analysed_and_played_from_its_constant_rate_copy(tmp_path: Path) -> None:
+    from courtvision.pipeline import CONSTANT_RATE_FILE, PipelineConfig, analyze
+
+    clip = tmp_path / "gappy.mp4"
+    # The sample's first 2.4 s with frames 20-49 at two thirds of the rate (every third one removed, timestamps kept).
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(SAMPLE), "-t", "2.4", "-vf",
+                    "select='not(between(n\\,20\\,49)*eq(mod(n\\,3)\\,1))'", "-fps_mode", "passthrough",
+                    "-c:v", "libx264", "-preset", "veryfast", "-an", str(clip)], check=True)
+    run = tmp_path / "run"
+    report = analyze(clip, run, PipelineConfig(render=False, broadcast=False))
+    v = report["video"]
+    assert v["file"] == "gappy.mp4" and v["irregular_frame_intervals"] == 10
+    copy = v["constant_rate_copy"]
+    assert copy["file"] == CONSTANT_RATE_FILE and copy["added_frames"] == 10 and copy["frames"] == v["n_frames"]
+    assert (run / "source.mp4").resolve() == (run / CONSTANT_RATE_FILE).resolve()  # the Review Room plays the copy
+    assert "sabit" in report["limitations"][0] and report["timings_s"]["constant_rate_copy_s"] >= 0
+    assert json.loads((run / "frames.json").read_text())["n"] == v["n_frames"]
+    written = (run / CONSTANT_RATE_FILE).stat().st_mtime_ns
+    again = analyze(clip, run, PipelineConfig(render=False, broadcast=False, reuse_perception=True))
+    assert (run / CONSTANT_RATE_FILE).stat().st_mtime_ns == written  # reused, not re-encoded
+    assert again["video"]["constant_rate_copy"]["sha256"] == copy["sha256"]
+    assert [f["call"] for f in again["flights"]] == [f["call"] for f in report["flights"]]
+
+
 def test_perception_cache_key_changes_with_the_networks(tmp_path):
     from courtvision.pipeline import PipelineConfig, perception_key
 
