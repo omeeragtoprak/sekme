@@ -19,8 +19,16 @@ def test_probe_falls_back_when_the_average_frame_rate_is_missing(monkeypatch) ->
     monkeypatch.setattr(vid.subprocess, "run",
                         lambda *a, **k: subprocess.CompletedProcess(a, 0, json.dumps(meta), ""))
     assert abs(vid.probe("x.mp4").fps - 29.97) < 0.01
+    meta["streams"][0]["avg_frame_rate"] = "30000/1"  # a downloaded WebM's average: 30 000 fps
+    assert abs(vid.probe("x.mp4").fps - 29.97) < 0.01
+    meta["streams"][0]["avg_frame_rate"] = "249/10"  # variable rate: the average, below the stated rate, is kept
+    assert abs(vid.probe("x.mp4").fps - 24.9) < 0.01
     meta["streams"][0]["r_frame_rate"] = "0/0"
+    meta["streams"][0]["avg_frame_rate"] = "0/0"
     with pytest.raises(vid.UnreadableVideoError, match="x.mp4: video akışında kare hızı yok"):
+        vid.probe("x.mp4")
+    meta["streams"][0]["avg_frame_rate"] = "30000/1"  # and no stated rate to fall back on: no rate
+    with pytest.raises(vid.UnreadableVideoError, match="kare hızı yok"):
         vid.probe("x.mp4")
 
 

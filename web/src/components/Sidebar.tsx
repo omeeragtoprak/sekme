@@ -112,7 +112,11 @@ function SidebarImpl({ report, reviews, selectedFlightId, onSelect, health }: Pr
         {flights.length === 0 ? (
           <div className="empty">
             <p className="empty-title">Vuruş bulunamadı</p>
-            <p className="empty-text">Analiz bu klipte top uçuşu bulmadı; karar verilecek bir şey yok.</p>
+            <p className="empty-text">
+              {report.calibration.total_frames > 0 && report.calibration.valid_frames === 0
+                ? "Kort hiçbir karede kalibre edilemedi: SEKME kortun tamamını arkadan ve yüksekten gösteren yayın kamerası açısı için tasarlandı. Bu videoda ölçüm ve karar yok."
+                : "Analiz bu klipte top uçuşu bulmadı; karar verilecek bir şey yok."}
+            </p>
           </div>
         ) : (
           <ul

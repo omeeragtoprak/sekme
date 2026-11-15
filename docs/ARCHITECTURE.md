@@ -714,7 +714,12 @@ guessing. Such a run used to look merely empty; a report whose court calibrates 
 (SEKME is built for one broadcast camera showing the whole court from behind and above), and one calibrated on
 under a quarter of its frames says that its calls come from those frames only (broadcast highlights calibrate
 about 70 %; none of the local runs is under 40 %). The command line warns when no frame calibrates. Clay and grass
-seen from the broadcast position have not been tested.
+seen from the broadcast position have not been tested. The same clip showed a metadata trap: ffprobe gave its WebM stream an
+average frame rate of 30000/1 (its stated rate is 30000/1001), so the video was taken as 30 000 fps, 0.02 s long,
+and the ball network's frame step became 1 000 frames (no ball found). `probe` now takes the stated rate when the
+average is above 1 000 fps or more than 1.5 times the stated rate (a real average never is; a variable-rate one is
+lower). Of the 109 local videos only this clip changes: 29.97 fps, 20.0 s, the ball on 104 of 600 frames, still no
+calibrated frame. The Review Room's empty shot list now gives the same reason as the report.
 
 **A fresh clone.** The weights are not in the repository. A missing checkpoint used to end in a traceback from
 hashing it, after an empty run folder had been made; `analyze` now checks the four checkpoints first and stops with

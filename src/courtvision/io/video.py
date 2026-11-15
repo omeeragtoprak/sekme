@@ -39,6 +39,7 @@ class VideoInfo:
     has_audio: bool
 
 
+MAX_FPS = 1000.0  # an average frame rate above this is metadata noise, not video
 _FFMPEG_TAG = re.compile(r"\[[^\]]*@ 0x[0-9a-fA-F]+\]\s*")  # "[mov,mp4,m4a @ 0x7f…] " before a message
 
 
@@ -89,7 +90,10 @@ def probe(path: str | Path) -> VideoInfo:
             raise UnreadableVideoError(f"{name}: video akışının boyutu yok")
         if _rotation(v) % 180 == 90:  # stored sideways (phones): OpenCV and ffmpeg decode the frames upright
             width, height = height, width
-        fps = rate(v.get("avg_frame_rate")) or rate(v.get("r_frame_rate"))
+        avg, stated = rate(v.get("avg_frame_rate")), rate(v.get("r_frame_rate"))
+        # Some WebM / Matroska files report a nonsensical average ("30000/1" for 29.97 fps video, seen on a
+        # downloaded clip); the stream's stated rate is then the one to trust. A real average is never far above it.
+        fps = avg if avg is not None and avg <= MAX_FPS and (stated is None or avg <= 1.5 * stated) else stated
         if fps is None:
             raise UnreadableVideoError(f"{name}: video akışında kare hızı yok")
         duration = float(meta["format"].get("duration", v.get("duration", 0.0)))
