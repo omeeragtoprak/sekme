@@ -331,13 +331,68 @@ small, but bounce positions still move up to 8 cm. None of the 106 broadcast and
 irregular interval, so none of them is analysed differently. Making the copy took 0.6 s for these 4 s at
 720p (x264 `veryfast`, CRF 17); the report records it (`video.constant_rate_copy`: rate, frames, frames added,
 its SHA-256; `video.file` and `video.sha256` stay the source's), the Review Room plays the copy and its badge
-says so, and the limitation in the report says frames were repeated. Repeated frames give the ball tracker
-a still frame; both copies here kept every call, but a long gap (several frames) is not covered by this test.
+says so, and the limitation in the report says frames were repeated. Repeated frames gave the ball tracker
+a still frame; both copies here kept every call (the ball is now ignored on repeated frames, below, and a long gap
+was tested there).
 An independent code review then hardened it (results above unchanged, re-run with the final code): the copy is
 re-hashed before reuse and its record removed before it is remade (a crash mid-copy cannot leave another
 video's copy behind a matching record); an odd pixel row or column is cropped (x264 4:2:0 needs even sizes);
 the copy never overwrites its source; if ffmpeg is missing or fails, the video is analysed as it is, with the
 old warning and the reason in `video.constant_rate_copy_error`.
+
+**Rule for ignoring the ball on repeated frames (written 2026-11-15, before any test input below was made).** A
+frame the copy repeats shows the ball where it was one frame earlier, at the next frame's time: the tracker sees
+the ball stop for a frame. Candidate: while the copy is made, ffmpeg's `showinfo` after the `fps` filter gives
+each output frame's checksum; a frame with the same checksum as the one before is a repeat (no new picture), the
+copy's record keeps those frame indices, and the ball candidates on them are dropped before tracking, so the
+tracker treats them as missed detections (filled up to 6 frames, as any miss). Off by default
+(`PipelineConfig.drop_repeated_ball`) until this rule is checked. Development evidence, not a test: on the two
+copies above (`burst20`, `drop5`, already used to adopt the copy) the summed speed error falls from 9.4 to 2.8 and
+from 7.1 to 1.8 km/h, the time error from 0.015 to 0.003 s and from 0.001 to 0.002 s, the bounce distance from
+2.7 to 4.3 cm and from 4.6 to 2.1 cm, every call kept. **Test inputs**, from two videos not used for this work, the
+v4 default runs of the 2024 final highlights and the 2025 final (1920 × 1080, 59.94 fps): in each run's report,
+the first 6 s window that starts 0.5 s before a called flight's start frame, lies within one measurable segment,
+and has at least three called bounces at least 0.5 s from its ends (`devir/scratch/vfr_mask_check.py`). Each
+window is cut and re-encoded (x264 CRF 17, no audio), analysed as it is (the reference), and three variable-rate
+inputs are made from it with frames removed and their timestamps kept: `burst30` (every other frame removed in
+the window's middle third), `jitter15` (each frame but the first and last removed with probability 0.15, NumPy
+`default_rng(1)`), `gap6` (the six frames from three before the reference's second called bounce removed: one
+long gap at a bounce). Each of the six inputs is analysed through the copy without and with the candidate, and
+scored as above against its reference: called bounces matched by time (within 0.3 s), (i) summed distance, (ii)
+summed time error, (iii) summed hit and bounce speed error. **Adopted, on by default, if summed over the six
+inputs** (a) (iii) with the candidate is at most 0.8 times (iii) without it; (b) (i) is not larger by more than
+6 cm and (ii) not larger by more than 6 ms (1 cm and 1 ms per input); (c) no reference call that is matched with
+its verdict without the candidate is lost or changes verdict with it. Videos without repeated frames are not
+affected by construction (no copy, or a copy with none). Otherwise it stays off and the result is recorded here.
+
+**Result (2026-11-15): adopted, on by default** (`devir/scratch/vfr_mask_check.py`, candidate code b6ce846, outputs
+kept locally). Windows: 2024 final highlights frames 13–373 (0.22–6.22 s), five IN calls; 2025 final frames
+206–566 (3.44–9.44 s), five IN calls. Every input has nominal rate 60000/1001; the copies repeat 60 (`burst30`),
+58 (`jitter15`) and 6 (`gap6`) frames, all found by the checksums. Summed over the six inputs, through the copy
+without → with the candidate: (i) bounce distance 40.6 → 45.9 cm (+5.3, allowed +6), (ii) time error 51.9 →
+16.8 ms, (iii) speed error 408.3 → 208.7 km/h (0.51 times, allowed 0.8); all 30 reference calls matched with
+their verdict in both arms. All four conditions hold.
+
+| input (2024 / 2025) | (i) cm | (ii) ms | (iii) km/h |
+|---|---|---|---|
+| `burst30` | 5.9 → 5.0 / 5.7 → 6.6 | 16.0 → 1.8 / 9.3 → 2.7 | 11.2 → 6.8 / 46.5 → 39.2 |
+| `jitter15` | 8.1 → 5.4 / 12.9 → 20.8 | 7.0 → 2.6 / 14.6 → 4.7 | 194.2 → 4.6 / 116.3 → 118.0 |
+| `gap6` | 4.0 → 4.0 / 4.1 → 4.1 | 2.1 → 2.1 / 2.9 → 2.9 | 2.5 → 2.5 / 37.6 → 37.6 |
+
+How strong this is, looked at afterwards (`devir/scratch/vfr_mask_sensitivity.py`; not part of the rule, which
+stands as written): most of (iii)'s fall is one flight. The 2024 window's first bounce (0.12 s, its flight cut
+by the window's start) gets a bounce speed of 205 km/h from `jitter15` through the copy, 15 km/h with the
+candidate (reference 15); the 2025 window's first bounce is unstable in every input with or without it (70 or
+207 km/h against 101). Without the calls within 0.5 s of a window's ends (24 of 30), the candidate lowers the
+time error by two thirds (50.2 → 15.9 ms) and the speed error by 18 % (49.8 → 40.6 km/h), and the bounce
+distance grows by 6.5 cm over 24 calls (35.8 → 42.3), mostly two bounces of the 2025 `jitter15` input (4.6 → 9.0
+and 2.8 → 7.1 cm, both within their 1σ of about 10 cm along the court); on that subset the 20 % and 6 cm limits
+would both be missed narrowly. So the clear gain is in timing, the speed gain is real but modest away from the
+window's edges, and position moves within its own uncertainty in both directions. A single long gap (`gap6`, 0.1 s
+at a bounce) changes nothing: the tracker already discarded the stale detections there. The report records it
+(`video.constant_rate_copy.repeated_frames`, `repeated_ball_dropped`), the limitation and the command line say
+on how many repeated frames the ball was ignored, and `PipelineConfig(drop_repeated_ball=False)` restores the
+earlier handling.
 
 **Codecs.** One-second excerpts re-encoded as HEVC (MP4), VP9 (WebM and MP4) and AV1 (MP4) probe and decode
 with the size and frame count `probe` reports, and play in the Review Room. The source video used to be served

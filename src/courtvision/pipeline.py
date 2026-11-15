@@ -164,12 +164,14 @@ VFR_COPY_NOTE = ("Videonun kare hızı değişken ({n} kare aralığı ortancada
                  "olsun diye sabit {fps} fps'lik bir kopyadan analiz edildi ve oynatılan o kopya. Kaynakta eksik "
                  "olan yerlerde önceki kare tekrarlandı (net {added} kare eklendi): o karelerde top ve oyuncu yeni "
                  "konum vermez.")
+VFR_REPEATS_NOTE = (" Tekrarlanan {r} karede top yok sayıldı; top izi orada kaçırılmış bir kare gibi dolduruldu.")
 
 
 def video_notes(fps: float, irregular: int, copy: dict | None = None) -> list[str]:
     """Limitations that depend on the video itself, added to the general ones."""
     if irregular and copy is not None:
-        notes = [VFR_COPY_NOTE.format(n=irregular, fps=f"{fps:.2f}".replace(".", ","), added=copy["added_frames"])]
+        notes = [VFR_COPY_NOTE.format(n=irregular, fps=f"{fps:.2f}".replace(".", ","), added=copy["added_frames"])
+                 + (VFR_REPEATS_NOTE.format(r=copy["repeated_frames"]) if copy.get("repeated_ball_dropped") else "")]
     else:
         notes = [VFR_NOTE.format(n=irregular)] if irregular else []
     if 0 < fps < LOW_FPS:
@@ -223,6 +225,7 @@ class PipelineConfig:
     fps_scaled_thresholds: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): 60 fps frame counts
     player_size_from_camera: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): camera size gate
     constant_rate_copy: bool = True  # variable-rate video analysed from a constant-rate copy (docs/ARCHITECTURE.md)
+    drop_repeated_ball: bool = True  # no ball on the frames the copy repeats (docs/ARCHITECTURE.md, adopted 2026-11-15)
     models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
@@ -391,9 +394,11 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
 CONSTANT_RATE_FILE = "constant_rate.mp4"
 
 
-def _constant_rate_source(source: Path, source_sha: str, info: VideoInfo, out: Path) -> tuple[Path, dict]:
+def _constant_rate_source(source: Path, source_sha: str, info: VideoInfo,
+                          out: Path) -> tuple[Path, dict, list[int] | None]:
     """The run's constant-rate copy of a variable-rate `source` (made once; reused while its record names the same
-    source, the same rate and the copy's current hash) and what the report says about it."""
+    source, the same rate and the copy's current hash), what the report says about it, and the indices of the
+    frames it repeats (None when unknown)."""
     rate = nominal_rate(source) or Fraction(info.fps).limit_denominator(1001)
     dest, record = out / CONSTANT_RATE_FILE, out / "constant_rate.json"
     want = {"source_sha256": source_sha, "rate": f"{rate.numerator}/{rate.denominator}"}
@@ -402,17 +407,24 @@ def _constant_rate_source(source: Path, source_sha: str, info: VideoInfo, out: P
     except (OSError, ValueError):
         have = None
     copy_sha = _sha256(dest) if isinstance(have, dict) else None  # a copy changed since its record is remade
-    if not (isinstance(have, dict) and have == {**want, "sha256": copy_sha}):
+    current = (isinstance(have, dict) and {k: have.get(k) for k in (*want, "sha256")} == {**want, "sha256": copy_sha}
+               and "repeated" in have)  # records written before the repeats were kept are remade too
+    if not current:
         record.unlink(missing_ok=True)  # a crash while the copy is replaced must not leave the old record behind
-        constant_rate_copy(source, dest, rate)
-        have = {**want, "sha256": _sha256(dest)}
+        _, repeated = constant_rate_copy(source, dest, rate)
+        have = {**want, "sha256": _sha256(dest), "repeated": repeated}
         tmp = record.with_name(record.name + ".part")
         tmp.write_text(json.dumps(have))
         tmp.replace(record)
     n_copy = probe(dest).n_frames
+    repeated = have["repeated"]
+    if not (isinstance(repeated, list)
+            and all(isinstance(i, int) and not isinstance(i, bool) and 0 < i < n_copy for i in repeated)):
+        repeated = None  # frame log unreadable (kept so for this copy), or not its frames: no frame is a repeat
     return dest, {"file": CONSTANT_RATE_FILE, "fps": round(float(rate), 6), "sha256": have["sha256"],
                   "frames": n_copy, "source_frames": info.n_frames,
-                  "added_frames": n_copy - info.n_frames}  # repeated minus dropped (denser parts of the source)
+                  "added_frames": n_copy - info.n_frames,  # repeated minus dropped (denser parts of the source)
+                  "repeated_frames": None if repeated is None else len(repeated)}, repeated
 
 
 def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None = None,
@@ -436,10 +448,11 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     irregular = irregular_frame_intervals(source)
     copy_info = None
     copy_error = None
+    repeated: list[int] | None = None
     if irregular and cfg.constant_rate_copy:  # frame index / rate must be the real time for everything below
         prog("constant_rate_copy", 0.0)
         try:
-            video, copy_info = _constant_rate_source(source, source_sha, info, out)
+            video, copy_info, repeated = _constant_rate_source(source, source_sha, info, out)
             info = probe(video)
         except (UnreadableVideoError, RuntimeError, OSError, ValueError) as exc:  # no ffmpeg, an encoder error, the
             video, copy_info, copy_error = source, None, str(exc)  # source itself: analysed as it is, with the warning
@@ -467,6 +480,11 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     calib = calibrate_sequence(meas, cuts, (info.width, info.height), court)
     # Frame counts below were set on 30 fps video; the candidate scales them like the ball net's input stride.
     fscale = frame_scale(info.fps) if cfg.fps_scaled_thresholds else 1
+    if copy_info is not None:
+        copy_info["repeated_ball_dropped"] = bool(cfg.drop_repeated_ball and repeated)
+    if cfg.drop_repeated_ball and repeated:  # a repeat shows the ball one frame late: a miss, not a stop
+        repeats = set(repeated)
+        cands = [[] if i in repeats else c for i, c in enumerate(cands)]
     ball = track_ball(drop_court_fixed(cands, [c.H_inv if c.valid else None for c in calib],
                                        win=15 * fscale, min_frames=10 * fscale), info.width)
     players = select_players(dets, calib, info.fps, size_from_camera=cfg.player_size_from_camera)

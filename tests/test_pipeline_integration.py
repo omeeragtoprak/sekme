@@ -60,6 +60,7 @@ def test_a_variable_rate_clip_is_analysed_and_played_from_its_constant_rate_copy
     assert v["file"] == "gappy.mp4" and v["irregular_frame_intervals"] == 10
     copy = v["constant_rate_copy"]
     assert copy["file"] == CONSTANT_RATE_FILE and copy["added_frames"] == 10 and copy["frames"] == v["n_frames"]
+    assert copy["repeated_frames"] == 10 and copy["repeated_ball_dropped"] and not report["candidates"]
     assert (run / "source.mp4").resolve() == (run / CONSTANT_RATE_FILE).resolve()  # the Review Room plays the copy
     assert "sabit" in report["limitations"][0] and report["timings_s"]["constant_rate_copy_s"] >= 0
     assert json.loads((run / "frames.json").read_text())["n"] == v["n_frames"]
@@ -68,6 +69,17 @@ def test_a_variable_rate_clip_is_analysed_and_played_from_its_constant_rate_copy
     assert (run / CONSTANT_RATE_FILE).stat().st_mtime_ns == written  # reused, not re-encoded
     assert again["video"]["constant_rate_copy"]["sha256"] == copy["sha256"]
     assert [f["call"] for f in again["flights"]] == [f["call"] for f in report["flights"]]
+    repeats = json.loads((run / "constant_rate.json").read_text())["repeated"]
+    assert repeats == list(range(22, 50, 3))  # the slots of the removed frames
+    assert again["video"]["constant_rate_copy"]["repeated_ball_dropped"] and "10 karede top yok" in \
+        again["limitations"][0]
+    ball = json.loads((run / "frames.json").read_text())["ball"]
+    assert not [i for i in repeats if ball[i] and ball[i][2] == 1]  # never detected on a repeated frame
+    kept = analyze(clip, run, PipelineConfig(render=False, broadcast=False, reuse_perception=True,
+                                             drop_repeated_ball=False))
+    assert not kept["video"]["constant_rate_copy"]["repeated_ball_dropped"]
+    detected = [i for i, b in enumerate(json.loads((run / "frames.json").read_text())["ball"]) if b and b[2] == 1]
+    assert set(repeats) & set(detected)  # without it the ball is "seen" on repeated frames, one frame late
 
 
 def test_perception_cache_key_changes_with_the_networks(tmp_path):

@@ -153,26 +153,47 @@ def nominal_rate(path: str | Path) -> Fraction | None:
     return rate if rate > 0 else None
 
 
-def constant_rate_copy(src: str | Path, dest: str | Path, rate: Fraction) -> Path:
+_SHOWINFO = re.compile(r"\[Parsed_showinfo_\d+ @ [^\]]*\]\s*n:\s*(\d+)\s.*?\bchecksum:([0-9A-Fa-f]+)")
+
+
+def repeated_frames(showinfo_log: str) -> tuple[int, list[int]]:
+    """(frames shown, indices of frames whose picture checksum equals the previous frame's) from ffmpeg `showinfo`
+    lines: after the `fps` filter those are the frames it repeated to fill a gap. A source frame that is itself
+    identical to the one before (a frozen picture) counts too; it shows nothing new either."""
+    sums = dict((int(m.group(1)), m.group(2)) for m in _SHOWINFO.finditer(showinfo_log))
+    n = max(sums, default=-1) + 1
+    return n, [i for i in range(1, n) if i in sums and sums[i] == sums.get(i - 1)]
+
+
+def constant_rate_copy(src: str | Path, dest: str | Path, rate: Fraction) -> tuple[Path, list[int] | None]:
     """Re-encode `src` at a constant `rate` with ffmpeg's `fps` filter: each output frame is the source frame
     nearest its time, so a gap repeats a frame and index / rate is the real time again. Upright (rotation applied),
     H.264 for the browser (an odd last pixel row or column is cropped: 4:2:0 needs even sizes), audio kept as AAC.
-    Written to a temporary name first: `dest` is complete or absent."""
+    Written to a temporary name first: `dest` is complete or absent. Also returns the indices of the copy's
+    repeated frames (same picture as the frame before), None when ffmpeg's frame log could not be read or does not
+    have one line per frame of the copy (the indices would not be the copy's). The log is held in memory: about
+    300 bytes a frame, 65 MB for an hour at 60 fps."""
     dest = Path(dest)
     tmp = dest.with_name(dest.stem + ".part" + dest.suffix)
     if Path(src).resolve() in (dest.resolve(), tmp.resolve()):
         raise ValueError(f"{dest.name}: the copy would overwrite its source")
-    vf = f"fps={rate.numerator}/{rate.denominator},crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0"
-    cmd = [_bin("ffmpeg"), "-v", "error", "-y", "-i", str(src), "-map", "0:V:0", "-map", "0:a:0?",
-           "-vf", vf, "-c:v", "libx264", "-crf", "17", "-preset", "veryfast",
+    vf = f"fps={rate.numerator}/{rate.denominator},crop=trunc(iw/2)*2:trunc(ih/2)*2:0:0,showinfo"
+    cmd = [_bin("ffmpeg"), "-hide_banner", "-nostats", "-v", "info", "-y", "-i", str(src), "-map", "0:V:0",
+           "-map", "0:a:0?", "-vf", vf, "-c:v", "libx264", "-crf", "17", "-preset", "veryfast",
            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(tmp)]
     res = subprocess.run(cmd, check=False, capture_output=True, text=True)
     if res.returncode != 0:
         tmp.unlink(missing_ok=True)
+        log = "\n".join(ln for ln in res.stderr.splitlines() if "Parsed_showinfo" not in ln)
         raise UnreadableVideoError(f"{Path(src).name}: sabit kare hızlı kopya yapılamadı "
-                                   f"({_reason(res.stderr, str(src), Path(src).name)})")
+                                   f"({_reason(log, str(src), Path(src).name)})")
+    n, repeated = repeated_frames(res.stderr)
+    try:
+        written = probe(tmp).n_frames
+    except UnreadableVideoError:
+        written = -1
     tmp.replace(dest)
-    return dest
+    return dest, (repeated if n and n == written else None)
 
 
 def open_video(path: str | Path) -> cv2.VideoCapture:

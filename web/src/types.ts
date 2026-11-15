@@ -271,7 +271,10 @@ export type Report = {
     /** Frame intervals more than 25 % off the median (variable frame rate); absent in older reports. */
     irregular_frame_intervals?: number;
     /** Set when such a video was analysed (and is played) from a constant-rate copy. */
-    constant_rate_copy?: { file: string; fps: number; frames: number; source_frames: number; added_frames: number } | null;
+    constant_rate_copy?: {
+      file: string; fps: number; frames: number; source_frames: number; added_frames: number;
+      repeated_frames?: number | null; repeated_ball_dropped?: boolean;
+    } | null;
   };
   models: Record<"court" | "ball" | "players", ModelCard> & { pose?: ModelCard };
   candidates?: Record<string, number | boolean>; // flags of candidates not yet decided (docs/ARCHITECTURE.md)

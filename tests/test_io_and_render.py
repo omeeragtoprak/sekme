@@ -255,12 +255,23 @@ def test_constant_rate_copy_runs_ffmpegs_fps_filter_and_leaves_no_partial_file(m
         if fail:
             return subprocess.CompletedProcess(cmd, 1, "", f"{tmp_path / 'in.mov'}: Invalid data found")
         Path(cmd[-1]).write_bytes(b"copy")
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+        return subprocess.CompletedProcess(cmd, 0, "", log)
 
+    log = ""
+    written = []
+    monkeypatch.setattr(vid, "probe", lambda p: written.append(Path(p).name) or vid.VideoInfo(
+        str(p), 160, 90, 30.0, 3, 0.1, False))
     monkeypatch.setattr(vid.subprocess, "run", run)
     fail = False
-    dest = vid.constant_rate_copy(tmp_path / "in.mov", tmp_path / "constant_rate.mp4", Fraction(30000, 1001))
+    dest, repeated = vid.constant_rate_copy(tmp_path / "in.mov", tmp_path / "constant_rate.mp4", Fraction(30000, 1001))
     assert dest.read_bytes() == b"copy" and "fps=30000/1001," in seen[-1][seen[-1].index("-vf") + 1]
+    assert seen[-1][seen[-1].index("-vf") + 1].endswith(",showinfo") and repeated is None  # no frame log: unknown
+    frame = "[Parsed_showinfo_2 @ 0x6000] n:{} pts:{} pts_time:0 checksum:{} plane_checksum:[1 2 3]"
+    log = "\n".join(frame.format(i, i, c) for i, c in enumerate(("AB", "AB", "CD")))
+    assert vid.constant_rate_copy(tmp_path / "in.mov", dest, Fraction(30))[1] == [1]
+    assert written[-1] == "constant_rate.part.mp4"  # the frames written are counted before the copy is kept
+    log = "\n".join(frame.format(i, i, c) for i, c in enumerate(("AB", "AB")))  # a line per frame missing
+    assert vid.constant_rate_copy(tmp_path / "in.mov", dest, Fraction(30))[1] is None
     assert seen[-1][seen[-1].index("0:V:0") - 1] == "-map"  # never the cover art
     with pytest.raises(ValueError, match="overwrite its source"):
         vid.constant_rate_copy(dest, dest, Fraction(30))
@@ -269,6 +280,22 @@ def test_constant_rate_copy_runs_ffmpegs_fps_filter_and_leaves_no_partial_file(m
     with pytest.raises(vid.UnreadableVideoError, match="in.mov: sabit kare hızlı kopya yapılamadı"):
         vid.constant_rate_copy(tmp_path / "in.mov", tmp_path / "other.mp4", Fraction(30))
     assert not (tmp_path / "other.mp4").exists() and not (tmp_path / "other.part.mp4").exists()
+
+
+def test_repeated_frames_are_read_from_ffmpegs_showinfo_checksums() -> None:
+    from courtvision.io.video import repeated_frames
+
+    def line(n, checksum):
+        return (f"[Parsed_showinfo_2 @ 0x600001a4c000] n:{n:4d} pts:{n * 1001:7d} pts_time:{n / 29.97:<8.6f} "
+                f"duration:1001 fmt:yuv420p cl:left sar:1/1 s:1280x720 i:P iskey:0 type:P "
+                f"checksum:{checksum} plane_checksum:[1A2B3C4D 5E6F7A8B 9C0D1E2F] mean:[87 127 128]")
+
+    log = "\n".join(["Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'phone.mov':",
+                      line(0, "AAAA0001"), line(1, "AAAA0002"), line(2, "AAAA0002"),  # 2 repeats 1
+                      "[libx264 @ 0x1234] frame I:1 Avg QP:20.00 size: 1000",
+                      line(3, "AAAA0003"), line(4, "aaaa0003"), line(5, "AAAA0005"), line(6, "AAAA0005")])
+    assert repeated_frames(log) == (7, [2, 6])  # checksums compared as ffmpeg prints them, frame by frame
+    assert repeated_frames("no frame log") == (0, [])
 
 
 def test_link_source_replaces_links_to_another_video_but_never_deletes_a_file(tmp_path) -> None:
@@ -301,7 +328,7 @@ def test_a_variable_rate_video_is_analysed_from_one_reused_constant_rate_copy(mo
     def fake_copy(src, dest, rate):
         made.append(rate)
         dest.write_bytes(b"copy at " + str(rate).encode())
-        return dest
+        return dest, [40, 43]
 
     monkeypatch.setattr(pipeline, "constant_rate_copy", fake_copy)
     monkeypatch.setattr(pipeline, "nominal_rate", lambda p: Fraction(30000, 1001))
@@ -309,17 +336,26 @@ def test_a_variable_rate_video_is_analysed_from_one_reused_constant_rate_copy(mo
     src = tmp_path / "phone.mov"
     src.write_bytes(b"source")
     info = VideoInfo(str(src), 1280, 720, 24.9, 99, 3.97, False)
-    path, rec = pipeline._constant_rate_source(src, "abc", info, tmp_path)
+    path, rec, repeated = pipeline._constant_rate_source(src, "abc", info, tmp_path)
     assert path == tmp_path / "constant_rate.mp4" and made == [Fraction(30000, 1001)]
     assert rec["frames"] == 119 and rec["source_frames"] == 99 and rec["added_frames"] == 20
+    assert repeated == [40, 43] and rec["repeated_frames"] == 2
     assert rec["sha256"] == pipeline._sha256(path)
-    pipeline._constant_rate_source(src, "abc", info, tmp_path)  # re-analysis: the copy is reused
+    assert pipeline._constant_rate_source(src, "abc", info, tmp_path)[2] == [40, 43]  # re-analysis: reused
     assert len(made) == 1
+    record = tmp_path / "constant_rate.json"
+    old = json.loads(record.read_text())
+    record.write_text(json.dumps({k: v for k, v in old.items() if k != "repeated"}))  # a record from before
+    pipeline._constant_rate_source(src, "abc", info, tmp_path)
+    assert len(made) == 2  # remade, so the repeats are known
+    record.write_text(json.dumps({**old, "repeated": [0, 500]}))  # not this copy's frames: none trusted
+    assert pipeline._constant_rate_source(src, "abc", info, tmp_path)[1]["repeated_frames"] is None
+    record.write_text(json.dumps(old))
     pipeline._constant_rate_source(src, "other source", info, tmp_path)  # another video in the same folder
-    assert len(made) == 2
+    assert len(made) == 3
     path.write_bytes(b"changed by hand")  # a copy that no longer matches its record is remade
     pipeline._constant_rate_source(src, "other source", info, tmp_path)
-    assert len(made) == 3 and path.read_bytes().startswith(b"copy at")
+    assert len(made) == 4 and path.read_bytes().startswith(b"copy at")
 
     def crash(src, dest, rate):
         dest.write_bytes(b"half written")
@@ -330,7 +366,9 @@ def test_a_variable_rate_video_is_analysed_from_one_reused_constant_rate_copy(mo
         pipeline._constant_rate_source(src, "abc", info, tmp_path)  # source A again, crashing mid-copy
     assert not (tmp_path / "constant_rate.json").exists()  # so the next run cannot take this copy for A's
     note = pipeline.video_notes(29.97, 20, rec)[0]
-    assert "29,97 fps" in note and "net 20 kare" in note
+    assert "29,97 fps" in note and "net 20 kare" in note and "yok sayıldı" not in note
+    note = pipeline.video_notes(29.97, 20, {**rec, "repeated_ball_dropped": True})[0]
+    assert note.endswith("Tekrarlanan 2 karede top yok sayıldı; top izi orada kaçırılmış bir kare gibi dolduruldu.")
 
 
 @pytest.mark.skipif(not all(__import__("shutil").which(b) for b in ("ffmpeg", "ffprobe")),
@@ -345,14 +383,15 @@ def test_the_constant_rate_copy_restores_even_timestamps_on_a_real_file(tmp_path
     assert vid.irregular_frame_intervals(src) == 10 and vid.probe(src).n_frames == 50
     rate = vid.nominal_rate(src)
     assert rate == 30
-    copy = vid.constant_rate_copy(src, tmp_path / "constant_rate.mp4", rate)
+    copy, repeated = vid.constant_rate_copy(src, tmp_path / "constant_rate.mp4", rate)
     info = vid.probe(copy)
     assert vid.irregular_frame_intervals(copy) == 0 and info.n_frames == 60 and abs(info.fps - 30) < 1e-6
+    assert repeated == list(range(22, 50, 3))  # each removed frame's slot holds the frame before it
 
     odd = tmp_path / "odd.mp4"  # an odd size (x264 4:2:0 needs even ones) and no audio
     subprocess.run(["ffmpeg", "-v", "error", "-i", str(src), "-vf", "pad=161:91", "-fps_mode", "passthrough",
                     "-c:v", "libx264", "-pix_fmt", "yuv444p", str(odd)], check=True)
-    info = vid.probe(vid.constant_rate_copy(odd, tmp_path / "odd_copy.mp4", rate))
+    info = vid.probe(vid.constant_rate_copy(odd, tmp_path / "odd_copy.mp4", rate)[0])
     assert (info.width, info.height, info.n_frames, info.has_audio) == (160, 90, 60, False)
 
 
@@ -368,8 +407,13 @@ def test_the_command_line_says_how_a_variable_rate_video_was_handled(monkeypatch
     monkeypatch.setattr(pipeline, "analyze", lambda *a, **k: report({"file": "constant_rate.mp4", "fps": 29.97003,
                                                                       "added_frames": 20}))
     assert cli.main(args) == 0
-    assert "sabit 29,97 fps'lik kopyadan analiz edildi (constant_rate.mp4, net 20 kare eklendi)" in \
+    assert "sabit 29,97 fps'lik kopyadan analiz edildi (constant_rate.mp4, net 20 kare eklendi)\n" in \
         capsys.readouterr().err
+    monkeypatch.setattr(pipeline, "analyze", lambda *a, **k: report({
+        "file": "constant_rate.mp4", "fps": 29.97003, "added_frames": 20, "repeated_frames": 20,
+        "repeated_ball_dropped": True}))
+    assert cli.main(args) == 0
+    assert "(constant_rate.mp4, net 20 kare eklendi); tekrarlanan 20 karede top yok sayıldı" in capsys.readouterr().err
     monkeypatch.setattr(pipeline, "analyze", lambda *a, **k: report(None))  # the copy failed: the old warning
     assert cli.main(args) == 0
     assert "uyarı: değişken kare hızı (20 düzensiz kare aralığı); hızlar ve işaretler kayabilir" in \
