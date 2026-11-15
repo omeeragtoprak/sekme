@@ -12,6 +12,7 @@ import hashlib
 import json
 import pickle
 import time
+from collections import Counter
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, fields
@@ -24,6 +25,7 @@ import numpy as np
 import torch
 
 from courtvision import __version__
+from courtvision.analytics import identity
 from courtvision.analytics.kinematics import player_kinematics
 from courtvision.broadcast import ocr
 from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
@@ -226,6 +228,7 @@ class PipelineConfig:
     player_size_from_camera: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): camera size gate
     constant_rate_copy: bool = True  # variable-rate video analysed from a constant-rate copy (docs/ARCHITECTURE.md)
     drop_repeated_ball: bool = True  # no ball on the frames the copy repeats (docs/ARCHITECTURE.md, adopted 2026-11-15)
+    appearance_identity: bool = False  # candidate, off by default (docs/ARCHITECTURE.md): who is who from clothing
     models: dict[str, str] = field(default_factory=lambda: {k: str(ROOT / v) for k, v in MODEL_FILES.items()})
 
 
@@ -341,6 +344,78 @@ def _annotate_from_broadcast(flights: list[dict], broadcast: dict, scan: Broadca
         f["receiver_name"] = names.get(f["receiver"]) if names else None
 
 
+def _annotate_identity(video, fjson: list[dict], players, cuts: list[int], fps: float, n_frames: int, out: Path,
+                       video_sha: str, cfg: PipelineConfig, names: tuple[str, str] | None) -> dict:
+    """Person A or B for both players of every flight from their clothing (`analytics/identity.py`). Where the
+    graphic names players, A and B take the name it gives them most often, and those names replace the graphic's
+    on every flight whose stretch is decided (`name_source` "görünüm"); elsewhere the graphic's names stay."""
+    reqs: list[tuple[int, np.ndarray]] = []
+    owner: list[tuple[int, str]] = []
+    for i, f in enumerate(fjson):
+        for off in identity.OFFSETS:
+            fr = f["start_frame"] + off
+            if fr <= f["end_frame"] and fr < n_frames:
+                for side in ("near", "far"):
+                    reqs.append((fr, players[side].boxes[fr]))
+                    owner.append((i, side))
+    cache = out / "identity.pkl"
+    key = pose_key(video_sha, identity.DESCRIPTOR,
+                   [(fr, side, box) for (fr, box), (_, side) in zip(reqs, owner, strict=True)])
+    descs = None
+    if cfg.reuse_perception and cache.is_file():
+        with open(cache, "rb") as fh:  # local cache written by this pipeline (trusted)
+            c = pickle.load(fh)
+        if c.get("key") == key:
+            descs = c["descs"]
+    if descs is None:
+        crops, complete = identity.crops_at(video, reqs)
+        descs = [identity.clothing(c) if c is not None else None for c in crops]
+        if complete:  # a video that stopped decoding early is read again next time, not cached half-read
+            tmp = cache.with_name(cache.name + ".part")
+            with open(tmp, "wb") as fh:
+                pickle.dump({"key": key, "descs": descs}, fh)
+            tmp.replace(cache)
+    stretch = identity.play_stretches([f["start_frame"] for f in fjson], cuts, fps)
+    near: dict[int, list[np.ndarray]] = {}
+    far: dict[int, list[np.ndarray]] = {}
+    for (i, side), d in zip(owner, descs, strict=True):
+        if d is not None:
+            (near if side == "near" else far).setdefault(stretch[i], []).append(d)
+    asg = identity.assign(near, far)
+    votes: Counter[tuple[str, str]] = Counter()  # (person, name) from the graphic's names in decided stretches
+    for i, f in enumerate(fjson):
+        if names and asg.decided(stretch[i]):
+            for side in ("near", "far"):
+                name = f.get("hitter_name") if f["hitter"] == side else f.get("receiver_name")
+                if name in names:  # another spelling of a name is no evidence for either way round
+                    votes[("A" if (side == "near") == asg.near_is_a[stretch[i]] else "B", name)] += 1
+    named = None
+    if names:
+        one, two = names
+        first, second = votes[("A", one)] + votes[("B", two)], votes[("A", two)] + votes[("B", one)]
+        if first != second:  # the graphic's majority says which person is which; no majority, no names
+            named = {"A": one, "B": two} if first > second else {"A": two, "B": one}
+    renamed = 0
+    for i, f in enumerate(fjson):
+        f["hitter_id"] = f["receiver_id"] = None
+        f.setdefault("hitter_name", None)
+        f.setdefault("receiver_name", None)
+        f["name_source"] = "grafik" if f.get("hitter_name") else None
+        if not asg.decided(stretch[i]):
+            continue
+        near_a = asg.near_is_a[stretch[i]]
+        f["hitter_id"] = "A" if (f["hitter"] == "near") == near_a else "B"
+        f["receiver_id"] = "B" if f["hitter_id"] == "A" else "A"
+        if named:
+            renamed += f.get("hitter_name") not in (None, named[f["hitter_id"]])
+            f["hitter_name"], f["receiver_name"] = named[f["hitter_id"]], named[f["receiver_id"]]
+            f["name_source"] = "görünüm"
+    keys = sorted(asg.margin)
+    return {"stretches": max(stretch, default=-1) + 1, "compared": len(keys),
+            "decided": sum(asg.decided(k) for k in keys), "names": named, "renamed_flights": renamed,
+            "margins": [round(asg.margin[k], 3) for k in keys]}
+
+
 def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, players, kin, out: Path, video_sha: str,
                       cfg: PipelineConfig, device) -> dict:
     """Pose at each contact -> hitting hand (from serves) and stroke type on every shot that starts with a hit."""
@@ -362,8 +437,8 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
             pickle.dump({"key": key, "poses": poses}, f)
     pose_of = dict(zip(idx, poses, strict=True))
 
-    def who(f: dict) -> str:
-        return f.get("hitter_name") or f"side:{f['hitter']}"
+    def who(f: dict) -> str:  # a name, else the person seen (A/B) where clothing tells them apart, else the end
+        return f.get("hitter_name") or (f"id:{f['hitter_id']}" if f.get("hitter_id") else f"side:{f['hitter']}")
 
     votes: dict[str, list[str]] = {}
     for i in idx:
@@ -388,7 +463,7 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
         f.update(stroke=st.kind, stroke_wing=st.wing, stroke_confident=st.confident, stroke_cue=st.cue,
                  hand=hand or "right", hand_source=source)
     return {"model": "yolo26s-pose", "poses": sum(p is not None for p in poses), "requested": len(poses),
-            "hands": {k.removeprefix("side:"): v for k, v in hands.items()}}
+            "hands": {k.removeprefix("side:").removeprefix("id:"): v for k, v in hands.items()}}
 
 
 CONSTANT_RATE_FILE = "constant_rate.mp4"
@@ -523,7 +598,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "candidates": {k: v for k, v in (("serve_toss_bridge_s", cfg.serve_toss_bridge_s),
                                          ("pin_serve_height", cfg.pin_serve_height),
                                          ("fps_scaled_thresholds", cfg.fps_scaled_thresholds),
-                                         ("player_size_from_camera", cfg.player_size_from_camera)) if v},
+                                         ("player_size_from_camera", cfg.player_size_from_camera),
+                                         ("appearance_identity", cfg.appearance_identity)) if v},
         "calibration": {
             "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts,
             "line_support_median": _f(np.median([c.support for c in valid]) if valid else None),
@@ -552,6 +628,11 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "limitations": video_notes(info.fps, irregular, copy_info) + LIMITATIONS,  # this video's own first
     }
     _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
+    if cfg.appearance_identity:
+        t5 = time.time()
+        report["identity"] = _annotate_identity(video, report["flights"], players, report["calibration"]["shot_cuts"],
+                                                info.fps, n, out, video_sha, cfg, scan.names if scan else None)
+        timings["identity_s"] = time.time() - t5
     t4 = time.time()
     report["strokes"] = _annotate_strokes(video, report["flights"], flights, ball, players, kin, out, video_sha, cfg,
                                           device)

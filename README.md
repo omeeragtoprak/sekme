@@ -205,6 +205,10 @@ promo/             HyperFrames promo film (footage not included)
   footage.
 - Ball footprint is a fixed 2 cm half-length; point/score inference from play is not implemented (the
   score is read from the broadcast).
+- Player names on shots come from the broadcast graphic: from a marked server's serve, else from the end changes
+  counted from the games it shows. OCR misreads those games in highlight footage, so whole stretches can carry
+  the two names the wrong way round (a quarter of the flights in the 2025 final highlights). A clothing-based
+  candidate (`--appearance-identity`) cuts that to 7 % but is not the default yet (docs/ARCHITECTURE.md).
 - Times are taken from frame numbers. A video with irregular frame timestamps (a phone dropping frames) is
   analysed, and played in the Review Room, from a constant-rate copy, with a frame repeated where the source
   has a gap (the ball is ignored on the repeated frames and filled in like a missed detection); phone videos

@@ -71,6 +71,7 @@ documented). `report.json` lists the flags a run used under `candidates`.
 | `--player-size-from-camera` | the player size gate from the calibrated camera (band 0.5–1.6 of a standing 1.85 m player) instead of one track's median height | `docs/EVAL_SERVE_SPEED.md`, third candidate |
 | `--pin-serve-height` | the flight fit held at the serve contact height measured on the camera ray (±0.05 m) | `docs/EVAL_SERVE_SPEED.md` |
 | `--toss-bridge` | a toss run may span a missed apex; the serve contact is searched over the whole run | withdrawn from its test (`docs/EVAL_SPOT.md`); reported only |
+| `--appearance-identity` | who is who from clothing in every stretch of play; names from the graphic attached to the two people by majority | "Player identity from clothing" below |
 
 ## Where the time goes (profiled 2026-11-14)
 
@@ -238,6 +239,79 @@ with a window of at most 4 s were identical to the earlier report. In highlight 
 6.5 s serve lag spans more than 10 s, which almost never lies inside one cut-free span, so the dropped updates
 stay dropped. The code was left as it was. The one disagreeing value (serve at frame 186: board read 101 mph by
 eye, paired 125) is the stale-value case noted above.
+
+## Player identity from clothing (rule written 2026-11-15, before the test match was looked at)
+
+**Finding.** Player names on shots come from the broadcast graphic: from a serve whose server the graphic marks
+(reliable, but few serves are seen in highlights), else from each player's start end and the number of end
+changes counted from the games on the nearest graphic. OCR often misreads those games in highlight footage:
+digits merge (2024 final: Fritz "34", Sinner "66"), a set column drops (6, 3 for 6, 6, 3), so the count's parity
+is close to random there (23, 28, 54 end changes read within 30 s). Crops of the near and far player at every
+flight's start show it: in the two development runs (2023 final, 90 s; 2024 final highlights, 180 s) the
+graphic's names put the wrong player on the near side in 3 of 11 stretches of play (about 29 of 135 named
+flights), always a whole stretch.
+
+**Candidate** (`analytics/identity.py`, `PipelineConfig.appearance_identity`, `--appearance-identity`, off by
+default; code f73e70a, with the fixes of an independent review in c4729e8, before the test was scored). Flights are grouped into stretches of play (a new stretch after a camera cut or a pause
+over 20 s between flight starts; nobody changes ends inside one). At 0, 4 and 8 frames after each flight's start
+both players are cropped and resized to 24 × 48; the torso's colours (pixels like the crop's left and right edges,
+the court, left out; saturated pixels by hue in 12 bins, the rest as dark / grey / light) give a histogram. Two
+people A and B: A starts as the near player of the stretch with most samples, then each stretch takes the cheaper
+way round (Hellinger distances) and A and B are re-estimated, until nothing changes. A stretch is decided when
+the two ways round differ by at least 0.15 (fixed before the test; the development stretches differed by 0.36 to
+0.93). Flights in decided stretches get `hitter_id` / `receiver_id` (A / B); where the graphic names players, A and
+B take the names the graphic gives them most often over the decided stretches, and those names replace the
+graphic's on those flights (`name_source` "görünüm"); undecided stretches keep the graphic's names. Hand votes
+go by name, else by person, else by end. On the development runs it decides all 11 compared stretches, agrees with
+the crops read by eye in all of them, and renames 3 and 23 flights.
+
+**Test** (`devir/scratch/identity_extract.py`, `identity_montage.py`, `identity_eval.py`). The 2025 final, not
+used in this work: `usopen2025_final_150-704s_v4` (554 s) and `usopen2025_final_hd_v3` (90 s), their cached
+detections. Reference: a separate labeller (an agent that has not seen the method's output) reads sheets with,
+for each stretch, crops of the near player over crops of the far player (no names, no output of the method),
+names the two outfits P and Q, and says which is near in each stretch, or "unclear". P and Q are tied to names by
+the flights the marked-server serves name (no end-change count). Each flight's reference is the near name of its
+stretch; unclear stretches are left out. Counted on the reference flights, for the graphic (the default) and the
+candidate: near name right, wrong, or none. **Adopted, on by default, if** (a) the candidate's wrong names are at
+most 2 % of the reference flights; (b) it has no more wrong and no fewer right names than the graphic; (c) its
+decided stretches hold at least 85 % of the reference flights. Otherwise it stays off and the result is
+recorded here. Where the labeller and the candidate disagree, the crops are looked at afterwards and described,
+without changing the outcome.
+
+**Result (2026-11-15): not adopted; it stays a candidate.** As scored (`devir/scratch/identity_eval.py`): the
+labeller (sonnet, who saw only the sheets) described the outfits as a pink sleeveless shirt with dark purple shorts
+(P) and a dark red shirt and shorts with a white cap (Q), labelled 19 + 4 stretches and left one unclear (no
+near crops); the marked-server serves tied P to ALCARAZ (39 of 53 such flights agreeing). On the 279 reference
+flights the graphic named the near player right on 185, wrong on 92, not at all on 2; the candidate decided every
+stretch and was right on all 279. So (a), (b) and (c) all held.
+
+The 14 marked-server flights that disagreed were then looked at, and they show the test was flawed. The reference
+used the candidate's own stretches, and the labeller was told one person is near throughout a stretch. Two
+stretches of the 554 s run each hold a camera change the cut detector missed, with a change of ends inside:
+stretch 3 (107.6–160.4 s) and stretch 13 (329.7–397.3 s). The full frames show the red player (Sinner) near at
+123.7 s and at 329.7 and 333.0 s, where both stretches' majority is the pink player. Each flight's own crops say
+the same, clearly (`devir/scratch/identity_perflight.py`: the near crops are 0.38 to 0.50 closer to the other
+person). Those are 11 flights at 123.7–132.7 s and 9 at 329.7–338.3 s, and on all 20 both the reference and the
+candidate are wrong. No other stretch of the four runs has a flight whose own crops contradict its stretch. The
+marked-server names were right at 123.7 s but kept going past the change of ends (no cut, no score change seen).
+The serve at 159.8 s was put on the wrong end (the far player served).
+
+Re-scored with those 20 flights corrected:
+
+| near player's name | right | wrong | none |
+|---|---|---|---|
+| graphic (default) | 205 | 72 (25.8 %) | 2 |
+| clothing (candidate) | 259 | 20 (7.2 %) | 0 |
+
+(a) fails: 7.2 % against at most 2 %. The flaw is in the test's design (the reference shared the candidate's
+stretches), not in the candidate's favour, so the honest reading is that the bar is not met. It stays off
+(`--appearance-identity`), although it removes most of the graphic's wrong names. What would fix the
+20: deciding per flight, or splitting a stretch where its flights' own clothing changes side, which the per-flight
+margins above make easy, and a cut detector that catches these edits. That is a new version, and the 2025 final is
+now spent for this question (its crops and frames have been looked at), so it needs footage not used yet (the six
+US Open videos awaiting a download yes) and a reference labelled per flight. Separately, the graphic's default
+names are wrong on about a quarter of the flights in this match and a fifth in the development runs (whole
+stretches, from misread games); the README says so.
 
 ## Review Room security (security review, 2026-11-14)
 
