@@ -217,6 +217,9 @@ Also from the pipeline review (2026-11-14), checked and left:
   direction window is cut off there), and one exactly on a boundary is found by neither side; so a stroke right
   next to a camera cut or a calibration gap is missed. Found by a test review (2026-11-15) and pinned
   (`tests/test_events_edges.py`); changing it changes the event detection and needs its own rule.
+- `events/flights.py`: a leading flight (no hit before it) whose track runs on through a second shot takes its
+  hitter from the first and last image rows, so it can come out on the wrong side and its fit is then rejected
+  (no call, not a wrong one). Noted by a test review (2026-11-15), not changed.
 - Poses are read by seeking to each hit frame; on the 60 fps 1080p footage 25 of 25 sampled frames were
   identical to sequential decoding, so this was not changed.
 
