@@ -8,6 +8,7 @@ rest of the pipeline.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any, TypeGuard, cast
 
 import numpy as np
 
@@ -37,7 +38,7 @@ class YoloPersonTracker:
 
     def __call__(self, frame: np.ndarray) -> list[PersonDet]:
         # fp16 on GPU/MPS: 43 -> 34 ms/frame at 1080p, the same boxes (median shift 0.13 px over 1221 boxes).
-        res = self.model.track(frame, persist=True, classes=[0], tracker="bytetrack.yaml", imgsz=self.imgsz,
+        res: Any = self.model.track(frame, persist=True, classes=[0], tracker="bytetrack.yaml", imgsz=self.imgsz,
                                conf=self.conf, device=self.device, verbose=False, half=self.device != "cpu")[0]
         out: list[PersonDet] = []
         if res.boxes is None or len(res.boxes) == 0:
@@ -82,11 +83,12 @@ class IouTracker:
             if ids[k] is None:
                 ids[k] = self.next_id
                 self.next_id += 1
-        seen = dict(zip(ids, boxes, strict=True))
+        ids_int = cast("list[int]", ids)  # every None was replaced by a new id above
+        seen = dict(zip(ids_int, boxes, strict=True))
         kept = {tid: (box, age + 1) for tid, (box, age) in self.tracks.items()
                 if tid not in seen and age + 1 <= self.max_age}
         self.tracks = {**kept, **{tid: (box, 0) for tid, box in seen.items()}}
-        return [int(i) for i in ids]
+        return [int(i) for i in ids_int]
 
 
 class SekmePersonTracker:
@@ -163,7 +165,7 @@ class PlayerTrack:
 PLAYER_HEIGHT_M = 1.85
 
 
-def expected_height_px(camera, w: np.ndarray) -> float | None:
+def expected_height_px(camera, w: np.ndarray | None) -> float | None:
     """Image height of a standing player (PLAYER_HEIGHT_M) whose feet are at court point ``w``."""
     if camera is None or w is None:
         return None
@@ -201,7 +203,7 @@ def select_players(dets: list[list[PersonDet]], calib: list[FrameCalibration],
         exp_h.append([expected_height_px(c.camera if c.valid else None, w) if size_from_camera else None
                       for w in row])
 
-    def in_half(w: np.ndarray | None, side: str) -> bool:
+    def in_half(w: np.ndarray | None, side: str) -> TypeGuard[np.ndarray]:  # True implies w is not None
         if w is None or abs(w[0]) > PLAY_X:
             return False
         y = -w[1] if side == "near" else w[1]

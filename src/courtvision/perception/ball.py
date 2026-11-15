@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+from typing import cast
 
 import cv2
 import numpy as np
@@ -53,7 +54,8 @@ def load_ball_net(weights: str) -> tuple[torch.nn.Module, str]:
 
 
 class BallDetector:
-    IN_W, IN_H = WASB_CONFIG["inp_width"], WASB_CONFIG["inp_height"]
+    IN_W = cast("int", WASB_CONFIG["inp_width"])  # 512; the config dict is heterogeneous
+    IN_H = cast("int", WASB_CONFIG["inp_height"])  # 288
 
     def __init__(self, weights: str, device: torch.device, threshold: float = 0.5, half: bool = False) -> None:
         # fp16 on GPU/MPS: 72 -> 46 ms/frame for WASB on the US Open clip, same detections, top-1 shift <= 0.72 px.
@@ -163,7 +165,9 @@ def drop_court_fixed(cands: list[list[BallCandidate]], ground_h: list[np.ndarray
             out.append(cands[i])
             continue
         nb = [g[j] for j in range(max(0, i - win), min(n, i + win + 1)) if j != i and g[j] is not None]
-        keep = [c for c, p in zip(cands[i], g[i], strict=True)
+        gi = g[i]
+        assert gi is not None  # the `continue` above
+        keep = [c for c, p in zip(cands[i], gi, strict=True)
                 if sum(bool(np.min(np.linalg.norm(q - p, axis=1)) < radius_m) for q in nb) < min_frames]
         out.append(keep)
     return out
@@ -234,7 +238,7 @@ def _remove_outliers(xy: np.ndarray, win: int = 3, k: float = 4.0, floor_px: flo
         return float(resid / max(k * spread, floor_px * 4))
 
     r = np.full(n, -np.inf)
-    for i in np.flatnonzero(ok):
+    for i in cast("list[int]", np.flatnonzero(ok)):  # integer indices
         r[i] = ratio(i)
     while n:
         i = int(np.argmax(r))

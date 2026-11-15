@@ -17,6 +17,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 
@@ -77,8 +78,8 @@ def contacts(lab: Labels, reach: int = 4) -> list[Contact]:
     n = len(lab.status)
     events = np.flatnonzero(lab.status > 0)  # hits (1) and bounces (2): a track line never crosses one
     for i in np.flatnonzero(lab.status == 2):
-        lo = max([max(0, i - reach), *(e + 1 for e in events if e < i)])
-        hi = min([min(n, i + 1 + reach), *(e for e in events if e > i)])
+        lo = cast("int", max([max(0, i - reach), *(e + 1 for e in events if e < i)]))  # ints (numpy or plain)
+        hi = cast("int", min([min(n, i + 1 + reach), *(e for e in events if e > i)]))
         pre = [j for j in range(lo, i) if lab.visible[j]][-2:]
         post = [j for j in range(i + 1, hi) if lab.visible[j]][:2]
         if len(pre) < 2 or len(post) < 2:

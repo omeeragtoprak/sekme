@@ -11,6 +11,7 @@ import multiprocessing
 import os
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field, replace
+from typing import cast
 
 import numpy as np
 
@@ -210,6 +211,7 @@ def image_bounce(frames: np.ndarray, xy: np.ndarray, b: int, calib: list[FrameCa
     lift = cal.camera.center if cal.camera is not None else None
 
     def ground(p: np.ndarray) -> np.ndarray:
+        assert cal.H_inv is not None  # checked above; `cal` is not changed afterwards
         g = apply_h(cal.H_inv, p)
         return g if lift is None else g + (lift[:2] - g) * BALL_RADIUS / lift[2]
 
@@ -353,7 +355,7 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
         fl.notes.append(f"belirgin sekme yok (kırılma kazancı {num(gain, 2)}): vole ya da top kadrajdan çıktı")
         return fl
     fl.bounce_frame = int(idx[b])
-    cams: list[Camera] = [calib[i].camera for i in idx]  # type: ignore[misc]
+    cams: list[Camera] = [calib[i].camera for i in idx]
     anchors = []
     start_anchor = None if leading else _anchor(players, hitter, s, fps)
     feet = players[hitter].world[s] if hitter in players else np.full(2, np.nan)
@@ -389,8 +391,9 @@ def _fit_one(ball: BallTrack, calib: list[FrameCalibration], fps: float, players
         fl.hit_speed_kmh = float(np.linalg.norm(v_hit) * 3.6)
         fl.hit_height_m = float(p_hit[2])
     if h_contact is not None:
+        # h_contact is only set when start_anchor is not None, i.e. not leading: hit_height_m was set above.
         fl.notes.append(f"servis temas yüksekliği {num(h_contact, 2)} m, servisçinin üstünden geçen kamera ışınında "
-                        f"ölçüldü (uydurmanın temas yüksekliği {num(fl.hit_height_m, 2)} m)")
+                        f"ölçüldü (uydurmanın temas yüksekliği {num(cast(float, fl.hit_height_m), 2)} m)")
         fl.hit_height_m = h_contact
     fl.bounce_speed_kmh = float(np.linalg.norm(fit.params[3:6]) * 3.6)
     why = _plausibility(fl, fit, frame_w)
@@ -451,9 +454,10 @@ def _image_call(fl: Flight, idx: np.ndarray, xy: np.ndarray, b: int, calib: list
         return fl
     fl.bounce_2d = out
     fl.zone = service_box(fl.receiver, float(feet[0])) if serve and np.isfinite(feet[0]) else rally_zone(fl.receiver)
-    call = call_bounce(g, cov, fl.zone, seed=fl.bounce_frame)
+    seed = cast(int, fl.bounce_frame)  # both callers set it (changepoint) before calling _image_call
+    call = call_bounce(g, cov, fl.zone, seed=seed)
     if serve:  # only the toss says "serve" here (no contact geometry): decisive only if both readings agree
-        alt = call_bounce(g, cov, rally_zone(fl.receiver), seed=fl.bounce_frame)
+        alt = call_bounce(g, cov, rally_zone(fl.receiver), seed=seed)
         if alt.verdict != call.verdict:
             call = replace(call, verdict="REVIEW", conflict=f"servis olarak {VERDICT[call.verdict]}, "
                                                             f"ralli vuruşu olarak {VERDICT[alt.verdict]}")

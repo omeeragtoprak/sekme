@@ -29,6 +29,7 @@ class UNet(nn.Module):
             cin = w
         self.dec = nn.ModuleList(_block(widths[i + 1] + widths[i], widths[i]) for i in reversed(range(len(widths) - 1)))
         self.head = nn.Conv2d(widths[0], cout, 1)
+        assert self.head.bias is not None  # nn.Conv2d is built with bias=True (the default)
         nn.init.constant_(self.head.bias, -math.log((1 - prior) / prior))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

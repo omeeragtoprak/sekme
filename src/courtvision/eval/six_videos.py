@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from fractions import Fraction
+from typing import Any
 
 import numpy as np
 
@@ -304,7 +305,7 @@ def player_rule(videos: list[tuple[list[dict], list[dict], dict, dict, int]], mi
                 min_one_right: int = 10) -> Verdict:
     """``videos``: (random-sample labels, disagreement labels, default frames.json, candidate frames.json,
     frame height)."""
-    tot = {k: {"main_frames": 0, "near": {"present": 0, "found": 0, "wrong": 0},
+    tot: dict[str, Any] = {k: {"main_frames": 0, "near": {"present": 0, "found": 0, "wrong": 0},
                "far": {"present": 0, "found": 0, "wrong": 0}} for k in ("default", "candidate")}
     dis = {side: {"one_right": 0, "b_right": 0} for side in ("near", "far")}
     for labels, dlabels, fa, fb, h in videos:
@@ -360,7 +361,8 @@ def call_changes(pairs: list[tuple[dict, dict]], tol: float = 2.0) -> dict:
     shift (cm) and the change in the bounce's standard deviation (cm) and in P(in), serves and others apart."""
     out: dict = {"calls_a": 0, "calls_b": 0, "only_a": 0, "only_b": 0,
                  "verdict_changes": {"serve": [], "other": []}}
-    acc = {g: {"shift_cm": [], "sigma_change_cm": [], "p_in_change": []} for g in ("serve", "other")}
+    acc: dict[str, dict[str, list[float]]] = {
+        g: {"shift_cm": [], "sigma_change_cm": [], "p_in_change": []} for g in ("serve", "other")}
     for rep_a, rep_b in pairs:
         a = [f for f in rep_a["flights"] if f.get("call") and f.get("bounce")]
         b = [f for f in rep_b["flights"] if f.get("call") and f.get("bounce")]

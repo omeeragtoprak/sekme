@@ -18,6 +18,7 @@ from dataclasses import dataclass, field, fields
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
@@ -385,15 +386,15 @@ def _annotate_strokes(video, fjson: list[dict], flights: list[Flight], ball, pla
                    [(flights[i].start_frame, flights[i].hitter, r[1]) for i, r in zip(idx, reqs, strict=True)])
     poses = None
     if cfg.reuse_perception and cache.is_file():
-        with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
-            c = pickle.load(f)
+        with open(cache, "rb") as fh:  # local cache written by this pipeline (trusted)
+            c = pickle.load(fh)
         if c.get("key") == key:
             poses = c["poses"]
     if poses is None:
         est = pose_estimator(cfg.models["pose"], device.type)
         poses = poses_at(video, reqs, est)
-        with open(cache, "wb") as f:
-            pickle.dump({"key": key, "poses": poses}, f)
+        with open(cache, "wb") as fw:
+            pickle.dump({"key": key, "poses": poses}, fw)
     pose_of = dict(zip(idx, poses, strict=True))
 
     def who(f: dict) -> str:
@@ -450,6 +451,7 @@ def _constant_rate_source(source: Path, source_sha: str, info: VideoInfo,
         tmp = record.with_name(record.name + ".part")
         tmp.write_text(json.dumps(have))
         tmp.replace(record)
+    assert have is not None  # `current` needs isinstance(have, dict); otherwise it was made just above
     n_copy = probe(dest).n_frames
     repeated = have["repeated"]
     if not (isinstance(repeated, list)
@@ -551,14 +553,14 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
                     None if fl.rejected else fl.hit_speed_kmh)  # a rejected fit's speed is not a measurement
               for i, fl in enumerate(flights) if fl.kind == "serve"]
     measurable_t = [(a / info.fps, b / info.fps) for a, b in segments]
-    broadcast = check(scan, serves, measurable=measurable_t) if scan is not None else {
+    broadcast: dict[str, Any] = check(scan, serves, measurable=measurable_t) if scan is not None else {
         "ocr": None, "reason": "disabled" if not cfg.broadcast else "Apple Vision OCR is not available"}
     if scan is not None:
         timings["broadcast_s"] = time.time() - t3
 
     valid = [c for c in calib if c.valid]
     cams = [c.camera for c in valid if c.camera is not None]
-    report = {
+    report: dict[str, Any] = {
         "schema": "courtvision.report/1",
         "version": __version__,
         "created": datetime.now(UTC).isoformat(timespec="seconds"),

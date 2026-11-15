@@ -17,7 +17,7 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -133,7 +133,7 @@ def media_path(run: Path, name: str) -> Path | None:
 class _WebFiles(StaticFiles):
     """Built web app. index.html names the hashed bundles, so it must be revalidated after a rebuild."""
 
-    def file_response(self, full_path, stat_result, scope, status_code=200):  # type: ignore[no-untyped-def]
+    def file_response(self, full_path, stat_result, scope, status_code=200):
         resp = super().file_response(full_path, stat_result, scope, status_code)
         if str(full_path).endswith(".html"):
             resp.headers["Cache-Control"] = "no-cache"
@@ -159,7 +159,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
     hosts = set(allowed_hosts or LOCAL_HOSTS)
 
     @app.middleware("http")
-    async def local_and_same_origin(request: Request, call_next):  # type: ignore[no-untyped-def]
+    async def local_and_same_origin(request: Request, call_next):
         host = request.headers.get("host", "")
         # DNS rebinding: a page on another name that resolves to this machine is not answered.
         if "*" not in hosts and host_name(host) not in hosts:
@@ -322,7 +322,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
     @app.post("/api/runs/{run_id}/serve-labels", status_code=201)
     def add_serve_label(run_id: str, body: ServeLabelIn) -> dict:
         d = run_dir(run_id)
-        record = {"id": uuid.uuid4().hex, "created": datetime.now(UTC).isoformat(timespec="seconds"),
+        record: dict[str, Any] = {"id": uuid.uuid4().hex, "created": datetime.now(UTC).isoformat(timespec="seconds"),
                   "type": body.type, "labeler": body.labeler}
         n, fps = clip_timing(d, load_json(d / "report.json"))
         if body.type == "serve":

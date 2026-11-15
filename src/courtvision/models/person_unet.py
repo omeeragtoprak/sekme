@@ -27,6 +27,7 @@ SIZE_WEIGHT = 0.5
 class PersonUNet(UNet):
     def __init__(self, widths: tuple[int, ...] = (24, 48, 96, 192, 192)) -> None:
         super().__init__(3, 3, widths, prior=0.01)
+        assert self.head.bias is not None  # UNet builds the head with nn.Conv2d(bias=True)
         with torch.no_grad():  # size channels start at a typical player box (log px), not at the prior
             self.head.bias[1] = math.log(12.0)
             self.head.bias[2] = math.log(30.0)

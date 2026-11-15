@@ -21,6 +21,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any, cast
 
 import cv2
 import numpy as np
@@ -235,6 +236,7 @@ def parse_speed(boxes: list[TextBox], frame: int, t: float) -> tuple[SpeedReadin
             v, u = int(m.group(1)), "mph" if m.group(2).startswith("MP") else "km/h"
             if SERVE_SPEED_RANGE[u][0] <= v <= SERVE_SPEED_RANGE[u][1]:  # ads and captions carry "20 KM" too
                 glued.append((b.conf, v, u))
+    unit: str | None
     if glued:  # the unit printed with the number labels it
         conf, value, unit = max(glued)
         return SpeedReading(frame, t, value), unit
@@ -310,7 +312,7 @@ def majority_names(scores: list[ScoreReading]) -> tuple[str, str] | None:
     return top, bot
 
 
-def _stable(seq: list, key, max_gap: float) -> list[tuple[float, float, object]]:
+def _stable(seq: list, key, max_gap: float) -> list[tuple[float, float, Any]]:
     """Runs of equal keys confirmed by at least two consecutive readings: (t_first, t_last, item)."""
     runs: list[list] = []
     for it in seq:
@@ -329,8 +331,9 @@ def _point_step(a: ScoreReading, b: ScoreReading) -> tuple[int | None, int | Non
     gb = [r.games[-1] if r.games else 0 for r in b.rows]
     if [len(r.games) for r in a.rows] != [len(r.games) for r in b.rows]:
         return None, None  # a set ended in between (or the graphic changed layout)
-    pa = [POINT_RANK.get(r.points or "0") for r in a.rows]
-    pb = [POINT_RANK.get(r.points or "0") for r in b.rows]
+    # Typed list[int] for the arithmetic below; a None entry (unknown rank) returns on the next check.
+    pa = cast("list[int]", [POINT_RANK.get(r.points or "0") for r in a.rows])
+    pb = cast("list[int]", [POINT_RANK.get(r.points or "0") for r in b.rows])
     if None in pa or None in pb:
         return None, None  # tiebreak points or unreadable
     dg = [gb[0] - ga[0], gb[1] - ga[1]]
@@ -373,7 +376,7 @@ def score_changes(scores: list[ScoreReading], max_gap: float = 1.2) -> list[Scor
 BOARD_FLICKER_S = 4.0
 
 
-def _drop_flickers(runs: list[tuple[float, float, object]], max_s: float) -> list[tuple[float, float, object]]:
+def _drop_flickers(runs: list[tuple[float, float, Any]], max_s: float) -> list[tuple[float, float, Any]]:
     """Remove a run B between two runs of the same value A when A is back within ``max_s`` of B's first sighting."""
     runs = list(runs)
     i = 1

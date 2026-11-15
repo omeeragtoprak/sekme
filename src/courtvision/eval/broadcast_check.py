@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from courtvision.broadcast.scoreboard import BroadcastScan, ScoreReading, score_changes, speed_updates
 
@@ -73,7 +74,8 @@ def check(scan: BroadcastScan, serves: list[Serve], lag: tuple[float, float] = (
     updates = speed_updates(scan.speeds)
 
     # Serve speed vs the radar board ------------------------------------------------------------
-    pairs, unmatched_updates = [], []
+    pairs: list[dict[str, Any]] = []
+    unmatched_updates = []
     matched: set[int] = set()
     for u in updates:
         if u.previous is None:  # first value seen: the serve behind it is not in view
@@ -87,6 +89,7 @@ def check(scan: BroadcastScan, serves: list[Serve], lag: tuple[float, float] = (
             continue
         if len(cands) == 1 and board is not None and cands[0].speed_kmh is not None:
             s = cands[0]
+            assert s.speed_kmh is not None  # cands[0].speed_kmh was checked in the condition above
             matched.add(s.flight_id)
             pairs.append({"flight_id": s.flight_id, "t": round(s.t, 2), "ours_kmh": round(s.speed_kmh, 1),
                           "board": u.value, "board_kmh": round(board, 1),
