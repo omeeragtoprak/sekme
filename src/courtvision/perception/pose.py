@@ -49,8 +49,8 @@ class PoseEstimator:
         if crop is None:
             return None
         X1, Y1, X2, Y2 = crop
-        out: Any = self.model.predict(frame[Y1:Y2, X1:X2], imgsz=self.imgsz, verbose=False, device=self.device)
-        res = out[0]  # (ultralytics versions annotate the result as a list or an iterator; it is a list)
+        results: Any = self.model.predict(frame[Y1:Y2, X1:X2], imgsz=self.imgsz, verbose=False, device=self.device)
+        res = results[0]  # (ultralytics versions annotate the result as a list or an iterator; it is a list)
         if res.keypoints is None or len(res.keypoints) == 0 or res.boxes is None:
             return None
         # The detection closest to the crop's centre is the tracked player (not a ball kid or umpire).
