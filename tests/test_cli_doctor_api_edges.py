@@ -220,7 +220,7 @@ def test_the_summary_lists_every_flight_with_its_call_or_its_notes(monkeypatch, 
          "call": {"verdict": "REVIEW", "p_in": 0.5, "margin_m": -0.004, "sigma_m": 0.02, "line": "x"}}]
     assert _analyze(monkeypatch, ["v.mp4", "--out", "o"], rep)[0] == 0
     assert capsys.readouterr().out.splitlines() == [
-        "calibrated frames 3/5, line rmse None px",  # pinned: a missing median is printed as "None px"
+        "calibrated frames 3/5, line rmse —",  # a missing median is a dash (it used to print "None px")
         "  flight 0: near -> far  OUT    P(in)=0.123 margin -5±3 cm (far baseline)",
         "  flight 1:  far -> near no call: kısa; gürültülü",
         "  flight 2:  far -> near IN     P(in)=1.000 margin +0±0 cm (net)",
@@ -335,7 +335,8 @@ def test_serve_on_this_machine_keeps_the_host_check_and_stays_quiet(monkeypatch,
     assert cli.os.environ["SEKME_FIT_WORKERS"] == "3"  # uploaded videos are fitted in parallel
 
 
-@pytest.mark.parametrize("host", ["localhost", "::1", "127.0.0.1"])
+@pytest.mark.parametrize("host", ["localhost", "::1", "127.0.0.1", "LOCALHOST", "LocalHost"])
+# Any case: host names are case-insensitive.
 def test_serve_treats_the_three_loopback_names_as_local(monkeypatch, capsys, host: str) -> None:
     seen = _serve(monkeypatch, ["--host", host, "--port", "1234", "--runs", "elsewhere"])
     assert seen["allowed_hosts"] is None and seen["runs"] == Path("elsewhere")
@@ -343,9 +344,9 @@ def test_serve_treats_the_three_loopback_names_as_local(monkeypatch, capsys, hos
     assert capsys.readouterr().err == ""
 
 
-@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.20", "LOCALHOST", "::"])
+@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.20", "::"])
 def test_serve_on_any_other_address_warns_and_answers_to_every_host_name(monkeypatch, capsys, host: str) -> None:
-    seen = _serve(monkeypatch, ["--host", host])  # pinned: "LOCALHOST" is not recognised as local (case-sensitive)
+    seen = _serve(monkeypatch, ["--host", host])
     assert seen["allowed_hosts"] == ["*"] and seen["uvicorn"][1]["host"] == host
     assert capsys.readouterr().err == (
         f"uyarı: İnceleme Odası {host} adresinde, kimlik doğrulaması olmadan açılıyor; ağdaki herkes analizleri "
@@ -574,8 +575,8 @@ def test_disk_check_measures_an_existing_folder_or_else_its_parent(monkeypatch, 
 
 
 @pytest.mark.parametrize("free,ok,detail", [
-    (5.0e9, True, "5 GB boş"), (5.0e9 - 1, False, "5.0 GB boş, bir uzun analiz için az"),
-    (4.96e9, False, "5.0 GB boş, bir uzun analiz için az"),  # pinned: "5.0 GB" is called too little (rounded)
+    (5.0e9, True, "5 GB boş"), (5.0e9 - 1, False, "4.9 GB boş, bir uzun analiz için az"),
+    (4.96e9, False, "4.9 GB boş, bir uzun analiz için az"),  # rounded down (it used to read "5.0 GB ... az")
     (0.0, False, "0.0 GB boş, bir uzun analiz için az"), (1.23e9, False, "1.2 GB boş, bir uzun analiz için az")])
 def test_disk_check_warns_below_five_gigabytes(monkeypatch, tmp_path: Path, free: float, ok: bool, detail) -> None:
     _disk_usage(monkeypatch, free)
@@ -909,9 +910,11 @@ def test_num_default_is_one_decimal_and_never_shows_a_dot() -> None:
     assert "," not in num(7.3, 0)  # no decimals: no comma either
 
 
-@pytest.mark.parametrize("value,expect", [(-0.04, "-0,0"), (-0.0, "-0,0")])
-def test_num_keeps_the_sign_of_a_negative_that_rounds_to_zero(value: float, expect: str) -> None:
-    assert num(value) == expect  # pinned: "-0,0" is shown for a tiny negative number
+@pytest.mark.parametrize("value,digits,expect", [(-0.04, 1, "0,0"), (-0.0, 1, "0,0"), (-0.004, 2, "0,00"),
+                                                 (-1e-9, 0, "0"), (-0.06, 1, "-0,1"), (-0.5, 0, "0")])
+def test_num_shows_a_negative_that_rounds_to_zero_as_zero(value: float, digits: int, expect: str) -> None:
+    # It used to show "-0,0" (and "-0" for -0.5 at no decimals, which rounds half to even).
+    assert num(value, digits) == expect
 
 
 @pytest.mark.parametrize("value,digits,expect", [(float("nan"), 1, "nan"), (float("inf"), 1, "inf"),

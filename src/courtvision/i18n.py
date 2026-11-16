@@ -24,7 +24,10 @@ _KIND = {"singles": "tekler", "doubles": "çiftler"}
 
 def num(v: float, digits: int = 1) -> str:
     """Number with a Turkish decimal comma, e.g. ``num(12.34) == "12,3"``."""
-    return f"{v:.{digits}f}".replace(".", ",")
+    s = f"{v:.{digits}f}"
+    if s.startswith("-") and not s.strip("-0."):  # a tiny negative rounds to "-0,0": show it as zero
+        s = s[1:]
+    return s.replace(".", ",")
 
 
 def prob(p: float, digits: int = 1) -> str:

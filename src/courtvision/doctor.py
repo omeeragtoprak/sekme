@@ -7,6 +7,7 @@ disk space) only make it slower or poorer, and are warnings.
 
 from __future__ import annotations
 
+import math
 import shutil
 import subprocess
 import sys
@@ -111,8 +112,8 @@ def _web(root: Path) -> Check:
 def _disk(path: Path) -> Check:
     probe = path if path.exists() else path.parent
     free = shutil.disk_usage(probe).free / 1e9
-    if free < MIN_FREE_GB:
-        return Check("disk", False, False, f"{probe}: {free:.1f} GB boş, bir uzun analiz için az")
+    if free < MIN_FREE_GB:  # rounded down, so a value under the limit never reads as the limit itself
+        return Check("disk", False, False, f"{probe}: {math.floor(free * 10) / 10:.1f} GB boş, bir uzun analiz için az")
     return Check("disk", True, False, f"{probe}: {free:.0f} GB boş")
 
 

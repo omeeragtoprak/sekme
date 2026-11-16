@@ -69,7 +69,9 @@ def _analyze(args: argparse.Namespace) -> int:
     if cal["total_frames"] and not cal["valid_frames"]:
         print("uyarı: kort hiçbir karede kalibre edilemedi; ölçüm ve karar yok (SEKME kortu arkadan gösteren yayın "
               "kamerası açısı için)", file=sys.stderr)
-    print(f"calibrated frames {cal['valid_frames']}/{cal['total_frames']}, line rmse {cal['line_rmse_px_median']} px")
+    rmse = cal["line_rmse_px_median"]
+    print(f"calibrated frames {cal['valid_frames']}/{cal['total_frames']}, line rmse "
+          + (f"{rmse} px" if rmse is not None else "—"))
     for f in report["flights"]:
         call = f["call"]
         verdict = f"{call['verdict']:6s} P(in)={call['p_in']:.3f} margin {100 * call['margin_m']:+.0f}±" \
@@ -88,7 +90,7 @@ def _serve(args: argparse.Namespace) -> int:
     def run_analysis(video: Path, out: Path, progress) -> None:
         analyze(video, out, PipelineConfig(device=args.device), progress)
 
-    local = args.host in ("127.0.0.1", "localhost", "::1")
+    local = args.host.lower() in ("127.0.0.1", "localhost", "::1")  # host names are case-insensitive
     if not local:
         print(f"uyarı: İnceleme Odası {args.host} adresinde, kimlik doğrulaması olmadan açılıyor; ağdaki herkes "
               "analizleri görebilir ve video yükleyebilir", file=sys.stderr)
