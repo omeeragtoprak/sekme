@@ -266,3 +266,8 @@ developed on TrackNet rallies, not on these dev matches (rule 2), and E2E-Spot c
 ball before a serve: before its test run it is run on the dev matches (no slot); their numbers are recorded here,
 and any change they lead to is written down, with its rule, before the test. Strokes are matched by time only;
 their side agreement is reported, not used.
+
+**Development, reported only (2026-11-16): the six v4 broadcast runs** (US Open 2023–2025, from their caches;
+`devir/scratch/far_breaks_broadcast_dev.py`): hits 555 → 592, flights 590 → 626, calls 367 → 366, of which 352
+on the same bounce in both runs; no call turned from IN to OUT or back. Nothing there has stroke labels, so this
+only shows the side effects on real broadcasts are small; it decides nothing.
