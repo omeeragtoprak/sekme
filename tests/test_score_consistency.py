@@ -4,9 +4,12 @@ reading showing fewer sets than one before it has lost a column too."""
 
 from __future__ import annotations
 
+import cv2
+import numpy as np
 import pytest
 
-from courtvision.broadcast.scoreboard import ScoreReading, ScoreRow
+from courtvision.broadcast.ocr import TextBox
+from courtvision.broadcast.scoreboard import ScoreReading, ScoreRow, cell_digit, parse_scoreboard
 from courtvision.eval.broadcast_check import consistent_scores, current_set_missing
 from courtvision.eval.six_videos import check_name_labels, names_rule, names_sample
 
@@ -144,3 +147,129 @@ def test_names_rule_reports_each_video_the_names_source_and_other_name_fields() 
     assert v.numbers["flights_with_other_name_fields_changed"] == {
         "server_name": 1, "hand": 0, "hand_source": 0, "stroke": 0, "stroke_wing": 1}
     assert v.decision == "accepted"  # wrong 12 -> 0, right 3 -> 3; the other name fields are reported, not judged
+
+
+# --- the cell recovery: Vision does not read the graphic's "0"s ------------------------------------------------
+
+BAR = (90, 35, 20)  # the graphic's dark blue (BGR)
+
+
+def _canvas() -> np.ndarray:
+    return np.full((720, 1280, 3), BAR, np.uint8)
+
+
+def _draw(img: np.ndarray, glyph: str, x: float, y: float, w: float = 0.012, h: float = 0.024) -> None:
+    H, W = img.shape[:2]
+    x0, y0, x1, y1 = int(x * W), int(y * H), int((x + w) * W), int((y + h) * H)
+    cx, cy, rx, ry = (x0 + x1) // 2, (y0 + y1) // 2, (x1 - x0) // 2, (y1 - y0) // 2
+    light = (240, 240, 240)
+    if glyph == "0":
+        cv2.ellipse(img, (cx, cy), (rx, ry), 0, 0, 360, light, 3)
+    elif glyph == "1":
+        cv2.rectangle(img, (cx - 2, y0), (cx + 2, y1), light, -1)
+    elif glyph == "6":  # a lower loop and a left stem: open at the top right
+        cv2.ellipse(img, (cx, cy + ry // 3), (rx, (2 * ry) // 3), 0, 0, 360, light, 3)
+        cv2.line(img, (x0 + 1, cy + ry // 3), (x0 + 1, y0), light, 3)
+    elif glyph == "two":  # two narrow glyphs side by side
+        cv2.rectangle(img, (x0, y0), (x0 + 3, y1), light, -1)
+        cv2.rectangle(img, (x1 - 3, y0), (x1, y1), light, -1)
+    elif glyph in ("box", "AD", "40"):  # a light points box with dark text
+        cv2.rectangle(img, (x0 - 4, y0 - 4), (x1 + 8, y1 + 4), light, -1)
+        cv2.putText(img, "15" if glyph == "box" else glyph, (x0, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (20, 20, 20), 2)
+    else:  # a wide filled glyph (another digit's ink)
+        cv2.rectangle(img, (x0, y0), (x1, y1), light, -1)
+
+
+def test_a_cell_reads_as_a_ring_a_bar_empty_or_unknown_from_its_pixels() -> None:
+    for glyph, want in (("0", "0"), ("1", "1"), ("box", "?"), ("AD", "?"), ("40", "?"), ("solid", "?"),
+                        ("6", "?"), ("two", "?")):
+        img = _canvas()
+        _draw(img, glyph, 0.5, 0.5)
+        assert cell_digit(img, 0.495, 0.517, 0.498, 0.028) == want, glyph
+    assert cell_digit(_canvas(), 0.495, 0.517, 0.498, 0.028) == "empty"
+    assert cell_digit(_canvas(), 1.2, 1.3, 0.5, 0.028) == "?"  # outside the frame: nothing to read
+
+
+def _graphic(img: np.ndarray, top: list, bottom: list, pts: tuple[str, str], hidden: tuple[str, str] | None):
+    """Boxes of a two-row graphic with set columns at x = 0.259 + k * 0.0195, the points after them; ``hidden``
+    is drawn as pixels in the next column but given no box (as Vision leaves the "0"s out)."""
+    boxes = [TextBox("1 SINNER ITA", 1, 0.06, 0.832, 0.092, 0.026),
+             TextBox("2 ALCARAZ ESP", 1, 0.06, 0.872, 0.115, 0.026)]
+    for row, (vals, y) in enumerate(((top, 0.834), (bottom, 0.874))):
+        for k, v in enumerate(vals):
+            boxes.append(TextBox(str(v), 1, 0.259 + k * 0.0195, y, 0.011, 0.024))
+        n = len(vals)
+        if hidden is not None:
+            _draw(img, hidden[row], 0.259 + n * 0.0195, y)
+        boxes.append(TextBox(pts[row], 1, 0.259 + (n + (hidden is not None)) * 0.0195 + 0.012, y, 0.016, 0.024))
+    return boxes
+
+
+def test_the_parser_recovers_a_left_out_current_set_from_the_cells_pixels() -> None:
+    img = _canvas()
+    r = parse_scoreboard(_graphic(img, [2, 6, 1], [6, 3, 6], ("15", "30"), ("1", "0")), img, 10, 1.0)
+    assert r is not None and r.rows[0].games == (2, 6, 1) and r.next_set == (1, 0)  # the reading itself is as read
+    img = _canvas()
+    r = parse_scoreboard(_graphic(img, [2, 6, 1], [6, 3, 6], ("AD", "40"), ("0", "0")), img, 10, 1.0)
+    assert r is not None and r.next_set == (0, 0)
+
+
+def test_no_recovery_without_a_finished_set_a_point_box_room_for_a_cell_or_a_readable_cell() -> None:
+    img = _canvas()
+    r = parse_scoreboard(_graphic(img, [2, 6, 1], [6, 3, 5], ("15", "30"), ("0", "0")), img, 10, 1.0)
+    assert r is not None and r.next_set is None  # 1-5: the set is still being played
+    img = _canvas()
+    r = parse_scoreboard(_graphic(img, [6], [3], ("15", "30"), ("0", "0")), img, 10, 1.0)
+    assert r is not None and r.next_set == (0, 0)  # one set column is enough: the cell is found by the gap
+    img = _canvas()
+    r = parse_scoreboard(_graphic(img, [2, 6, 1], [6, 3, 6], ("15", "30"), None), img, 10, 1.0)
+    assert r is not None and r.next_set is None  # the points box right after the last set: no room for a cell
+    img = _canvas()
+    r = parse_scoreboard(_graphic(img, [2, 6], [6, 3], ("15", "30"), ("0", "solid")), img, 10, 1.0)
+    assert r is not None and r.next_set is None  # one cell unreadable: nothing is guessed
+    r = parse_scoreboard(_graphic(_canvas(), [2, 6], [6, 3], ("15", "30"), ("0", "0")), None, 10, 1.0)
+    assert r is not None and r.next_set is None  # no image
+
+
+def test_the_filter_keeps_a_reading_whose_left_out_set_was_recovered_and_counts_it() -> None:
+    from dataclasses import replace
+
+    lost = _r(3.0, (2, 6, 1), (6, 3, 6))  # 1-6 over, 15-30 played
+    back = replace(lost, next_set=(1, 0))
+    assert consistent_scores([back])[0].rows[0].games == (2, 6, 1, 1)
+    assert consistent_scores([back])[0].rows[1].games == (6, 3, 6, 0)
+    assert consistent_scores([lost]) == []  # not recovered: dropped as before
+    later = _r(4.0, (2, 6, 1), (6, 3, 6), "0", "0")  # three sets after a recovered four-set reading: a misread
+    assert [r.t for r in consistent_scores([back, later])] == [3.0]
+
+
+def test_a_blank_points_box_in_one_row_uses_the_other_rows_box_to_find_the_cell() -> None:
+    img = _canvas()
+    boxes = _graphic(img, [2, 6, 1], [6, 3, 6], ("AD", "40"), ("0", "0"))
+    top_points = [b for b in boxes if b.text == "AD"]
+    assert len(top_points) == 1
+    boxes = [b for b in boxes if b.text != "AD"]  # the other player's box is blank at AD: Vision gives no text box
+    r = parse_scoreboard(boxes, img, 10, 1.0)
+    assert r is not None and r.rows[0].points is None and r.rows[1].points == "40"
+    assert r.next_set == (0, 0)
+
+
+def test_a_cache_from_before_next_set_is_read_again_only_when_the_candidate_is_on(tmp_path, monkeypatch) -> None:
+    import pickle
+
+    import courtvision.pipeline as pl
+    from courtvision.broadcast.scoreboard import BroadcastScan
+
+    old = _r(1.0, (6,), (3,))
+    object.__delattr__(old, "next_set")  # as unpickled from a cache written before the field existed
+    assert "next_set" not in vars(old) and old.next_set is None  # the class default still answers
+    with open(tmp_path / "broadcast.pkl", "wb") as f:
+        pickle.dump({"video_sha256": "sha", "scan": BroadcastScan(15, 1, scores=[old])}, f)
+    fresh = BroadcastScan(15, 1, scores=[_r(1.0, (6,), (3,))])
+    calls: list = []
+    monkeypatch.setattr(pl, "scan_video", lambda video, fps: calls.append(video) or fresh)
+    off = pl._broadcast_scan("v.mp4", 30.0, tmp_path, "sha", pl.PipelineConfig(reuse_perception=True))
+    assert off.scores[0] is not None and calls == []  # the default reuses the old cache
+    on = pl._broadcast_scan("v.mp4", 30.0, tmp_path, "sha", pl.PipelineConfig(reuse_perception=True,
+                                                                               score_consistency=True))
+    assert on is fresh and calls == ["v.mp4"]  # the candidate reads the graphic again

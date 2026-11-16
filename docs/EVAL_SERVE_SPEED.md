@@ -355,3 +355,38 @@ six points; all are changed, the thresholds are not:
   videos count as used); before, it wrote the result without them, and the scored-once rule then barred them for good.
 - **The text "sides stay as read"** refers to the report's `broadcast` section (score changes, serve sides, speeds),
   which is unchanged; a flight's `server_name` is among the names.
+
+### Second change to the fourth candidate before any download (2026-11-16): the left-out column read from its pixels
+
+Looking at the frames behind the remaining wrong names showed why the current set's column is lost: the graphic
+shows it ("2 6 1 1 / 6 3 6 0"), but Apple Vision does not read its "0"s (nor, often, a "1" next to them), at any
+crop size (`docs/ARCHITECTURE.md`, Known issues). So the candidate now reads that cell from its pixels before
+giving up on the reading: where the last set read is finished while a point is played, the cell is looked for in
+the gap between the last set column and the points box (the two rows' points boxes are aligned, so a blank one
+uses the other's position; a gap too narrow for a cell holds none), and classified in both rows
+(`broadcast/scoreboard.py` `cell_digit`, done while the graphic is read and kept as the reading's `next_set`):
+"1" a narrow bar; "0" a closed ring, both sides inked down its whole body and the middle empty; anything else,
+a light cell (a points box), two glyphs in the window or a fragment, is unknown. With "0" or "1" in both rows the
+column is restored, otherwise the reading is dropped as before. The reading itself, and so every default output,
+is unchanged.
+
+**Review before any download.** An adversarial review of the first form of this change (a column step measured
+from the set columns, a simpler ring test) found that light points boxes with dark text ("AD", "40") read as "0",
+that a step from two columns could be 40 % short or 64 % long, and that other digits sometimes read as "0". The
+form above answers each (no step at all; light cells, two-glyph windows and open shapes refused), and an old cache
+without `next_set` is read again when the candidate is on. Measured on the six broadcast clips' stored text boxes
+(`devir/scratch/ocr_confusion_dev.py`), treating each last set column Vision did read as if it had been left out:
+of 331 cells holding 2–6, none read as "0" or "1" (before the review: 45); of 89 holding "1", 83 read as "1", none
+as "0". Vision reads no "0" there, so the "0"s were checked by eye: six recovered readings drawn at random all
+match the graphic.
+
+A second look by the same reviewer found the points boxes refused everywhere (none of 1 420 read as "0" on the six
+clips), no cell holding 2–7 read as "0" or "1" (about 930), and the recoveries on the other clips matching their
+frames (the 2024 final's 10 as 1-0, the quarter-final's 3 as 0-1). Left as accepted: a thin, full-height light
+mark in a wide gap (a separator) would read as "1"; the US Open graphic of all six videos has none. A real "0"'s
+recall cannot be measured on Vision's own readings (it reads none), only by eye.
+
+Development, same 279 reference flights, the graphic read again with this code: right 220, wrong 18, unnamed 41
+(the first version: 181 / 27 / 71; the default 205 / 72 / 2); 52 of the 68 readings with a lost column got it back
+(39 as 0-0, 12 as 1-0, one 1-1). Still development numbers on a clip used to design the change. The labels, the
+rule and its thresholds are as above, unchanged.

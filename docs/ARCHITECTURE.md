@@ -252,8 +252,9 @@ Also from the pipeline review (2026-11-14), checked and left:
   6 3 6 0", and the fourth set's column is missing from every reading: its "0"s are never read, its "1" only
   sometimes. Re-reading a crop of the graphic at 1, 2 and 3 times the size brings back some "1"s, never the "0"s,
   and glues "2 6" into "26", so a re-read cannot restore the column. A "1 0" column lost this way turns the
-  end-change count odd and puts the names on the wrong ends; this is what `--score-consistency` (fourth candidate
-  in `docs/EVAL_SERVE_SPEED.md`) takes the names away from, rather than guess the column.
+  end-change count odd and puts the names on the wrong ends. The cell's pixels do tell: a "0" is a ring, a "1" a
+  narrow bar (`broadcast/scoreboard.py` `cell_digit`); `--score-consistency` (fourth candidate in
+  `docs/EVAL_SERVE_SPEED.md`) restores the column from them and drops the reading where they do not read.
 - `broadcast/scoreboard.py`: a player name with a dotted initial ("ALCARAZ G.", "J.-W. TSONGA") is not read
   as a name, and the fuzzy match for the speed board's label also accepts look-alike words ("SERVICE",
   "SPEEDY"). Neither occurs in the six broadcast clips: their names are read as surnames or full names (no

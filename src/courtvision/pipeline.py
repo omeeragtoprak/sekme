@@ -354,7 +354,8 @@ def _broadcast_scan(video, fps: float, out: Path, video_sha: str, cfg: PipelineC
     if cfg.reuse_perception and cache.is_file():
         with open(cache, "rb") as f:  # local cache written by this pipeline (trusted)
             cached = pickle.load(f)
-        if cached.get("video_sha256") == video_sha:
+        stale = cfg.score_consistency and any("next_set" not in vars(r) for r in cached["scan"].scores)
+        if cached.get("video_sha256") == video_sha and not stale:  # older caches lack what the candidate reads
             return cached["scan"]
     scan = scan_video(video, fps)
     with open(cache, "wb") as f:
