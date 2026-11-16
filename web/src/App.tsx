@@ -110,6 +110,7 @@ function PageState({ children, alert }: { children: ReactNode; alert?: boolean }
 export default function App() {
   const [health, setHealth] = useState<Async<Health>>({ status: "loading" });
   const [runs, setRuns] = useState<Async<RunSummary[]>>({ status: "loading" });
+  const [runsNotice, setRunsNotice] = useState<string | null>(null); // a failed refresh of a list already shown
   const [runId, setRunId] = useState<string | null>(null);
   const [report, setReport] = useState<Async<Report>>({ status: "idle" });
   const [frames, setFrames] = useState<Async<Frames>>({ status: "idle" });
@@ -142,6 +143,7 @@ export default function App() {
     try {
       const list = sortRuns(await api.runs(ctrl.signal));
       setRuns({ status: "ready", data: list });
+      setRunsNotice(null);
       setRunId((prev) => {
         if (preferId && list.some((r) => r.id === preferId)) return preferId;
         if (prev && list.some((r) => r.id === prev)) return prev;
@@ -149,8 +151,9 @@ export default function App() {
       });
     } catch (err) {
       if (isAbort(err)) return;
-      // A failed refresh keeps the list already shown (the next refresh retries); only a first load shows the error.
+      // A failed refresh keeps the list already shown and says so; only a first load shows the error page.
       setRuns((prev) => (prev.status === "ready" ? prev : { status: "error", error: errorText(err) }));
+      setRunsNotice(`liste yenilenemedi (${errorText(err)}); sayfayı yenileyin`);
     }
   }, []);
 
@@ -522,6 +525,7 @@ export default function App() {
               active={mode === "review"}
               labelMode={labelingId !== null && labelingId === selectedFlightId}
               onLabel={onLabel}
+              onLabelIgnored={setLabelError}
               onCancelLabel={onCancelLabel}
             />
             <Timeline
@@ -579,6 +583,7 @@ export default function App() {
     <div className={`app${ui.sidebar ? "" : " app--no-sidebar"}${ui.inspector ? "" : " app--no-inspector"}`}>
       <Toolbar
         runs={runs}
+        runsNotice={runsNotice}
         runId={runId}
         onSelectRun={setRunId}
         media={media}

@@ -187,31 +187,39 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
     app = FastAPI(title="SEKME Review Room", version=__version__)
     hosts = set(allowed_hosts or LOCAL_HOSTS)
 
-    @app.middleware("http")
-    async def local_and_same_origin(request: Request, call_next):
+    def refused(request: Request) -> JSONResponse | None:
         host = request.headers.get("host", "")
         # DNS rebinding: a page on another name that resolves to this machine is not answered.
         if "*" not in hosts and host_name(host) not in hosts:
             return JSONResponse({"detail": "geçersiz sunucu adı"}, status_code=400)
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return None
         # A page on another site can post a form here without a preflight: a write must come from this origin
         # (same host and port). Requests without an Origin (curl, scripts) are not from a web page.
         origin = request.headers.get("origin")
-        writing = request.method not in ("GET", "HEAD", "OPTIONS")
-        if writing and ((origin is not None and urlparse(origin).netloc.lower() != host.lower())
-                        or request.headers.get("sec-fetch-site") == "cross-site"):
+        if ((origin is not None and urlparse(origin).netloc.lower() != host.lower())
+                or request.headers.get("sec-fetch-site") == "cross-site"):
             return JSONResponse({"detail": "başka bir siteden gelen istek reddedildi"}, status_code=403)
-        # A body is buffered by the framework before a route sees it: refuse a declared oversize one unread.
-        if writing:
-            limit = MAX_UPLOAD_BYTES + 1024**2 if request.url.path == "/api/jobs" else MAX_JSON_BYTES
-            try:
-                declared = int(request.headers.get("content-length") or 0)
-            except ValueError:
-                return JSONResponse({"detail": "geçersiz içerik uzunluğu"}, status_code=400)
-            if declared > limit:
-                return JSONResponse({"detail": "dosya çok büyük" if request.url.path == "/api/jobs"
-                                     else "istek çok büyük"}, status_code=413)
-        response = await call_next(request)
-        response.headers.update(SECURITY_HEADERS)
+        # A body is buffered by the framework before a route sees it: a write must declare its length (browsers
+        # always do) and an oversize one is refused unread.
+        upload = request.url.path == "/api/jobs"
+        length = request.headers.get("content-length")
+        if length is None:
+            if request.headers.get("transfer-encoding"):
+                return JSONResponse({"detail": "içerik uzunluğu belirtilmeli"}, status_code=411)
+            return None
+        try:
+            declared = int(length)
+        except ValueError:
+            return JSONResponse({"detail": "geçersiz içerik uzunluğu"}, status_code=400)
+        if declared > (MAX_UPLOAD_BYTES + 1024**2 if upload else MAX_JSON_BYTES):
+            return JSONResponse({"detail": "dosya çok büyük" if upload else "istek çok büyük"}, status_code=413)
+        return None
+
+    @app.middleware("http")
+    async def local_and_same_origin(request: Request, call_next):
+        response = refused(request) or await call_next(request)
+        response.headers.update(SECURITY_HEADERS)  # on refusals too
         return response
 
     def run_dir(run_id: str) -> Path:
@@ -433,16 +441,19 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
                     analyze_fn(dest, runs_root / run_id, prog)
                     job.run_id, job.status, job.stage, job.progress = run_id, "done", "done", 1.0
                 except UnreadableVideoError as exc:  # the upload is not a usable video: say so and drop it
-                    job.status, job.error = "error", str(exc).replace(dest.name, shown_name, 1)
+                    job.status, job.error = "error", scrub(str(exc)).replace(dest.name, shown_name, 1)
                     dest.unlink(missing_ok=True)
                 except MissingModelError as exc:  # this server lacks a network: say which (the upload is fine)
-                    job.status, job.error = "error", str(exc)
+                    job.status, job.error = "error", scrub(str(exc))
                 except Exception as exc:  # reported to the client through the job status, without server paths
-                    text = f"{type(exc).__name__}: {exc}"
-                    for folder, shown in ((runs_root / run_id, run_id), (dest, shown_name), (runs_root, "runs"),
-                                          (uploads, "uploads")):
-                        text = text.replace(str(folder), shown)
-                    job.status, job.error = "error", text
+                    job.status, job.error = "error", scrub(f"{type(exc).__name__}: {exc}")
+
+        def scrub(text: str) -> str:
+            """The run's and upload's folders by their names, never as server paths (whole path parts only)."""
+            for folder, shown in ((runs_root / run_id, run_id), (dest, shown_name), (runs_root, "runs"),
+                                  (uploads, "uploads")):
+                text = re.sub(re.escape(str(folder)) + r"(?![^/\\'\"\s:,)\]])", shown.replace("\\", "\\\\"), text)
+            return text
 
         threading.Thread(target=work, daemon=True).start()
         return {"job_id": job.id}

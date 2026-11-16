@@ -74,6 +74,8 @@ type Props = {
   /** Ground-truth labelling: clicks on the video report the frame and the pixel. */
   labelMode?: boolean;
   onLabel?: (frame: number, px: [number, number]) => void;
+  /** A label click that could not be taken (the frame is still loading), with the reason to show. */
+  onLabelIgnored?: (reason: string) => void;
   onCancelLabel?: () => void;
 };
 
@@ -303,6 +305,7 @@ export default function VideoStage({
   active = true,
   labelMode = false,
   onLabel,
+  onLabelIgnored,
   onCancelLabel,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -665,7 +668,10 @@ export default function VideoStage({
             onPointerLeave={() => setLoupe(null)}
             onClick={(e) => {
               // While a seek is in flight the frame number is already the new one but the picture is the old one.
-              if (videoRef.current?.seeking) return;
+              if (videoRef.current?.seeking) {
+                onLabelIgnored?.("Kare yükleniyor; görüntü gelince yeniden tıklayın.");
+                return;
+              }
               const [u, v] = videoPx(e);
               onLabel?.(frameRef.current, [Math.round(u * 10) / 10, Math.round(v * 10) / 10]);
             }}

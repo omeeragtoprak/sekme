@@ -145,3 +145,49 @@ def test_an_upload_that_fails_mid_write_is_removed(tmp_path: Path, monkeypatch) 
     r = c.post("/api/jobs", files={"file": ("a.mp4", b"x" * 100, "video/mp4")})
     assert r.status_code == 507
     assert list((tmp_path / "up").iterdir()) == []  # the partial file is gone
+
+
+def test_the_middlewares_own_refusals_carry_the_security_headers_too(tmp_path: Path) -> None:
+    _run(tmp_path / "runs")
+    c = _client(tmp_path)
+    body = {"flight_id": 1, "decision": "confirm", "reviewer": "r"}
+    refusals = [
+        c.get("/api/health", headers={"host": "evil.example"}),  # 400: not a local name
+        c.post("/api/runs/clip1/reviews", json=body, headers={"origin": "http://evil.example"}),  # 403
+        c.post("/api/runs/clip1/reviews", json={**body, "note": "x" * (app_module.MAX_JSON_BYTES + 1)}),  # 413
+        c.post("/api/runs/clip1/reviews", content=iter([json.dumps(body).encode()]),
+               headers={"content-type": "application/json"}),  # 411: chunked, no length
+    ]
+    assert [r.status_code for r in refusals] == [400, 403, 413, 411]
+    for r in refusals:
+        for k, v in SECURITY_HEADERS.items():
+            assert r.headers.get(k) == v, (r.status_code, k)
+
+
+def test_a_write_must_declare_its_length_but_a_write_without_a_body_is_not_refused(tmp_path: Path) -> None:
+    run = _run(tmp_path / "runs")
+    c = _client(tmp_path)
+    parts = [b'{"flight_id": 1, ', b'"decision": "confirm", "reviewer": "r"}']
+    r = c.post("/api/runs/clip1/reviews", content=iter(parts), headers={"content-type": "application/json"})
+    assert r.status_code == 411 and r.json()["detail"] == "içerik uzunluğu belirtilmeli"
+    assert not (run / "reviews.jsonl").exists()
+    assert c.post("/api/runs/clip1/reviews").status_code == 422  # no body at all: the route says what is missing
+
+
+def test_server_paths_are_replaced_only_as_whole_path_parts_in_every_kind_of_job_error(tmp_path: Path) -> None:
+    from courtvision.errors import MissingModelError, UnreadableVideoError
+
+    sibling = f"{tmp_path / 'runs'}2/other"  # a folder that only starts like the runs folder is not the runs folder
+
+    def fail(kind):
+        def fn(video: Path, out: Path, progress) -> None:
+            raise kind(f"cannot use {out / 'x.json'} beside {sibling} from {video}")
+        return fn
+
+    for kind in (RuntimeError, MissingModelError, UnreadableVideoError):
+        c = _client(tmp_path / kind.__name__, analyze_fn=fail(kind))
+        job = _wait(c, c.post("/api/jobs", files={"file": ("clip.mp4", b"x", "video/mp4")}).json()["job_id"])
+        err = job["error"]
+        assert str(tmp_path / kind.__name__) not in err, (kind, err)
+        assert f"{sibling}" in err.replace(str(tmp_path / kind.__name__ / "runs"), "<runs>"), (kind, err)
+        assert "/x.json beside" in err and err.endswith("from clip.mp4"), (kind, err)

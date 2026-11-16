@@ -18,6 +18,8 @@ import { LAYER_LABELS, type Layers } from "./VideoStage";
 
 type Props = {
   runs: Async<RunSummary[]>;
+  /** A failed refresh of the list already shown (the list stays). */
+  runsNotice?: string | null;
   runId: string | null;
   onSelectRun: (id: string) => void;
   media: MediaName[];
@@ -103,6 +105,7 @@ function ToolbarImpl(p: Props) {
   } else if (p.runs.status === "error") {
     titleSub = "Analizler alınamadı";
   }
+  if (p.runsNotice && p.runs.status === "ready") titleSub = `${titleSub} · ${p.runsNotice}`;
 
   return (
     <header className="toolbar">
