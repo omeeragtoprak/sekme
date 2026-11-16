@@ -278,6 +278,21 @@ Also from the pipeline review (2026-11-14), checked and left:
   refusals carry the same headers, and a write that sends a body without declaring its length (chunked) is
   refused (411) rather than buffered past the limit. Left, as accepted for a local tool: parallel uploads each
   pass the free-space check, and a link swapped in between the check and the open needs local write access.
+- `events/hits.py` misses far-side strokes (development finding, TrackNet games 1–7, 2026-11-16,
+  `devir/scratch/missed_strokes_dev.py`): of 367 labelled strokes inside measurable segments, 270 have a hit within
+  3 frames; of the 97 others, 87 are by the far player, 93 have the ball detected on 10 or more of the 13 frames
+  around the contact, and 46 have a hit 4–8 frames away (late or early, not missing). Likely cause: the detector
+  looks for a reversal of the ball's image-y direction, but a far player's stroke towards the near side keeps
+  rising in the image for a while after contact, so the reversal comes at the apex, not at the contact. A
+  candidate that also uses the 2D velocity break at contact (a turn in x or a jump in speed) would need its rule
+  written before a test; the E2E-Spot test matches (two candidate slots left, `docs/EVAL_SPOT.md`) measure
+  exactly stroke spotting. Development candidate `--far-stroke-breaks` (off by default; `events/hits.py`
+  `far_breaks`: a turn above 60° or a speed change above 2.5 times, fitted over 3 detected frames on each side,
+  next to the far player's box; added only where no hit is within 8 frames at 30 fps), events re-run from the
+  caches of games 1–7 (`devir/scratch/far_breaks_e2e_dev.py`): strokes with a hit within 3 frames 269 → 285 of
+  374 (far 161 → 177 of 253), first bounces 220 → 223 of 323, decisive calls 228 → 232 (all consistent with the
+  labels both ways), false alarms 29 → 30, hits 434 → 463. Thresholds chosen on games 1–7; its test needs held-out
+  events (E2E-Spot) and a rule written first.
 - `calib/line_refine.py`: a ridge cut by the end of its search window is still returned (biased towards the
   window, e.g. −8.75 px for a ridge centred at −9) instead of being refused; and the colour histogram behind the
   shot-cut test (`perception/court.py`) is sharp enough that a flat, untextured frame made 15 grey levels

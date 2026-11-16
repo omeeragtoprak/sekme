@@ -81,7 +81,8 @@ MAX_FAILED_IN_ROW = 3
 MAX_FAILED_SHARE = 0.10
 # CLI flag -> the report's "candidates" record of a run made with it.
 FLAG_KEYS = {"toss-bridge": "serve_toss_bridge_s", "pin-serve-height": "pin_serve_height",
-             "fps-scaled-thresholds": "fps_scaled_thresholds", "player-size-from-camera": "player_size_from_camera"}
+             "fps-scaled-thresholds": "fps_scaled_thresholds", "player-size-from-camera": "player_size_from_camera",
+             "far-stroke-breaks": "far_stroke_breaks"}
 SCORER_CODE = ["src", "scripts/eval_spot.py"]
 _CODE: list[str] = []  # the analysis code, fixed when a run starts
 
@@ -374,7 +375,8 @@ def compare(base: dict, cand: dict, pm_base: dict, pm_cand: dict) -> dict:
     candidate's own rule), pooled and per match, in points, with the matched counts. The decision is the
     candidate's written rule, applied to these numbers."""
     keys = {"serve_recall": ("serve", "recall"), "serve_precision_excl_faults": ("serve", "precision_excl_faults"),
-            "first_bounce_recall": ("bounce", "first_recall"), "bounce_precision": ("bounce", "precision")}
+            "first_bounce_recall": ("bounce", "first_recall"), "bounce_precision": ("bounce", "precision"),
+            "stroke_recall": ("stroke", "recall"), "stroke_precision": ("stroke", "precision")}
 
     def one(b: dict, c: dict) -> dict:
         out = {k: {"baseline": b[a][f], "candidate": c[a][f], "change_points": 100 * (c[a][f] - b[a][f])}

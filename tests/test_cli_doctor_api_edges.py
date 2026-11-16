@@ -75,6 +75,7 @@ def test_analyze_without_flags_hands_the_pipeline_its_defaults(monkeypatch, caps
     ("--fps-scaled-thresholds", "fps_scaled_thresholds", True),
     ("--player-size-from-camera", "player_size_from_camera", True),
     ("--score-consistency", "score_consistency", True),
+    ("--far-stroke-breaks", "far_stroke_breaks", True),
     ("--toss-bridge", "serve_toss_bridge_s", 0.3)])
 def test_each_switch_changes_exactly_its_own_setting(monkeypatch, flag: str, field: str, value) -> None:
     _, seen = _analyze(monkeypatch, ["v.mp4", flag])
@@ -272,7 +273,7 @@ def test_parser_defaults_of_every_subcommand(monkeypatch) -> None:
         "cmd": "analyze", "video": "v.mp4", "out": None, "device": "auto", "no_render": False, "no_broadcast": False,
         "reuse_perception": False, "ball_model": None, "ball_stride": 0, "toss_bridge": False,
         "pin_serve_height": False, "player_size_from_camera": False, "fps_scaled_thresholds": False,
-        "score_consistency": False, "fit_workers": None, "model": []}
+        "score_consistency": False, "far_stroke_breaks": False, "fit_workers": None, "model": []}
     assert _namespace(monkeypatch, "serve", []) == {"cmd": "serve", "runs": "runs", "host": "127.0.0.1", "port": 8765,
                                                     "device": "auto"}
     assert _namespace(monkeypatch, "doctor", []) == {"cmd": "doctor", "runs": "runs"}

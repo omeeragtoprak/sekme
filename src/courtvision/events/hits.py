@@ -5,6 +5,7 @@ The reversal must persist, which rejects the short image-space wobble a bounce p
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -98,3 +99,59 @@ def detect_hits_in_segments(ball: BallTrack, players: dict[str, PlayerTrack], fp
     for s, e in segments:
         hits += detect_hits(_masked(ball, s, e), players, fps, frame_h)
     return hits
+
+
+# Candidate (--far-stroke-breaks, off by default; docs/ARCHITECTURE.md Known issues): a far player's stroke towards
+# the near side keeps rising in the image after contact, so the image-y reversal above comes at the apex, not at the
+# contact, and many far strokes are missed. A break in the ball's 2D image velocity next to the far player marks them.
+BREAK_ANGLE_DEG = 60.0
+BREAK_SPEED_RATIO = 2.5
+
+
+def _velocity(xy: np.ndarray, idx: list[int]) -> np.ndarray | None:
+    if len(idx) < 2:
+        return None
+    t = np.array(idx, float)
+    return np.array([np.polyfit(t, xy[idx, d], 1)[0] for d in (0, 1)])
+
+
+def far_breaks(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
+               segments: list[tuple[int, int]]) -> list[Hit]:
+    """Frames where the detected ball's image velocity turns by more than BREAK_ANGLE_DEG or changes speed by more
+    than BREAK_SPEED_RATIO times, over k detected frames on each side, with the ball next to the far player's box;
+    breaks within 0.2 s are merged (the strongest kept). Each is a far hit."""
+    if "far" not in players:
+        return []
+    k = max(3, math.ceil(0.1 * fps - 1e-9))  # 0.1 s rounded up: 3 at 25 and 30 fps, 6 at 60
+    merge = max(2, int(round(0.2 * fps)))
+    xy, src, boxes = ball.xy, ball.source, players["far"].boxes
+    out: list[tuple[int, float]] = []
+    for s, e in segments:
+        for i in range(s + k, e - k):
+            if src[i] != 1 or not np.all(np.isfinite(boxes[i])) or not _near_box(xy[i], boxes[i]):
+                continue
+            a = _velocity(xy, [j for j in range(i - k, i + 1) if src[j] == 1])
+            b = _velocity(xy, [j for j in range(i, i + k + 1) if src[j] == 1])
+            if a is None or b is None:
+                continue
+            na, nb = float(np.linalg.norm(a)), float(np.linalg.norm(b))
+            if na < 1.0 or nb < 1.0:
+                continue  # about still: no direction to turn
+            angle = float(np.degrees(np.arccos(np.clip(a @ b / (na * nb), -1.0, 1.0))))
+            ratio = max(na, nb) / min(na, nb)
+            if angle <= BREAK_ANGLE_DEG and ratio <= BREAK_SPEED_RATIO:
+                continue
+            strength = angle + 30.0 * (ratio - 1.0)
+            if out and i - out[-1][0] <= merge:
+                if strength > out[-1][1]:
+                    out[-1] = (i, strength)
+            else:
+                out.append((i, strength))
+    return [Hit(i, "far", xy[i].copy(), True) for i, _ in out]
+
+
+def add_far_breaks(hits: list[Hit], breaks: list[Hit], fps: float) -> list[Hit]:
+    """The breaks with no hit already within 8 frames at 30 fps (0.27 s) join the hits, in frame order."""
+    near = max(2, int(round(8 * fps / 30)))
+    new = [b for b in breaks if not any(abs(b.frame - h.frame) <= near for h in hits)]
+    return sorted([*hits, *new], key=lambda h: h.frame)

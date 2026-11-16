@@ -225,3 +225,44 @@ A second review (2026-11-16, still before any download) read `src/courtvision/ev
 measurement and rules above and found it doing what they say; its edges (the 0.1 s and 0.5 s windows and the
 sweep at 25 and 29.97 fps, the fault window, pooling, F1 and the undefined cases) are pinned in
 `tests/test_scorers_edges.py`.
+
+## Candidate 2 (test slot 1): far strokes from a 2D velocity break (rule written 2026-11-16, before any download)
+
+**Change** (`sekme analyze --far-stroke-breaks`; off by default; `events/hits.py` `far_breaks`, `add_far_breaks`):
+the hit detector looks for a reversal of the ball's image-y direction, but a far player's stroke towards the near
+side keeps rising in the image after contact, so the reversal comes at the apex and many far strokes are missed or
+found late. The candidate also marks a far hit where the detected ball's image velocity, fitted over 3 detected
+frames on each side (0.1 s rounded up: 3 at 25 and 30 fps, 6 at 60), turns by more than 60° or changes speed by more than 2.5 times next to the far
+player's box, merging breaks within 0.2 s; such a hit is added only where no hit is within 8 frames at 30 fps.
+
+**Why** (development data only, TrackNet games 1–7, events re-run from their caches;
+`devir/scratch/far_breaks_e2e_dev.py`): labelled strokes with a hit within 3 frames 269 → 285 of 374 (far strokes
+161 → 177 of 253); first bounces 220 → 223 of 323; decisive calls 228 → 232, all consistent with the labels both
+ways; false alarms 29 → 30; hits 434 → 463. Of the 97 strokes missed before, 87 were by the far player with the
+ball well detected (`docs/ARCHITECTURE.md`, Known issues). Thresholds were chosen on those games. It was developed
+on TrackNet, not on the dev matches of rule 2: these test matches are its first contact with E2E-Spot footage.
+
+**Rule** (the form of rule 2 is for bounce changes; this candidate changes strokes, so its own rule is):
+on the four test matches, default against `--far-stroke-breaks`, it becomes the default only if all hold:
+
+1. pooled **stroke recall** (0.1 s) rises by **at least 2 points**, rises in **at least 3** of the 4 test matches
+   and falls in **none**;
+2. pooled **stroke precision** falls by **no more than 2 points**;
+3. pooled **first-bounce recall** falls by **no more than 1 point**, and pooled **bounce precision** by no more
+   than 1 point;
+4. pooled **serve recall** (flight serves) falls by **no more than 1 point**.
+
+Otherwise it is rejected: its code is removed and the result stays here. It uses test slot 1
+(`results/spot_test_candidates.json`). Reported, not used: the side agreement and timing of the matched strokes,
+far and near strokes separately where the labels name the side, and the dev matches' numbers. The scorer's
+comparison now also lists stroke recall and precision (`scripts/eval_spot.py` `compare`), added for this rule.
+
+**Amended before any download (2026-11-16, after an adversarial review).** "Points" are absolute percentage points,
+decided on the unrounded `change_points` of the result file, not on the rounded printout. The window was 2 detected
+frames at 25 fps (`round(2.5)` is 2), not the 3 the text gave; it is now 0.1 s rounded up, 3 at 25 and 30 fps, which
+leaves the TrackNet numbers above (30 fps) unchanged. Criterion 1 asked only that no match fall, which a candidate
+that only adds hits nearly always meets; it now also needs a rise in at least 3 of the 4 matches. The candidate was
+developed on TrackNet rallies, not on these dev matches (rule 2), and E2E-Spot clips also show servers bouncing the
+ball before a serve: before its test run it is run on the dev matches (no slot); their numbers are recorded here,
+and any change they lead to is written down, with its rule, before the test. Strokes are matched by time only;
+their side agreement is reported, not used.
