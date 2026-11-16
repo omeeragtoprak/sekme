@@ -259,7 +259,15 @@ Also from the pipeline review (2026-11-14), checked and left:
   not listed (only `source.*` may point elsewhere, to the original video). The logs' reader now ends records only
   at "\n", skips a byte order mark, a line with invalid UTF-8 and anything that is not a record, instead of
   losing the first record or failing the whole log; and an append after a line torn by a crash first ends that
-  line, where the new record used to be glued to the fragment and lost with it.
+  line, where the new record used to be glued to the fragment and lost with it. A security review the same day
+  added: no page may frame the Review Room (`X-Frame-Options`, `frame-ancestors 'none'`; a framed page could be
+  clicked into reviews) and nothing is sniffed (`nosniff`); a write the browser marks `Sec-Fetch-Site:
+  cross-site` is refused like one with a foreign Origin; a body declared larger than its limit (an upload over
+  2 GiB plus 1 MiB of form, any other write over 1 MiB) is refused before the framework buffers it to disk; an
+  upload that fails mid-write leaves no partial file; and a failed analysis reports its error with the run and
+  upload names instead of server paths. Left, as accepted for a local tool: a body sent without a declared
+  length is still buffered before the limit applies, parallel uploads each pass the free-space check, and a
+  link swapped in between the check and the open needs local write access.
 - `calib/line_refine.py`: a ridge cut by the end of its search window is still returned (biased towards the
   window, e.g. −8.75 px for a ridge centred at −9) instead of being refused; and the colour histogram behind the
   shot-cut test (`perception/court.py`) is sharp enough that a flat, untextured frame made 15 grey levels

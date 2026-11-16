@@ -51,7 +51,12 @@ NO_WEB_APP_HTML = """<!doctype html><html lang="tr"><head><meta charset="utf-8">
 MEDIA_TYPES = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
                ".mkv": "video/x-matroska"}
 MAX_UPLOAD_BYTES = 2 * 1024**3
+MAX_JSON_BYTES = 1024**2  # every other write is a small JSON record
 MIN_FREE_BYTES = 1024**3  # an upload is refused when less than this is free on the upload disk
+# Sent with every response: no page may frame the Review Room (a framed page could be clicked into reviews it did
+# not mean), and no response is sniffed into another type.
+SECURITY_HEADERS = {"X-Frame-Options": "DENY", "Content-Security-Policy": "frame-ancestors 'none'",
+                    "X-Content-Type-Options": "nosniff"}
 # Names the Review Room answers to: a page on another name resolving to 127.0.0.1 (DNS rebinding) is refused.
 LOCAL_HOSTS = ["127.0.0.1", "localhost", "::1"]
 
@@ -191,10 +196,23 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         # A page on another site can post a form here without a preflight: a write must come from this origin
         # (same host and port). Requests without an Origin (curl, scripts) are not from a web page.
         origin = request.headers.get("origin")
-        if (request.method not in ("GET", "HEAD", "OPTIONS") and origin is not None
-                and urlparse(origin).netloc.lower() != host.lower()):
+        writing = request.method not in ("GET", "HEAD", "OPTIONS")
+        if writing and ((origin is not None and urlparse(origin).netloc.lower() != host.lower())
+                        or request.headers.get("sec-fetch-site") == "cross-site"):
             return JSONResponse({"detail": "başka bir siteden gelen istek reddedildi"}, status_code=403)
-        return await call_next(request)
+        # A body is buffered by the framework before a route sees it: refuse a declared oversize one unread.
+        if writing:
+            limit = MAX_UPLOAD_BYTES + 1024**2 if request.url.path == "/api/jobs" else MAX_JSON_BYTES
+            try:
+                declared = int(request.headers.get("content-length") or 0)
+            except ValueError:
+                return JSONResponse({"detail": "geçersiz içerik uzunluğu"}, status_code=400)
+            if declared > limit:
+                return JSONResponse({"detail": "dosya çok büyük" if request.url.path == "/api/jobs"
+                                     else "istek çok büyük"}, status_code=413)
+        response = await call_next(request)
+        response.headers.update(SECURITY_HEADERS)
+        return response
 
     def run_dir(run_id: str) -> Path:
         if not RUN_ID.match(run_id):
@@ -387,12 +405,16 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         job = Job(id=uuid.uuid4().hex[:12])
         dest = uploads / f"{job.id}{ext}"
         size = 0
-        with open(dest, "wb") as out:
-            while chunk := file.file.read(1 << 20):
-                size += len(chunk)
-                if size > MAX_UPLOAD_BYTES:
-                    break
-                out.write(chunk)
+        try:
+            with open(dest, "wb") as out:
+                while chunk := file.file.read(1 << 20):
+                    size += len(chunk)
+                    if size > MAX_UPLOAD_BYTES:
+                        break
+                    out.write(chunk)
+        except OSError as exc:  # e.g. the disk filled up mid-write: no partial file is left behind
+            dest.unlink(missing_ok=True)
+            raise HTTPException(507, "yükleme yazılamadı (disk dolu olabilir)") from exc
         if size > MAX_UPLOAD_BYTES:
             dest.unlink(missing_ok=True)
             raise HTTPException(413, "dosya çok büyük")
@@ -415,8 +437,12 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
                     dest.unlink(missing_ok=True)
                 except MissingModelError as exc:  # this server lacks a network: say which (the upload is fine)
                     job.status, job.error = "error", str(exc)
-                except Exception as exc:  # reported to the client through the job status
-                    job.status, job.error = "error", f"{type(exc).__name__}: {exc}"
+                except Exception as exc:  # reported to the client through the job status, without server paths
+                    text = f"{type(exc).__name__}: {exc}"
+                    for folder, shown in ((runs_root / run_id, run_id), (dest, shown_name), (runs_root, "runs"),
+                                          (uploads, "uploads")):
+                        text = text.replace(str(folder), shown)
+                    job.status, job.error = "error", text
 
         threading.Thread(target=work, daemon=True).start()
         return {"job_id": job.id}
