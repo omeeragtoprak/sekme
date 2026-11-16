@@ -80,7 +80,8 @@ def _pt(p: np.ndarray) -> tuple[int, int]:
 def panel(frame: np.ndarray, x0: int, y0: int, x1: int, y1: int, alpha: float = 0.72,
           color: tuple[int, int, int] = PANEL) -> None:
     x0, y0 = max(x0, 0), max(y0, 0)
-    x1, y1 = min(x1, frame.shape[1]), min(y1, frame.shape[0])
+    # Clipped from below too: a negative end would otherwise slice from the far edge of the frame.
+    x1, y1 = max(min(x1, frame.shape[1]), 0), max(min(y1, frame.shape[0]), 0)
     roi = frame[y0:y1, x0:x1]
     roi[:] = (roi * (1 - alpha) + np.array(color) * alpha).astype(np.uint8)
 

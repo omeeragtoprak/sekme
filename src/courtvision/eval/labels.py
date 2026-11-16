@@ -33,7 +33,7 @@ def px_scale_cm(H: list[float] | np.ndarray, px: tuple[float, float]) -> float:
 def zone_from_name(name: str) -> Zone:
     """Rebuild the zone a call was judged in from its name ("far-singles", "service-near-left", ...)."""
     parts = name.split("-")
-    if parts[0] == "service" and len(parts) == 3:
+    if parts[0] == "service" and len(parts) == 3 and parts[2] in ("left", "right"):
         # service_box names the box "left" when the server stands right of centre (x > 0).
         return service_box(Half(parts[1]), 1.0 if parts[2] == "left" else -1.0)
     if len(parts) == 2:

@@ -212,16 +212,42 @@ Also from the pipeline review (2026-11-14), checked and left:
 - `perception/ball.py`: the tracker keeps predicting across at most 5 missed frames (`i - last <= max_gap`, the
   frame of the miss's end counted), while gap filling fills up to 6. Found by a test review (2026-11-15) and
   pinned by a test (`tests/test_ball_tracking_edges.py`); making the two agree changes the tracker, so it needs
-  its own rule and was left.
+  its own rule and was left. Counted afterwards (2026-11-16, `devir/scratch/gap6_count.py`): after 6 missed
+  frames the next detection is picked without the gate and the 6 frames are then filled as if linked. The six
+  v4 broadcast runs (66 645 frames) have 63 filled gaps of exactly 6 frames, more than of 5 (55) or 4 (62), and
+  21 of them lie inside a flight that makes a call; TrackNet games 1–7 have one, inside no called flight. The
+  fit and the bounce use detected frames only, so such a gap can reach a call only through the hit detector,
+  which reads the filled track (`events/hits.py`, the image-y direction). A change would be judged on stroke
+  timing, which needs held-out events (the E2E-Spot test matches or the six US Open videos, both waiting for a
+  download yes); until then it stays.
 - `events/hits.py`: a direction reversal within about 5 frames of a measurable segment's edge is not detected (the
   direction window is cut off there), and one exactly on a boundary is found by neither side; so a stroke right
   next to a camera cut or a calibration gap is missed. Found by a test review (2026-11-15) and pinned
-  (`tests/test_events_edges.py`); changing it changes the event detection and needs its own rule.
+  (`tests/test_events_edges.py`); changing it changes the event detection and needs its own rule. Counted
+  afterwards on TrackNet games 1–7 (development; 2026-11-16, `devir/scratch/edge_strokes.py`): 4 of the 367
+  labelled strokes inside a measurable segment lie within 5 frames of its edge, and 2 of those 4 have no hit
+  within 3 frames (against 95 of the 363 further in). With at most two strokes to gain there, no rule was written.
 - `events/flights.py`: a leading flight (no hit before it) whose track runs on through a second shot takes its
   hitter from the first and last image rows, so it can come out on the wrong side and its fit is then rejected
-  (no call, not a wrong one). Noted by a test review (2026-11-15), not changed.
+  (no call, not a wrong one). Noted by a test review (2026-11-15), not changed. Counted afterwards on the six v4
+  broadcast runs (2026-11-16, `devir/scratch/leading_ender.py`, from their reports): 44 leading flights; 37 end in
+  a seen stroke and in 36 of them the inferred hitter is already that stroke's opponent, so taking the hitter
+  from the ender instead would change one flight, which is rejected (8 consistent observations) and makes no
+  call either way. The other 7 have no seen next stroke, where only the direction can decide; one of them makes a
+  call (US Open 2025 quarter-final, frames 3492–3528, IN), and its fit passed the plausibility gates. With at most
+  one flight to gain, no rule was written.
 - Poses are read by seeking to each hit frame; on the 60 fps 1080p footage 25 of 25 sampled frames were
   identical to sequential decoding, so this was not changed.
+- `analytics/kinematics.py` (player speed and distance, never a call): the outlier filter looks at 9 frames, so
+  a box that jumps onto someone else for 5 frames in a row is the majority there and is kept; on a synthetic
+  walk at 18 km/h this reports a 61.6 km/h peak and 26.5 m for 14.8 m walked. A run of valid frames shorter
+  than the 0.6 s smoothing window gets no speed, but its raw, unsmoothed steps still count towards the distance.
+  Found by a test review (2026-11-16) and pinned (`tests/test_analytics_eval_edges.py`); left, since a change
+  would need labelled player tracks to judge it.
+- `eval/broadcast_check.py`: end changes are counted from the games columns, with a tiebreak as one game, while
+  the players also change ends after every 6 tiebreak points; during a tiebreak (and after one, depending on its
+  points) the graphic's names can be on the wrong ends (names only, never a call). Pinned
+  (`tests/test_broadcast_check_hud_edges.py`) and left: the graphic shows tiebreak points only while it lasts.
 
 Fixed in the same review: the perception cache key now includes the calibrator's keyframe interval, the
 shot-cut threshold and the person detector's input size (older caches are read as made with the defaults,
