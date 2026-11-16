@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { api, errorText } from "../api";
 import {
+  bounceFrameOf,
   DASH,
   fmtClock,
   fmtDate,
@@ -76,9 +77,12 @@ function InspectorImpl(p: Props) {
 
   const flightReviews = useMemo(() => {
     if (p.reviews.status !== "ready" || !flight) return [];
+    // Newest first; the server stamps whole seconds and appends in order, so a tie goes to the later record.
     return p.reviews.data
-      .filter((r) => r.flight_id === flight.id)
-      .sort((a, b) => Date.parse(b.created) - Date.parse(a.created));
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => r.flight_id === flight.id)
+      .sort((a, b) => Date.parse(b.r.created) - Date.parse(a.r.created) || b.i - a.i)
+      .map(({ r }) => r);
   }, [p.reviews, flight]);
 
   return (
@@ -183,7 +187,7 @@ function ShotPane({ runId, report, flight: f, reviews, reviewsState, onReviewPos
     !f.rejected && f.board_speed_kmh && f.hit_speed_kmh
       ? (100 * (f.hit_speed_kmh - f.board_speed_kmh)) / f.board_speed_kmh
       : null;
-  const bounceFrame = f.bounce?.frame ?? f.bounce_frame;
+  const bounceFrame = bounceFrameOf(f); // the frame the seek and the timeline show for it
 
   return (
     <>
@@ -195,7 +199,7 @@ function ShotPane({ runId, report, flight: f, reviews, reviewsState, onReviewPos
         <span className="hero-sub">
           Vuruş {f.id + 1}
           {f.kind === "serve" ? " · Servis" : f.stroke ? ` · ${strokeLabel(f.stroke, f.stroke_wing)}` : ""} · {route}
-          {bounceFrame !== null && bounceFrame !== undefined ? ` · sekme karesi ${Math.round(bounceFrame)}` : ""}
+          {bounceFrame !== null ? ` · sekme karesi ${bounceFrame}` : ""}
         </span>
       </div>
 

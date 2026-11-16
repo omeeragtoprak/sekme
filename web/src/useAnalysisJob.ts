@@ -105,16 +105,20 @@ export function useAnalysisJob(onDone: (runId: string) => void) {
   const start = useCallback((file: File) => {
     uploadRef.current?.abort();
     setState({ phase: "uploading", file: file.name, fraction: 0 });
-    const handle = uploadVideo(file, (fraction) =>
-      setState((prev) => (prev.phase === "uploading" ? { ...prev, fraction } : prev)),
-    );
+    // Only the current upload may change the state: a replaced upload's abort rejects after the new one started.
+    const handle: UploadHandle = uploadVideo(file, (fraction) => {
+      if (uploadRef.current !== handle) return;
+      setState((prev) => (prev.phase === "uploading" ? { ...prev, fraction } : prev));
+    });
     uploadRef.current = handle;
     handle.promise.then(
       (id) => {
+        if (uploadRef.current !== handle) return;
         uploadRef.current = null;
         setState({ phase: "processing", file: file.name, jobId: id, job: null, transientError: null });
       },
       (err: unknown) => {
+        if (uploadRef.current !== handle) return;
         uploadRef.current = null;
         setState({ phase: "error", file: file.name, message: errorText(err) });
       },

@@ -149,7 +149,8 @@ export default function App() {
       });
     } catch (err) {
       if (isAbort(err)) return;
-      setRuns({ status: "error", error: errorText(err) });
+      // A failed refresh keeps the list already shown (the next refresh retries); only a first load shows the error.
+      setRuns((prev) => (prev.status === "ready" ? prev : { status: "error", error: errorText(err) }));
     }
   }, []);
 
@@ -237,7 +238,9 @@ export default function App() {
     api.reviews(runId, ctrl.signal).then(
       (list) => still() && setReviews({ status: "ready", data: Array.isArray(list) ? list : [] }),
       (err: unknown) => {
-        if (!isAbort(err) && still()) setReviews({ status: "error", error: errorText(err) });
+        // Keep the reviews already shown (and a just-posted one) when only the refresh fails.
+        if (!isAbort(err) && still())
+          setReviews((prev) => (prev.status === "ready" ? prev : { status: "error", error: errorText(err) }));
       },
     );
   }, [runId]);
@@ -341,7 +344,11 @@ export default function App() {
   const servePosting = useRef(false);
   const postServeLabel = useCallback(
     (make: (labeler: string) => ServeLabelIn) => {
-      if (!runId || servePosting.current) return; // a double click would get a 409 for its own mark
+      if (!runId) return;
+      if (servePosting.current) {  // a double click would get a 409 for its own mark: say why nothing happened
+        setServeError("Önceki kayıt sürüyor; bitince yeniden deneyin.");
+        return;
+      }
       let labeler = "";
       try {
         labeler = window.localStorage.getItem("courtvision.reviewer")?.trim() ?? "";

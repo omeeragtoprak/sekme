@@ -246,6 +246,20 @@ Also from the pipeline review (2026-11-14), checked and left:
   would need labelled player tracks to judge it. On the six v4 broadcast runs (12 player tracks, read from their
   reports) neither shows much: the peaks are 14.0–22.3 km/h, no step between frames exceeds 1 m, camera cuts add
   at most 0.1 m, and the unsmoothed short runs give 44.6 m of the 2 627.8 m in all (1.7 %).
+- `broadcast/scoreboard.py`: a player name with a dotted initial ("ALCARAZ G.", "J.-W. TSONGA") is not read
+  as a name, and the fuzzy match for the speed board's label also accepts look-alike words ("SERVICE",
+  "SPEEDY"). Neither occurs in the six broadcast clips: their names are read as surnames or full names (no
+  dotted initial), and of their 50 942 kept OCR text boxes none contains either word, every box taken as the
+  label being the serve-speed caption or its misreadings ("SERVE SPEEO", "SCRVE SPEED"). Found by a test
+  review (2026-11-16), pinned (`tests/test_pipeline_scoreboard_physics_edges.py`) and left, since a change
+  alters how graphics are read and needs the re-read of every clip described above.
+- Review Room API (fixed 2026-11-16, found by a test review): a link in place of one of a run's own files
+  (`report.json`, `frames.json`, the three `.jsonl` logs, `classic.mp4`, `pro.mp4`) was followed, so with write
+  access to the runs folder the API could be made to read or append outside it; such a run is now refused and
+  not listed (only `source.*` may point elsewhere, to the original video). The logs' reader now ends records only
+  at "\n", skips a byte order mark, a line with invalid UTF-8 and anything that is not a record, instead of
+  losing the first record or failing the whole log; and an append after a line torn by a crash first ends that
+  line, where the new record used to be glued to the fragment and lost with it.
 - `calib/line_refine.py`: a ridge cut by the end of its search window is still returned (biased towards the
   window, e.g. −8.75 px for a ridge centred at −9) instead of being refused; and the colour histogram behind the
   shot-cut test (`perception/court.py`) is sharp enough that a flat, untextured frame made 15 grey levels

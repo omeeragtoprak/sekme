@@ -664,6 +664,8 @@ export default function VideoStage({
             }}
             onPointerLeave={() => setLoupe(null)}
             onClick={(e) => {
+              // While a seek is in flight the frame number is already the new one but the picture is the old one.
+              if (videoRef.current?.seeking) return;
               const [u, v] = videoPx(e);
               onLabel?.(frameRef.current, [Math.round(u * 10) / 10, Math.round(v * 10) / 10]);
             }}

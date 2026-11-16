@@ -405,6 +405,10 @@ function Replay3DImpl({ flight, shotLabel }: Props) {
       if (readTRef.current) readTRef.current.textContent = "—";
       if (readVRef.current) readVRef.current.textContent = "—";
       if (readZRef.current) readZRef.current.textContent = "—";
+      if (sliderRef.current) {  // no trajectory: the slider must not keep the previous flight's position
+        sliderRef.current.value = "0";
+        sliderRef.current.style.setProperty("--p", "0%");
+      }
       return;
     }
     const s = sampleAt(traj, speeds, t);

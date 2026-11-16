@@ -30,8 +30,11 @@ from courtvision.errors import MissingModelError, UnreadableVideoError
 from courtvision.eval.labels import evaluate, px_scale_cm, serve_state, serve_summary, summarize, world_from_px
 
 SERVE_TOL_S = 0.5  # a labelled serve and a system serve within this many seconds are the same serve
-RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")  # \Z: "$" would also accept a trailing newline
 MEDIA = {"classic": "classic.mp4", "pro": "pro.mp4"}
+# The run's own files, read and appended in place. None may be a link: a link would let the API read or append
+# outside the runs folder. Only source.* may point elsewhere (the original video, see io/video.link_source).
+OWN_FILES = ("report.json", "frames.json", "reviews.jsonl", "labels.jsonl", "serve_labels.jsonl", *MEDIA.values())
 VIDEO_EXT = {".mp4", ".mov", ".m4v", ".webm", ".mkv"}
 # Shown at / when the web app has not been built (a fresh clone): the API works, the page says what to do.
 NO_WEB_APP_HTML = """<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>SEKME</title>
@@ -62,16 +65,31 @@ def host_name(netloc: str) -> str | None:
 
 
 def read_jsonl(p: Path) -> list[dict]:
-    """An append-only log; a line cut short by a crash mid-append is skipped, not fatal."""
+    """An append-only log of records, one per "\\n"-ended line. A line cut short by a crash mid-append (cut JSON or
+    a cut UTF-8 character) or anything that is not a record is skipped, never fatal; a byte order mark is ignored."""
     if not p.is_file():
         return []
     out = []
-    for line in p.read_text().splitlines():
+    for i, raw in enumerate(p.read_bytes().split(b"\n")):  # only "\n" ends a record (U+2028 may sit inside one)
         try:
-            out.append(json.loads(line))
-        except json.JSONDecodeError:
+            rec = json.loads(raw.decode("utf-8-sig" if i == 0 else "utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
             continue
+        if isinstance(rec, dict):
+            out.append(rec)
     return out
+
+
+def append_jsonl(p: Path, record: dict) -> None:
+    """Append one record on a line of its own (callers hold the lock). A torn last line left by a crash gets its
+    newline first, so the new record is not glued to it and lost with it."""
+    with open(p, "ab") as f:
+        if f.tell() > 0:
+            with open(p, "rb") as r:
+                r.seek(-1, 2)
+                if r.read(1) != b"\n":
+                    f.write(b"\n")
+        f.write(json.dumps(record).encode() + b"\n")
 
 AnalyzeFn = Callable[[Path, Path, Callable[[str, float], None]], object]
 
@@ -118,6 +136,10 @@ class Job(BaseModel):
     progress: float = 0.0
     run_id: str | None = None
     error: str | None = None
+
+
+def own_files_unlinked(run: Path) -> bool:
+    return not any((run / n).is_symlink() for n in OWN_FILES)
 
 
 def media_path(run: Path, name: str) -> Path | None:
@@ -180,6 +202,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         d = (runs_root / run_id).resolve()
         if d.parent != runs_root or not (d / "report.json").is_file():
             raise HTTPException(404, "analiz bulunamadı")
+        if not own_files_unlinked(d):
+            raise HTTPException(403, "analiz klasöründeki dosyalar başka bir yere bağlantı olamaz")
         return d
 
     def load_json(path: Path) -> dict:
@@ -195,8 +219,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
         for d in sorted(runs_root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
             if not d.is_dir() or not RUN_ID.match(d.name) or not (d / "report.json").is_file():
                 continue
-            if d.resolve().parent != runs_root:
-                continue  # linked from elsewhere: run_dir refuses it, so it is not listed either
+            if d.resolve().parent != runs_root or not own_files_unlinked(d):
+                continue  # linked from elsewhere, or its files are: run_dir refuses it, so it is not listed either
             if not (d / "frames.json").is_file():
                 continue  # a report kept on its own (an evaluation output) has nothing to review
             try:
@@ -254,8 +278,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
             "report_version": report.get("version"),
             "models_sha256": {k: v.get("sha256") for k, v in report.get("models", {}).items()},
         }
-        with review_lock, open(d / "reviews.jsonl", "a") as f:
-            f.write(json.dumps(record) + "\n")
+        with review_lock:
+            append_jsonl(d / "reviews.jsonl", record)
         return record
 
     def read_labels(d: Path) -> list[dict]:
@@ -295,8 +319,8 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
             "report_version": report.get("version"),
             "models_sha256": {k: v.get("sha256") for k, v in report.get("models", {}).items()},
         }
-        with review_lock, open(d / "labels.jsonl", "a") as f:
-            f.write(json.dumps(record) + "\n")
+        with review_lock:
+            append_jsonl(d / "labels.jsonl", record)
         return record
 
     def read_serve_labels(d: Path) -> list[dict]:
@@ -347,8 +371,7 @@ def create_app(runs_dir: Path, uploads_dir: Path | None = None, web_dist: Path |
                     raise HTTPException(404, "kaldırılacak servis etiketi bulunamadı")
                 if not any(s["id"] == body.target for s in serve_state(existing)[0]):
                     raise HTTPException(409, "bu kayıt bir servis etiketi değil ya da zaten kaldırılmış")
-            with open(d / "serve_labels.jsonl", "a") as f:
-                f.write(json.dumps(record) + "\n")
+            append_jsonl(d / "serve_labels.jsonl", record)
         return record
 
     @app.post("/api/jobs", status_code=202)
