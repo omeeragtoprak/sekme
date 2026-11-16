@@ -1,0 +1,383 @@
+{
+ "video": "w2025_final_sabalenka_anisimova",
+ "n_frames_decoded_by_cv2": 43741,
+ "serves": [
+  {
+   "lo": 127,
+   "hi": 128,
+   "side": "near",
+   "radar": {
+    "value": 108,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 950,
+   "hi": 952,
+   "side": "near",
+   "radar": {
+    "value": 110,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 2422,
+   "hi": 2423,
+   "side": "near",
+   "radar": {
+    "value": 85,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 3088,
+   "hi": 3090,
+   "side": "near",
+   "radar": {
+    "value": 89,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 4677,
+   "hi": 4678,
+   "side": "near",
+   "radar": {
+    "value": 102,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 6242,
+   "hi": 6243,
+   "side": "near",
+   "radar": {
+    "value": 83,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 7100,
+   "hi": 7101,
+   "side": "far",
+   "radar": {
+    "value": 104,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 9046,
+   "hi": 9047,
+   "side": "far",
+   "radar": {
+    "value": 87,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 12733,
+   "hi": 12735,
+   "side": "far",
+   "radar": {
+    "value": 89,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 13245,
+   "hi": 13246,
+   "side": "far",
+   "radar": {
+    "value": 91,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 13852,
+   "hi": 13853,
+   "side": "near",
+   "radar": {
+    "value": 100,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 14571,
+   "hi": 14572,
+   "side": "near",
+   "radar": {
+    "value": 110,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 15208,
+   "hi": 15209,
+   "side": "near",
+   "radar": {
+    "value": 95,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 15763,
+   "hi": 15764,
+   "side": "near",
+   "radar": {
+    "value": 116,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 16453,
+   "hi": 16455,
+   "side": "near",
+   "radar": {
+    "value": 106,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 16951,
+   "hi": 16952,
+   "side": "far",
+   "radar": {
+    "value": 83,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 18105,
+   "hi": 18106,
+   "side": "near",
+   "radar": {
+    "value": 94,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 19435,
+   "hi": 19436,
+   "side": "near",
+   "radar": {
+    "value": 111,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 20440,
+   "hi": 20441,
+   "side": "near",
+   "radar": {
+    "value": 97,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 21013,
+   "hi": 21014,
+   "side": "near",
+   "radar": {
+    "value": 93,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 21878,
+   "hi": 21880,
+   "side": "far",
+   "radar": {
+    "value": 105,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 24700,
+   "hi": 24702,
+   "side": "far",
+   "radar": {
+    "value": 84,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 26097,
+   "hi": 26099,
+   "side": "near",
+   "radar": {
+    "value": 92,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 26836,
+   "hi": 26837,
+   "side": "near",
+   "radar": {
+    "value": 111,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 28007,
+   "hi": 28008,
+   "side": "near",
+   "radar": {
+    "value": 109,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 28630,
+   "hi": 28631,
+   "side": "far",
+   "radar": null,
+   "note": "Anisimova"
+  },
+  {
+   "lo": 30055,
+   "hi": 30056,
+   "side": "far",
+   "radar": {
+    "value": 101,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 31216,
+   "hi": 31219,
+   "side": "far",
+   "radar": {
+    "value": 102,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 31645,
+   "hi": 31646,
+   "side": "near",
+   "radar": {
+    "value": 87,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 32985,
+   "hi": 32986,
+   "side": "near",
+   "radar": {
+    "value": 104,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 33819,
+   "hi": 33820,
+   "side": "near",
+   "radar": {
+    "value": 87,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 34447,
+   "hi": 34448,
+   "side": "near",
+   "radar": {
+    "value": 85,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 35864,
+   "hi": 35865,
+   "side": "far",
+   "radar": {
+    "value": 110,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 37149,
+   "hi": 37150,
+   "side": "far",
+   "radar": {
+    "value": 79,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 37662,
+   "hi": 37663,
+   "side": "near",
+   "radar": {
+    "value": 111,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 38358,
+   "hi": 38359,
+   "side": "far",
+   "radar": {
+    "value": 99,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 39133,
+   "hi": 39135,
+   "side": "far",
+   "radar": {
+    "value": 79,
+    "unit": "mph"
+   },
+   "note": "Anisimova"
+  },
+  {
+   "lo": 39510,
+   "hi": 39511,
+   "side": "near",
+   "radar": {
+    "value": 117,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  }
+ ]
+}

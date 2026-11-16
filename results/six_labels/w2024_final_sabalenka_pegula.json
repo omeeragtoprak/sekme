@@ -1,0 +1,326 @@
+{
+ "video": "w2024_final_sabalenka_pegula",
+ "n_frames_decoded_by_cv2": 44101,
+ "serves": [
+  {
+   "lo": 1363,
+   "hi": 1364,
+   "side": "near",
+   "radar": {
+    "value": 92,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 2639,
+   "hi": 2640,
+   "side": "near",
+   "radar": {
+    "value": 99,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 3392,
+   "hi": 3393,
+   "side": "near",
+   "radar": {
+    "value": 78,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 4068,
+   "hi": 4070,
+   "side": "far",
+   "radar": {
+    "value": 103,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 5139,
+   "hi": 5140,
+   "side": "far",
+   "radar": {
+    "value": 119,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 5906,
+   "hi": 5907,
+   "side": "far",
+   "radar": {
+    "value": 83,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 7478,
+   "hi": 7479,
+   "side": "far",
+   "radar": {
+    "value": 98,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 9516,
+   "hi": 9517,
+   "side": "far",
+   "radar": {
+    "value": 80,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 10504,
+   "hi": 10505,
+   "side": "near",
+   "radar": {
+    "value": 81,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 11916,
+   "hi": 11917,
+   "side": "near",
+   "radar": {
+    "value": 119,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 13090,
+   "hi": 13091,
+   "side": "near",
+   "radar": {
+    "value": 84,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 13956,
+   "hi": 13957,
+   "side": "far",
+   "radar": {
+    "value": 86,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 15615,
+   "hi": 15617,
+   "side": "far",
+   "radar": {
+    "value": 84,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 16397,
+   "hi": 16398,
+   "side": "near",
+   "radar": {
+    "value": 92,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 17477,
+   "hi": 17479,
+   "side": "near",
+   "radar": {
+    "value": 91,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 18458,
+   "hi": 18459,
+   "side": "near",
+   "radar": {
+    "value": 92,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 19680,
+   "hi": 19681,
+   "side": "near",
+   "radar": {
+    "value": 80,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 21651,
+   "hi": 21652,
+   "side": "near",
+   "radar": {
+    "value": 82,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 23128,
+   "hi": 23129,
+   "side": "near",
+   "radar": {
+    "value": 75,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 24520,
+   "hi": 24521,
+   "side": "near",
+   "radar": {
+    "value": 73,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 25849,
+   "hi": 25850,
+   "side": "far",
+   "radar": {
+    "value": 80,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 26587,
+   "hi": 26588,
+   "side": "far",
+   "radar": {
+    "value": 106,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 28025,
+   "hi": 28026,
+   "side": "far",
+   "radar": {
+    "value": 101,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 28665,
+   "hi": 28666,
+   "side": "far",
+   "radar": {
+    "value": 105,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 29594,
+   "hi": 29596,
+   "side": "far",
+   "radar": {
+    "value": 102,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 31777,
+   "hi": 31778,
+   "side": "near",
+   "radar": {
+    "value": 106,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 33611,
+   "hi": 33612,
+   "side": "near",
+   "radar": {
+    "value": 114,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 35608,
+   "hi": 35609,
+   "side": "near",
+   "radar": {
+    "value": 84,
+    "unit": "mph"
+   },
+   "note": "Sabalenka"
+  },
+  {
+   "lo": 36301,
+   "hi": 36302,
+   "side": "near",
+   "radar": {
+    "value": 93,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 38087,
+   "hi": 38088,
+   "side": "far",
+   "radar": {
+    "value": 96,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 39009,
+   "hi": 39010,
+   "side": "near",
+   "radar": {
+    "value": 106,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  },
+  {
+   "lo": 40053,
+   "hi": 40054,
+   "side": "near",
+   "radar": {
+    "value": 94,
+    "unit": "mph"
+   },
+   "note": "Pegula"
+  }
+ ]
+}

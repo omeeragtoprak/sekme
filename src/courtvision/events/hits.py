@@ -106,6 +106,10 @@ def detect_hits_in_segments(ball: BallTrack, players: dict[str, PlayerTrack], fp
 # contact, and many far strokes are missed. A break in the ball's 2D image velocity next to the far player marks them.
 BREAK_ANGLE_DEG = 60.0
 BREAK_SPEED_RATIO = 2.5
+# A bounce in front of the far player also turns the ball's image velocity; it happens at the feet, a stroke at racket
+# height. A break counts only with the ball at least this many box heights above the box's bottom (dev matches of
+# docs/EVAL_SPOT.md: labelled far strokes 10 % quantile 0.56, labelled far bounces 90 % quantile 0.06).
+BREAK_MIN_HEIGHT = 0.3
 
 
 def _velocity(xy: np.ndarray, idx: list[int]) -> np.ndarray | None:
@@ -119,7 +123,9 @@ def far_breaks(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
                segments: list[tuple[int, int]]) -> list[Hit]:
     """Frames where the detected ball's image velocity turns by more than BREAK_ANGLE_DEG or changes speed by more
     than BREAK_SPEED_RATIO times, over k detected frames on each side, with the ball next to the far player's box;
-    breaks within 0.2 s are merged (the strongest kept). Each is a far hit."""
+    breaks within 0.2 s are merged (the strongest kept). A merged break with the ball lower than BREAK_MIN_HEIGHT box
+    heights above the box's bottom is a bounce at the player's feet, not a stroke, and is dropped. Each other is a far
+    hit."""
     if "far" not in players:
         return []
     k = max(3, math.ceil(0.1 * fps - 1e-9))  # 0.1 s rounded up: 3 at 25 and 30 fps, 6 at 60
@@ -147,7 +153,8 @@ def far_breaks(ball: BallTrack, players: dict[str, PlayerTrack], fps: float,
                     out[-1] = (i, strength)
             else:
                 out.append((i, strength))
-    return [Hit(i, "far", xy[i].copy(), True) for i, _ in out]
+    return [Hit(i, "far", xy[i].copy(), True) for i, _ in out
+            if xy[i][1] <= boxes[i][3] - BREAK_MIN_HEIGHT * (boxes[i][3] - boxes[i][1])]
 
 
 def add_far_breaks(hits: list[Hit], breaks: list[Hit], fps: float) -> list[Hit]:

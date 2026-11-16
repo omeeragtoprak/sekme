@@ -1,0 +1,216 @@
+{
+ "video": "m2025_sf_sinner_auger_aliassime",
+ "n_frames_decoded_by_cv2": 40311,
+ "serves": [
+  {
+   "lo": 199,
+   "hi": 200,
+   "side": "far",
+   "radar": {
+    "value": 89,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 1490,
+   "hi": 1491,
+   "side": "near",
+   "radar": {
+    "value": 124,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 2716,
+   "hi": 2717,
+   "side": "near",
+   "radar": {
+    "value": 103,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 3426,
+   "hi": 3427,
+   "side": "near",
+   "radar": {
+    "value": 99,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 4523,
+   "hi": 4524,
+   "side": "near",
+   "radar": {
+    "value": 121,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 5619,
+   "hi": 5620,
+   "side": "near",
+   "radar": {
+    "value": 91,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 10178,
+   "hi": 10179,
+   "side": "far",
+   "radar": {
+    "value": 91,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 11068,
+   "hi": 11069,
+   "side": "near",
+   "radar": null
+  },
+  {
+   "lo": 12274,
+   "hi": 12275,
+   "side": "near",
+   "radar": {
+    "value": 120,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 14138,
+   "hi": 14139,
+   "side": "near",
+   "radar": {
+    "value": 114,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 14807,
+   "hi": 14808,
+   "side": "near",
+   "radar": {
+    "value": 108,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 17316,
+   "hi": 17318,
+   "side": "far",
+   "radar": {
+    "value": 92,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 18829,
+   "hi": 18830,
+   "side": "near",
+   "radar": {
+    "value": 96,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 20232,
+   "hi": 20233,
+   "side": "near",
+   "radar": {
+    "value": 94,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 21386,
+   "hi": 21387,
+   "side": "near",
+   "radar": {
+    "value": 120,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 22738,
+   "hi": 22740,
+   "side": "near",
+   "radar": {
+    "value": 95,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 23834,
+   "hi": 23835,
+   "side": "near",
+   "radar": {
+    "value": 114,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 24679,
+   "hi": 24680,
+   "side": "near",
+   "radar": {
+    "value": 92,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 25649,
+   "hi": 25650,
+   "side": "near",
+   "radar": {
+    "value": 90,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 28681,
+   "hi": 28683,
+   "side": "far",
+   "radar": {
+    "value": 120,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 30761,
+   "hi": 30762,
+   "side": "far",
+   "radar": null
+  },
+  {
+   "lo": 33875,
+   "hi": 33876,
+   "side": "near",
+   "radar": {
+    "value": 116,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 36557,
+   "hi": 36558,
+   "side": "near",
+   "radar": {
+    "value": 116,
+    "unit": "mph"
+   }
+  },
+  {
+   "lo": 37178,
+   "hi": 37179,
+   "side": "near",
+   "radar": {
+    "value": 94,
+    "unit": "mph"
+   }
+  }
+ ]
+}

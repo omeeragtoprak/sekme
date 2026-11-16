@@ -56,6 +56,25 @@ test data. The download needs the user's explicit yes (file, source, size).
   3. `-Kw7rzkJROw` (730 s), 4. `clVU6bPiwbY` (730 s), 5. `91QiqjXzBdc` (624 s), 6. `vSqQT6A2a0o` (673 s);
   at most ~3.5 GB of 1080p video in all. With ~4 GB free they are handled three at a time (download,
   label, analyse, keep the caches and reports, delete the video).
+
+  Downloaded on 2026-11-16 (`six_videos_fetch.py download`, after the user's yes; `data/six/manifest.json`),
+  before any labelling or analysis. yt-dlp's `bv*[height<=1080][ext=mp4]` picked AV1 at 1920x1080, 59.94 fps
+  (format 399), so the files are smaller than the sizes listed above; OpenCV decodes them:
+  - `m2025_sf_alcaraz_djokovic` (`91QiqjXzBdc`, 210 613 471 bytes), SHA-256
+    `b2e9e600f4eaee6164a10c096ec61dabbe2e32fc11f18afa9b18088e4b5ec97f`;
+  - `m2025_sf_sinner_auger_aliassime` (`vSqQT6A2a0o`, 234 405 859 bytes), SHA-256
+    `ae18a45a0c068e5bafc75bec0ccf5cd32c416ed1679a408e4e0c3ee728d706e4`;
+  - `w2025_final_sabalenka_anisimova` (`clVU6bPiwbY`, 231 110 720 bytes), SHA-256
+    `e991e7ebfe092879057f21590a8543e16fc1cbf9295019c2c8e3f8d599311a11`;
+  - `w2024_final_sabalenka_pegula` (`6pbIaygok2E`, 350 683 038 bytes; H.264, the same format rule), SHA-256
+    `7098b25607a5b026b65ea188430c119839531f689f55eb1aa4a3940b2bc6c606`;
+  - `m2024_sf_sinner_draper` (`JP95GKqjpZk`, 314 033 517 bytes; AV1), SHA-256
+    `ad3090c06cc342081aeedcd7a067a527604f084facdfee6d1e1f91d87a6cfcc3`;
+  - `m2024_sf_fritz_tiafoe` (`-Kw7rzkJROw`, 342 517 872 bytes; H.264), SHA-256
+    `a537908cf2f8f336827602862012da6969e74161b2a6d7745ac7c5168b124247`.
+
+  All six are local, each labelled before any analysis of it. The analyses wait for the E2E-Spot decision on
+  `--far-stroke-breaks` (`docs/EVAL_SPOT.md`), which changes the analysis code either way; the labels do not.
 - **Labels, blind**, as in `docs/EVAL_SERVE_CONTACT.md`: a separate labeller (a fresh agent session) with
   no access to any system output for these videos marks every serve shown in real time from the main
   camera: contact bracket, server side, and the stadium board's serve speed read by eye (the first new

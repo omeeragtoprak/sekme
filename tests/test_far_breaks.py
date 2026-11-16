@@ -60,3 +60,10 @@ def test_the_window_is_a_tenth_of_a_second_rounded_up_so_25_fps_uses_three_frame
     # A turn after 3 frames in and 3 out is found at 25 fps (round(2.5) would have given a 2-frame window).
     hits = far_breaks(_track(_turn(15)), _players(30), 25.0, [(0, 30)])
     assert [h.frame for h in hits] == [15]
+
+
+def test_a_break_at_the_far_players_feet_is_a_bounce_and_is_dropped() -> None:
+    # Box bottom 180, height 80: the ball must be at least 0.3 x 80 = 24 px above it (y <= 156).
+    assert [h.frame for h in far_breaks(_track(_turn(15, y0=156.0)), _players(30), 30.0, [(0, 30)])] == [15]
+    assert far_breaks(_track(_turn(15, y0=170.0)), _players(30), 30.0, [(0, 30)]) == []  # a bounce in front of the feet
+    assert far_breaks(_track(_turn(15, y0=190.0)), _players(30), 30.0, [(0, 30)]) == []  # below the box

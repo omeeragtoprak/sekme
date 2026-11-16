@@ -271,3 +271,39 @@ their side agreement is reported, not used.
 `devir/scratch/far_breaks_broadcast_dev.py`): hits 555 → 592, flights 590 → 626, calls 367 → 366, of which 352
 on the same bounce in both runs; no call turned from IN to OUT or back. Nothing there has stroke labels, so this
 only shows the side effects on real broadcasts are small; it decides nothing.
+
+**Dev matches, then one change, before the test (2026-11-16).** As the amendment asks, the candidate was first run on
+the three dev matches (379 clips; baseline `runs_spot_dev`, candidate from the baseline's detection caches;
+`data/spot/results_dev3_runs_spot_dev.json`), with the code of commit `33f67ee`. Against the baseline, in points:
+
+| dev3 (379 clips) | stroke recall | stroke precision | first-bounce recall | bounce precision | serve recall |
+|---|---|---|---|---|---|
+| as first written | +3.5 (+3.9, +3.9, +2.8) | −1.5 | −0.8 | −1.0 | 0.0 |
+| changed (below) | +3.4 (+3.7, +3.9, +2.7) | +0.4 | +0.7 | +0.1 | 0.0 |
+
+(Baseline: stroke recall 0.743, precision 0.421; first-bounce recall 0.695; bounce precision 0.807; serve recall
+0.772. Per-match stroke recall in the order Williams–Sharapova, Raducanu–Sakkari, Gauff–Williams.) As first written
+it would have been at the edge of criterion 3 (bounce precision −1.0006 points unrounded). Looking at what it
+added (`devir/scratch/far_breaks_spot_dev_diag.py`, `far_breaks_spot_features.py`, `far_breaks_spot_features_eval.py`):
+of the breaks it adds, 122 lie at a labelled far stroke, 52 at a labelled far bounce and 129 elsewhere; a bounce in
+front of the far player turns the ball's image velocity too, and it happens at the player's feet, a stroke at racket
+height. With the ball's height above the far player's box bottom in box heights, labelled far strokes have a 10 %
+quantile of 0.56 (median 1.32), labelled far bounces a 90 % quantile of 0.06.
+
+**The change** (commit `a8d0d4d`, `events/hits.py` `BREAK_MIN_HEIGHT`): a merged break with the ball lower than
+0.3 box heights above the far player's box bottom is dropped. On the dev matches it keeps 120 of the 122 stroke
+breaks, none of the 52 bounce breaks, and 47 of the 129 others. The threshold was chosen on these dev matches, so
+their numbers above are optimistic; the test matches have not been touched. On TrackNet games 1–7 (from their
+caches, `devir/scratch/far_breaks_e2e_dev.py`) the changed candidate gives labelled strokes with a hit within 3
+frames 269 → 284 of 374 (far 161 → 176; first written: 285, 177), first bounces 220 → 226 of 323 (first written:
+223), decisive calls 228 → 235, all consistent with the labels, false alarms 29 → 30, hits 434 → 454.
+
+**The rule is unchanged**: criteria 1–4 above, on the four test matches, decided once on the unrounded
+`change_points`; slot 1 runs the candidate as changed here (the code at the commit that records this text).
+
+**Known limitation, written before any test result (2026-11-16, after an independent review of the change).** The
+height test sees only the strongest break of each 0.2 s merge, so a stroke break merged into a stronger one at the
+feet is lost with it. Filtering before the merge would, on the dev matches, give 27 more breaks, 9 of them at a
+labelled far stroke (some possibly the same stroke twice). It was left as measured: changing it now would be a
+second, unmeasured change, and the loss works against the candidate, not for it. The slot-1 run uses the code as
+recorded above (analysis code of commit `a8d0d4d`).
