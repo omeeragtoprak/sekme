@@ -1,7 +1,8 @@
 # Event detection on independent broadcast matches (E2E-Spot tennis labels)
 
 Plan written on 2026-11-13, **before any video was downloaded or any system output on these matches was
-seen.** Nothing below has been run yet.
+seen.** Nothing below had been run then. Since run: the dev matches (2026-11-16) and test slot 1 (2026-11-17,
+adopted; see its section).
 
 ## Why
 
@@ -228,7 +229,8 @@ sweep at 25 and 29.97 fps, the fault window, pooling, F1 and the undefined cases
 
 ## Candidate 2 (test slot 1): far strokes from a 2D velocity break (rule written 2026-11-16, before any download)
 
-**Change** (`sekme analyze --far-stroke-breaks`; off by default; `events/hits.py` `far_breaks`, `add_far_breaks`):
+**Change** (`sekme analyze --far-stroke-breaks` until its adoption on 2026-11-17, now on by default with no flag;
+`events/hits.py` `far_breaks`, `add_far_breaks`):
 the hit detector looks for a reversal of the ball's image-y direction, but a far player's stroke towards the near
 side keeps rising in the image after contact, so the reversal comes at the apex and many far strokes are missed or
 found late. The candidate also marks a far hit where the detected ball's image velocity, fitted over 3 detected
@@ -307,3 +309,38 @@ feet is lost with it. Filtering before the merge would, on the dev matches, give
 labelled far stroke (some possibly the same stroke twice). It was left as measured: changing it now would be a
 second, unmeasured change, and the loss works against the candidate, not for it. The slot-1 run uses the code as
 recorded above (analysis code of commit `a8d0d4d`).
+
+**Result on the four test matches (2026-11-17): adopted.** One run of slot 1
+(`eval_spot.py run --name test4 --slot 1`, 303 clips in each arm, no failed analysis; the baseline at the default,
+the candidate from its cached detections), analysis code of commit `e274609` (the same as `a8d0d4d`: only
+documents and labels changed in between), scored once and committed before being read
+(`results/spot/results_test4_slot1.json`, commit `85e00fa`). Unrounded `change_points`:
+
+| test4 (303 clips) | stroke recall | stroke precision | first-bounce recall | bounce precision | serve recall |
+|---|---|---|---|---|---|
+| Baseline (default) | 0.7533 | 0.4880 | 0.6658 | 0.8342 | 0.7674 |
+| Candidate | 0.7865 | 0.4908 | 0.6743 | 0.8373 | 0.7674 |
+| Change, points (limit) | **+3.32** (at least +2) | **+0.28** (at least −2) | **+0.86** (at least −1) | **+0.31** (at least −1) | **0.00** (at least −1) |
+
+Stroke recall per match, points: Andreescu–Williams 2019 +3.52, Osaka–Gauff 2019 +5.00, Williams–Giorgi 2018 +1.25,
+Halep–Williams 2019 +3.57: it rises in all four and falls in none. All four criteria hold, so the candidate is the
+default from now on and its flag is gone (`PipelineConfig.far_stroke_breaks` stays, on). Strokes matched
+1203 → 1256 of 1597 labelled, system strokes 2465 → 2559; bounces matched 1016 → 1029 of 1525, system bounces
+1218 → 1229; serves 221 → 221 of 288 (the candidate does not touch serves).
+
+The rise is not uniform. Williams–Giorgi, the match with the smallest
+rise, is the only one where stroke precision (−1.4 points), first-bounce recall (−0.3) and bounce precision (−0.1)
+fall a little; the others gain on all three.
+
+Reported, not used (`devir/scratch/far_breaks_test_side_split.py`, private; the scorer's 0.1 s tolerance; recall by the labelled side,
+precision by the system's side): far strokes recall 540 → 593 of 820 (0.659 → 0.723), precision 0.421 → 0.431;
+near strokes 663 of 777 (0.853) and precision 0.562 in both arms, unchanged as expected. Side agreement of matched
+strokes 0.998 in both arms; median timing −1.0 frame in both.
+
+What this shows and what it does not. It is a gain in stroke spotting, mostly far strokes, measured on four matches
+the project never touched before (all women's matches, 25–30 fps, Wimbledon and US Open). The bounce gains come
+through segmentation (a stroke found splits a flight at the right place); bounce timing is unchanged (median
+−0.4 frame in both arms). The candidate's
+thresholds came from TrackNet games 1–7 and one change was made on the dev matches before the test (above); the
+test result is the first and only look at these matches for it. Slot 1 is used; slot 2 is the last one these
+matches allow.

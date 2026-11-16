@@ -81,8 +81,7 @@ MAX_FAILED_IN_ROW = 3
 MAX_FAILED_SHARE = 0.10
 # CLI flag -> the report's "candidates" record of a run made with it.
 FLAG_KEYS = {"toss-bridge": "serve_toss_bridge_s", "pin-serve-height": "pin_serve_height",
-             "fps-scaled-thresholds": "fps_scaled_thresholds", "player-size-from-camera": "player_size_from_camera",
-             "far-stroke-breaks": "far_stroke_breaks"}
+             "fps-scaled-thresholds": "fps_scaled_thresholds", "player-size-from-camera": "player_size_from_camera"}
 SCORER_CODE = ["src", "scripts/eval_spot.py"]
 _CODE: list[str] = []  # the analysis code, fixed when a run starts
 
@@ -218,7 +217,8 @@ def ledger() -> list[dict]:
     for e in entries:
         if not e["flags"]:
             raise SystemExit(f"ledger slot {e['slot']} has no flags: it would be the baseline again")
-        check_flags(e["flags"])
+        if not used(test_result(e["slot"])):  # a spent slot's flag may since be adopted (no flag) or removed
+            check_flags(e["flags"])
     return entries
 
 

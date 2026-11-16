@@ -18,8 +18,13 @@ pytestmark = pytest.mark.slow
 
 @pytest.mark.skipif(not SAMPLE.exists() or not all(w.exists() for w in WEIGHTS) or not shutil.which("ffmpeg"),
                     reason="sample clip / model weights / ffmpeg not available")
-def test_pipeline_end_to_end_on_real_clip(tmp_path: Path) -> None:
+def test_pipeline_end_to_end_on_real_clip(tmp_path: Path, monkeypatch) -> None:
+    from courtvision import pipeline
     from courtvision.pipeline import PipelineConfig, analyze
+
+    calls: list[int] = []  # far strokes from 2D breaks run by default (adopted 2026-11-17, docs/EVAL_SPOT.md)
+    real_far_breaks = pipeline.far_breaks
+    monkeypatch.setattr(pipeline, "far_breaks", lambda *a, **k: calls.append(1) or real_far_breaks(*a, **k))
 
     clip = tmp_path / "clip.mp4"
     # First 2.4 s: one full flight (near-player hit at frame ~9, far bounce at ~47, far hit at ~56).
@@ -28,6 +33,7 @@ def test_pipeline_end_to_end_on_real_clip(tmp_path: Path) -> None:
     report = analyze(clip, tmp_path / "run", PipelineConfig(render=False))
 
     assert report["schema"] == "courtvision.report/1"
+    assert calls == [1] and report["candidates"] == {}  # adopted, not a candidate: no flag recorded
     cal = report["calibration"]
     assert cal["valid_frames"] == cal["total_frames"]
     assert cal["line_rmse_px_median"] < 1.5

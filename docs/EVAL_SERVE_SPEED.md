@@ -73,8 +73,9 @@ test data. The download needs the user's explicit yes (file, source, size).
   - `m2024_sf_fritz_tiafoe` (`-Kw7rzkJROw`, 342 517 872 bytes; H.264), SHA-256
     `a537908cf2f8f336827602862012da6969e74161b2a6d7745ac7c5168b124247`.
 
-  All six are local, each labelled before any analysis of it. The analyses wait for the E2E-Spot decision on
-  `--far-stroke-breaks` (`docs/EVAL_SPOT.md`), which changes the analysis code either way; the labels do not.
+  All six are local, each labelled before any analysis of it. The analyses waited for the E2E-Spot decision on
+  `--far-stroke-breaks` (`docs/EVAL_SPOT.md`), which changed the analysis code either way: it was adopted on
+  2026-11-17, so every arm here runs with it on (the default); the labels do not depend on it.
 - **Labels, blind**, as in `docs/EVAL_SERVE_CONTACT.md`: a separate labeller (a fresh agent session) with
   no access to any system output for these videos marks every serve shown in real time from the main
   camera: contact bracket, server side, and the stadium board's serve speed read by eye (the first new
@@ -144,6 +145,25 @@ file in order with OpenCV, as the pipeline does; files named as in `scripts/six_
 
 For each frame: whether it is the main broadcast camera and, if so, each player's feet in the image (x, y),
 or "not in frame". Committed before any scoring.
+
+**Labels made (2026-11-16, before any analysis of the six videos)**: one fresh labeller session per video, with the
+brief `devir/scratch/labelling/BRIEF_TEMPLATE.md`, files and notes in `results/six_labels/` (each label commit
+names the labeller's start and end times). Serves 173 (101 near, 72 far), board readings 165:
+
+| video | serves (near / far) | board read | presence frames main / 80 |
+|---|---|---|---|
+| m2025_sf_alcaraz_djokovic | 22 (12 / 10) | 21 | 47 |
+| m2025_sf_sinner_auger_aliassime | 24 (19 / 5) | 22 | 36 |
+| w2025_final_sabalenka_anisimova | 38 (24 / 14) | 37 | 49 |
+| w2024_final_sabalenka_pegula | 32 (19 / 13) | 32 | 58 |
+| m2024_sf_sinner_draper | 25 (12 / 13) | 23 | 44 |
+| m2024_sf_fritz_tiafoe | 32 (15 / 17) | 30 | 52 |
+
+Recorded as they are, not changed after the fact: brackets are 2–3 frames wide except one of 4
+(w2025, 31216–31219); two labellers lost their first contact sheets in a context reset and rebuilt the serve list for
+that stretch from their notes and pre-serve sheets (Alcaraz–Djokovic up to frame ~23 760, Sinner–Auger-Aliassime up
+to ~22 680), so a serve there may be missing; the labellers differ on the closer zoom of the same behind-baseline
+camera (main for Sabalenka–Pegula and Sinner–Draper, not main for six frames of Fritz–Tiafoe).
 
 **Rule** (default analysis against `--player-size-from-camera`). A player is *found* when the tracked feet
 lie within 0.3 × the tracked box's height of the labelled feet (at least 15 px at 1080 lines), so a ball

@@ -101,7 +101,7 @@ def detect_hits_in_segments(ball: BallTrack, players: dict[str, PlayerTrack], fp
     return hits
 
 
-# Candidate (--far-stroke-breaks, off by default; docs/ARCHITECTURE.md Known issues): a far player's stroke towards
+# Adopted 2026-11-17 (docs/EVAL_SPOT.md, test slot 1; on by default): a far player's stroke towards
 # the near side keeps rising in the image after contact, so the image-y reversal above comes at the apex, not at the
 # contact, and many far strokes are missed. A break in the ball's 2D image velocity next to the far player marks them.
 BREAK_ANGLE_DEG = 60.0

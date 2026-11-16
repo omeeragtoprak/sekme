@@ -285,14 +285,18 @@ Also from the pipeline review (2026-11-14), checked and left:
   looks for a reversal of the ball's image-y direction, but a far player's stroke towards the near side keeps
   rising in the image for a while after contact, so the reversal comes at the apex, not at the contact. A
   candidate that also uses the 2D velocity break at contact (a turn in x or a jump in speed) would need its rule
-  written before a test; the E2E-Spot test matches (two candidate slots left, `docs/EVAL_SPOT.md`) measure
-  exactly stroke spotting. Development candidate `--far-stroke-breaks` (off by default; `events/hits.py`
+  written before a test; the E2E-Spot test matches (two candidate slots then, `docs/EVAL_SPOT.md`) measure
+  exactly stroke spotting. **Adopted 2026-11-17, on by default** (E2E-Spot test slot 1: stroke recall +3.32 points,
+  rising in all four test matches, far strokes 0.659 → 0.723; first-bounce recall +0.86, bounce precision +0.31,
+  serves unchanged; `docs/EVAL_SPOT.md`). As developed (then the candidate `--far-stroke-breaks`; `events/hits.py`
   `far_breaks`: a turn above 60° or a speed change above 2.5 times, fitted over 3 detected frames on each side,
   next to the far player's box; added only where no hit is within 8 frames at 30 fps), events re-run from the
   caches of games 1–7 (`devir/scratch/far_breaks_e2e_dev.py`): strokes with a hit within 3 frames 269 → 285 of
   374 (far 161 → 177 of 253), first bounces 220 → 223 of 323, decisive calls 228 → 232 (all consistent with the
-  labels both ways), false alarms 29 → 30, hits 434 → 463. Thresholds chosen on games 1–7; its test needs held-out
-  events (E2E-Spot) and a rule written first.
+  labels both ways), false alarms 29 → 30, hits 434 → 463. Thresholds chosen on games 1–7. Before its test a break
+  at the far player's feet (a bounce) was dropped (`BREAK_MIN_HEIGHT`, from the dev matches): games 1–7 then give
+  strokes 269 → 284, first bounces 220 → 226, decisive calls 228 → 235 (all consistent), false alarms 29 → 30, hits
+  434 → 454. Still open: on the test matches far strokes are found less often than near ones (0.72 against 0.85).
 - `calib/line_refine.py`: a ridge cut by the end of its search window is still returned (biased towards the
   window, e.g. −8.75 px for a ridge centred at −9) instead of being refused; and the colour histogram behind the
   shot-cut test (`perception/court.py`) is sharp enough that a flat, untextured frame made 15 grey levels

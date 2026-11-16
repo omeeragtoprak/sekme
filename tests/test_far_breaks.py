@@ -1,5 +1,5 @@
-"""Candidate --far-stroke-breaks (events/hits.py): a break in the ball's 2D image velocity next to the far player is
-a far stroke, added where no hit is within 8 frames at 30 fps."""
+"""Far strokes from 2D breaks (events/hits.py; adopted 2026-11-17, on by default): a break in the ball's 2D image
+velocity next to the far player is a far stroke, added where no hit is within 8 frames at 30 fps."""
 
 from __future__ import annotations
 
@@ -67,3 +67,8 @@ def test_a_break_at_the_far_players_feet_is_a_bounce_and_is_dropped() -> None:
     assert [h.frame for h in far_breaks(_track(_turn(15, y0=156.0)), _players(30), 30.0, [(0, 30)])] == [15]
     assert far_breaks(_track(_turn(15, y0=170.0)), _players(30), 30.0, [(0, 30)]) == []  # a bounce in front of the feet
     assert far_breaks(_track(_turn(15, y0=190.0)), _players(30), 30.0, [(0, 30)]) == []  # below the box
+
+
+def test_far_breaks_are_on_by_default() -> None:
+    from courtvision.pipeline import PipelineConfig
+    assert PipelineConfig().far_stroke_breaks is True  # adopted 2026-11-17 (docs/EVAL_SPOT.md, test slot 1)

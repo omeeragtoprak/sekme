@@ -259,7 +259,7 @@ class PipelineConfig:
     fps_scaled_thresholds: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): 60 fps frame counts
     player_size_from_camera: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): camera size gate
     score_consistency: bool = False  # candidate, off by default (docs/ARCHITECTURE.md): names from consistent readings
-    far_stroke_breaks: bool = False  # candidate, off by default (docs/ARCHITECTURE.md): far strokes from 2D breaks
+    far_stroke_breaks: bool = True  # far strokes also from 2D breaks (docs/EVAL_SPOT.md, adopted 2026-11-17)
     constant_rate_copy: bool = True  # variable-rate video analysed from a constant-rate copy (docs/ARCHITECTURE.md)
     drop_repeated_ball: bool = True  # no ball on the frames the copy repeats (docs/ARCHITECTURE.md, adopted 2026-11-15)
     same_angle_edits: bool = True  # edits from one camera position count as cuts (docs/ARCHITECTURE.md, adopted)
@@ -574,7 +574,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     kin = {side: player_kinematics(tr.world, info.fps) for side, tr in players.items()}
     segments = measurable_segments(calib, cuts, min_len=int(info.fps))
     hits = detect_hits_in_segments(ball, players, info.fps, info.height, segments)
-    if cfg.far_stroke_breaks:  # candidate: far strokes from a 2D velocity break next to the far player
+    if cfg.far_stroke_breaks:  # far strokes also from a 2D velocity break next to the far player (adopted)
         hits = add_far_breaks(hits, far_breaks(ball, players, info.fps, segments), info.fps)
     hits = merge_serves(hits, detect_serves(ball, players, info.fps, segments, bridge_s=cfg.serve_toss_bridge_s,
                                             frame_scale=fscale), info.fps)
@@ -614,8 +614,7 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
                                          ("pin_serve_height", cfg.pin_serve_height),
                                          ("fps_scaled_thresholds", cfg.fps_scaled_thresholds),
                                          ("player_size_from_camera", cfg.player_size_from_camera),
-                                         ("score_consistency", cfg.score_consistency),
-                                         ("far_stroke_breaks", cfg.far_stroke_breaks)) if v},
+                                         ("score_consistency", cfg.score_consistency)) if v},
         "calibration": {
             "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts, "same_angle_edits": edits,
             "same_angle_edits_measured": edits_measured,

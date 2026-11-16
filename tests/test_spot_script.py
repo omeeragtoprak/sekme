@@ -52,8 +52,11 @@ def test_the_ledger_allows_two_committed_candidates_with_known_flags(tmp_path: P
     with pytest.raises(SystemExit, match="allow 2"):
         E.ledger()
     led.write_text(json.dumps({"candidates": [{"slot": 1, "flags": ["toss-brigde"]}]}))
+    monkeypatch.setattr(E, "used", lambda path: False)
     with pytest.raises(SystemExit, match="unknown candidate flag"):
         E.ledger()
+    monkeypatch.setattr(E, "used", lambda path: path.name == "results_test4_slot1.json")
+    assert E.candidate(1) == ["toss-brigde"]  # a spent slot's flag may be gone since (adopted or removed)
 
 
 def test_a_clip_failure_is_recorded_but_an_environment_failure_stops(tmp_path: Path, monkeypatch) -> None:

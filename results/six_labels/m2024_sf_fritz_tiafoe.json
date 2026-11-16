@@ -1,0 +1,320 @@
+{
+ "video": "m2024_sf_fritz_tiafoe",
+ "n_frames_decoded_by_cv2": 43780,
+ "serves": [
+  {
+   "lo": 221,
+   "hi": 223,
+   "side": "far",
+   "radar": {
+    "value": 119,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 1974,
+   "hi": 1976,
+   "side": "far",
+   "radar": {
+    "value": 116,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 3235,
+   "hi": 3237,
+   "side": "far",
+   "radar": {
+    "value": 97,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 7950,
+   "hi": 7952,
+   "side": "far",
+   "radar": {
+    "value": 124,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 9687,
+   "hi": 9689,
+   "side": "far",
+   "radar": {
+    "value": 115,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 10881,
+   "hi": 10883,
+   "side": "far",
+   "radar": {
+    "value": 121,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 11982,
+   "hi": 11983,
+   "side": "near",
+   "radar": {
+    "value": 108,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 12694,
+   "hi": 12695,
+   "side": "near",
+   "radar": {
+    "value": 116,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 13388,
+   "hi": 13389,
+   "side": "far",
+   "radar": {
+    "value": 97,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 14379,
+   "hi": 14381,
+   "side": "far",
+   "radar": {
+    "value": 115,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 15196,
+   "hi": 15197,
+   "side": "far",
+   "radar": {
+    "value": 78,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 16198,
+   "hi": 16199,
+   "side": "near",
+   "radar": {
+    "value": 95,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 17943,
+   "hi": 17945,
+   "side": "near",
+   "radar": {
+    "value": 124,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 19519,
+   "hi": 19521,
+   "side": "near",
+   "radar": {
+    "value": 119,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 19659,
+   "hi": 19661,
+   "side": "near",
+   "radar": null,
+   "note": "Fritz"
+  },
+  {
+   "lo": 21786,
+   "hi": 21788,
+   "side": "far",
+   "radar": {
+    "value": 123,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 23096,
+   "hi": 23097,
+   "side": "far",
+   "radar": {
+    "value": 117,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 23687,
+   "hi": 23689,
+   "side": "far",
+   "radar": {
+    "value": 91,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 24636,
+   "hi": 24638,
+   "side": "near",
+   "radar": {
+    "value": 120,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 25456,
+   "hi": 25458,
+   "side": "far",
+   "radar": {
+    "value": 115,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 26766,
+   "hi": 26768,
+   "side": "far",
+   "radar": {
+    "value": 113,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 28622,
+   "hi": 28623,
+   "side": "near",
+   "radar": {
+    "value": 98,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 30407,
+   "hi": 30409,
+   "side": "near",
+   "radar": {
+    "value": 134,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 31278,
+   "hi": 31280,
+   "side": "near",
+   "radar": {
+    "value": 126,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 31763,
+   "hi": 31765,
+   "side": "near",
+   "radar": {
+    "value": 102,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 35410,
+   "hi": 35412,
+   "side": "far",
+   "radar": {
+    "value": 118,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 36210,
+   "hi": 36212,
+   "side": "near",
+   "radar": {
+    "value": 118,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 37472,
+   "hi": 37473,
+   "side": "near",
+   "radar": {
+    "value": 74,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 38243,
+   "hi": 38245,
+   "side": "far",
+   "radar": {
+    "value": 103,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 39175,
+   "hi": 39176,
+   "side": "near",
+   "radar": {
+    "value": 112,
+    "unit": "mph"
+   },
+   "note": "Fritz"
+  },
+  {
+   "lo": 40272,
+   "hi": 40273,
+   "side": "near",
+   "radar": {
+    "value": 79,
+    "unit": "mph"
+   },
+   "note": "Tiafoe"
+  },
+  {
+   "lo": 40886,
+   "hi": 40888,
+   "side": "far",
+   "radar": null,
+   "note": "Fritz"
+  }
+ ]
+}

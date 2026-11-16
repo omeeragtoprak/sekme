@@ -39,7 +39,7 @@ def _analyze(args: argparse.Namespace) -> int:
                          serve_toss_bridge_s=TOSS_BRIDGE_S if args.toss_bridge else 0.0,
                          pin_serve_height=args.pin_serve_height, fps_scaled_thresholds=args.fps_scaled_thresholds,
                          player_size_from_camera=args.player_size_from_camera,
-                         score_consistency=args.score_consistency, far_stroke_breaks=args.far_stroke_breaks)
+                         score_consistency=args.score_consistency)
     if args.ball_model:
         cfg.models["ball"] = str(Path(args.ball_model).resolve())
     for item in args.model:
@@ -154,9 +154,6 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--score-consistency", action="store_true",
                    help="candidate: player names counted only from score readings that are consistent over time "
                         "(off by default, docs/ARCHITECTURE.md)")
-    a.add_argument("--far-stroke-breaks", action="store_true",
-                   help="candidate: far strokes also from a 2D break of the ball's image velocity next to the far "
-                        "player (off by default, docs/ARCHITECTURE.md)")
     a.add_argument("--fit-workers", type=int, default=None, metavar="N",
                    help="processes for the 3D flight fits (same results; default SEKME_FIT_WORKERS, else half "
                         "the cores up to 4). 1 fits them in turn")

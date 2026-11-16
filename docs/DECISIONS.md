@@ -7,7 +7,7 @@ documented: a rejected pipeline change is removed from the code, and a rejected 
 defaults. Numbers are as measured, failures included. Each
 row links to the section that holds the rule, the result and what was learned.
 
-34 decisions: 12 adopted, 9 rejected, 6 not adopted, 5 open, 1 adopted as a correctness fix, 1 withdrawn.
+34 decisions: 13 adopted, 9 rejected, 6 not adopted, 4 open, 1 adopted as a correctness fix, 1 withdrawn.
 
 | Date | Change | Outcome | Evidence | Where |
 |---|---|---|---|---|
@@ -33,7 +33,7 @@ row links to the section that holds the rule, the result and what was learned.
 | 2026-11-14 | Camera-based player size gate, 0.5 band | open | No result yet; development only: TrackNet games 1–7 221 / 329 first bounces at 89.4 % precision | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Third candidate on the same videos: the player size gate from the camera (rule written 2026-11-14, before any download) |
 | 2026-11-14 | Frame counts scaled at 60 fps | open | No result yet; development only: with the change, 20 of 23 at 60 fps (19 within 2 frames) | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Second candidate on the same videos: frame counts scaled at 60 fps (rule written 2026-11-14, before any download) |
 | 2026-11-16 | Player names from consistent score readings | open | No result yet; development only (2025 final, spent for names): wrong near-player names 72 → 18, right 205 → 220, unnamed 2 → 41 on 279 reference flights (with the left-out column read from its pixels) | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Fourth candidate on the same videos: player names from consistent score readings (rule written 2026-11-16, before any download) |
-| 2026-11-16 | Far strokes from a 2D velocity break | open | No result yet; development only (TrackNet games 1–7): strokes hit within 3 frames 269 → 285 of 374, first bounces 220 → 223, decisive 228 → 232 all consistent | [EVAL_SPOT.md](EVAL_SPOT.md), Candidate 2 (test slot 1): far strokes from a 2D velocity break |
+| 2026-11-17 | Far strokes from a 2D velocity break | adopted | E2E-Spot test slot 1 (4 matches, 303 clips): stroke recall +3.32 points (rises in all 4 matches), stroke precision +0.28, first-bounce recall +0.86, bounce precision +0.31, serve recall 0.00 | [EVAL_SPOT.md](EVAL_SPOT.md), Candidate 2 (test slot 1): far strokes from a 2D velocity break |
 | 2026-11-14 | Gap contact change for hidden serves | adopted | paired mean error v3 1.49 → 0.53, v4 2.08 → 0.18; good serves 4 → 6 for both | [EVAL_SERVE_CONTACT.md](EVAL_SERVE_CONTACT.md), Rules |
 | 2026-11-14 | Serve net choice, v3 vs v4 | not adopted | With the accepted code v3 and v4 both have 6 good serves: no measurable difference on serves | [EVAL_SERVE_CONTACT.md](EVAL_SERVE_CONTACT.md), Rules |
 | 2026-11-14 | Player size gate from camera, 0.6 band | not adopted | worst fall (2023 final 90–179 s, far player) 99.0 % → 97.9 % (−1.15 points), fails (limit 1 point) | [EVAL_PLAYERS.md](EVAL_PLAYERS.md), Rule |
