@@ -247,6 +247,13 @@ Also from the pipeline review (2026-11-14), checked and left:
   would need labelled player tracks to judge it. On the six v4 broadcast runs (12 player tracks, read from their
   reports) neither shows much: the peaks are 14.0–22.3 km/h, no step between frames exceeds 1 m, camera cuts add
   at most 0.1 m, and the unsmoothed short runs give 44.6 m of the 2 627.8 m in all (1.7 %).
+- `broadcast/ocr.py` (Apple Vision) does not read the "0" cells of the US Open score graphic. On the 2025 final
+  (development frames at 329.8, 354.4, 360.7 and 390.6 s) the graphic shows "2 6 1 0 / 6 3 6 0" or "2 6 1 1 /
+  6 3 6 0", and the fourth set's column is missing from every reading: its "0"s are never read, its "1" only
+  sometimes. Re-reading a crop of the graphic at 1, 2 and 3 times the size brings back some "1"s, never the "0"s,
+  and glues "2 6" into "26", so a re-read cannot restore the column. A "1 0" column lost this way turns the
+  end-change count odd and puts the names on the wrong ends; this is what `--score-consistency` (fourth candidate
+  in `docs/EVAL_SERVE_SPEED.md`) takes the names away from, rather than guess the column.
 - `broadcast/scoreboard.py`: a player name with a dotted initial ("ALCARAZ G.", "J.-W. TSONGA") is not read
   as a name, and the fuzzy match for the speed board's label also accepts look-alike words ("SERVICE",
   "SPEEDY"). Neither occurs in the six broadcast clips: their names are read as surnames or full names (no
