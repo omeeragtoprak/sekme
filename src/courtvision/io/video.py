@@ -97,7 +97,11 @@ def probe(path: str | Path) -> VideoInfo:
         if fps is None:
             raise UnreadableVideoError(f"{name}: video akışında kare hızı yok")
         duration = float(meta["format"].get("duration", v.get("duration", 0.0)))
-        n = int(v.get("nb_frames") or round(duration * fps))
+        try:  # a stated count of "0" or "N/A" is no count: fall back to duration * fps
+            n = int(v.get("nb_frames") or 0)
+        except ValueError:
+            n = 0
+        n = n if n > 0 else round(duration * fps)
         has_audio = any(s.get("codec_type") == "audio" for s in meta["streams"])
     except UnreadableVideoError:
         raise

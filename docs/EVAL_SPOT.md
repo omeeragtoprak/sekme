@@ -220,3 +220,8 @@ runs folders, which an aborted first attempt could leave ambiguous), and scoring
 in a runs folder to come from one recorded file; a missing default network is refused. Known limit, not
 changed: a re-download is recognised by its size, frame rate and container frame count, so an upload of the same
 length with shifted content would pass; the reported median timing gap per match would show such an offset.
+
+A second review (2026-11-16, still before any download) read `src/courtvision/eval/spot.py` against the
+measurement and rules above and found it doing what they say; its edges (the 0.1 s and 0.5 s windows and the
+sweep at 25 and 29.97 fps, the fault window, pooling, F1 and the undefined cases) are pinned in
+`tests/test_scorers_edges.py`.

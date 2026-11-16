@@ -243,11 +243,22 @@ Also from the pipeline review (2026-11-14), checked and left:
   walk at 18 km/h this reports a 61.6 km/h peak and 26.5 m for 14.8 m walked. A run of valid frames shorter
   than the 0.6 s smoothing window gets no speed, but its raw, unsmoothed steps still count towards the distance.
   Found by a test review (2026-11-16) and pinned (`tests/test_analytics_eval_edges.py`); left, since a change
-  would need labelled player tracks to judge it.
+  would need labelled player tracks to judge it. On the six v4 broadcast runs (12 player tracks, read from their
+  reports) neither shows much: the peaks are 14.0–22.3 km/h, no step between frames exceeds 1 m, camera cuts add
+  at most 0.1 m, and the unsmoothed short runs give 44.6 m of the 2 627.8 m in all (1.7 %).
+- `calib/line_refine.py`: a ridge cut by the end of its search window is still returned (biased towards the
+  window, e.g. −8.75 px for a ridge centred at −9) instead of being refused; and the colour histogram behind the
+  shot-cut test (`perception/court.py`) is sharp enough that a flat, untextured frame made 15 grey levels
+  brighter counts as a cut (broadcast frames, with texture and noise, do not). Both found by a test review
+  (2026-11-16) and pinned (`tests/test_io_lines_cuts_edges.py`); a change to either alters calibration or cuts
+  and would need its own rule.
 - `eval/broadcast_check.py`: end changes are counted from the games columns, with a tiebreak as one game, while
   the players also change ends after every 6 tiebreak points; during a tiebreak (and after one, depending on its
   points) the graphic's names can be on the wrong ends (names only, never a call). Pinned
   (`tests/test_broadcast_check_hud_edges.py`) and left: the graphic shows tiebreak points only while it lasts.
+  Of the six v4 broadcast runs only the US Open 2023 final 90–179 s clip has one (second set; the graphic's last
+  reading during it shows 5–4 in points, and the match record gives 7–5): none of its flights during the tiebreak
+  was named, and 12 points are two extra changes, so the names after it are unaffected.
 
 Fixed in the same review: the perception cache key now includes the calibrator's keyframe interval, the
 shot-cut threshold and the person detector's input size (older caches are read as made with the defaults,

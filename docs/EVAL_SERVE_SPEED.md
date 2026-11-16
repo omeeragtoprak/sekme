@@ -263,3 +263,24 @@ found no blocker.
 
 Not changed, noted: s = round(fps / 30) is already 2 from 45 fps, so "s = 1 below 50 fps" above is only
 true below 45 fps; the rule keeps videos of 50 fps and more, and all six are 60 fps.
+
+## Scoring code corrected before any download (2026-11-16, after a second review of the code)
+
+A second review read `src/courtvision/eval/six_videos.py` against every number and condition of this plan
+(tolerances, frame-rate scaling, edges, pairing order, ties, rounding, how each verdict follows from its
+criteria) and pinned them in `tests/test_scorers_edges.py`. Nothing had been downloaded, drawn or labelled.
+Everything matched except these two points, now corrected; no rule changed:
+
+- **The serves the pinned run loses are listed.** Measurement says such a serve "counts as **worse** in
+  criterion 2 and is listed"; the count was right, but no serve was named. The result now carries
+  `lost_by_pinned`: the video (its place in the order of the six names), the serve's start frame, and what
+  the pinned run did (no flight, no speed, or its rejection).
+- **The disagreement sample uses the whole tolerance a player is found within.** Two runs count as picking
+  different players when their feet are further apart than 0.3 × the smaller box's height **but at least
+  15 px at 1080 lines** (scaled with the height), the floor of the "found" rule. Without it, two runs tracking
+  the same small far player a few pixels apart counted as a disagreement and took places in the 60-frame
+  sample that criterion 4 then cannot use.
+
+Reading of criterion 2 of the second candidate, recorded now (the code already does this): if the default
+run matches no serve, its share within 2 frames does not exist and cannot fall; the criterion then holds when
+the scaled run matches any serve, and fails when neither does.

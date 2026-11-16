@@ -174,8 +174,9 @@ def fps_rule(videos: list[tuple[float, list[dict], dict, dict]]) -> Verdict:
 def pin_rule(videos: list[tuple[list[dict], dict, dict]], min_paired: int = 15) -> Verdict:
     """``videos``: (labels, unpinned report, pinned report). Criteria of the pin candidate."""
     rows = []  # (label board, |e_unpinned|, |e_pinned| or None)
+    lost = []  # paired serves the pinned run rejects or gives no speed: worse in criterion 2, and listed
     verdict_changes = []
-    for labels, rep_u, rep_p in videos:
+    for vi, (labels, rep_u, rep_p) in enumerate(videos):
         su, sp = system_serves(rep_u), {s["start"]: s for s in system_serves(rep_p)}
         for i, (s, _) in match(labels, su).items():
             b = board_kmh(labels[i])
@@ -185,6 +186,9 @@ def pin_rule(videos: list[tuple[list[dict], dict, dict]], min_paired: int = 15) 
             ep = (abs(100 * (p["kmh"] - b) / b) if p is not None and p["kmh"] is not None and p["rejected"] is None
                   else None)
             rows.append((b, abs(100 * (s["kmh"] - b) / b), ep))
+            if ep is None:
+                lost.append({"video": vi, "start_frame": s["start"],
+                             "pinned": "no flight" if p is None else (p["rejected"] or "no speed")})
         su_by = {s["start"]: s for s in su}
         for start in sorted(set(su_by) | set(sp)):  # serves of either run
             vu = su_by[start]["verdict"] if start in su_by else None
@@ -193,7 +197,8 @@ def pin_rule(videos: list[tuple[list[dict], dict, dict]], min_paired: int = 15) 
                 verdict_changes.append((start, vu, vp))
     n = len(rows)
     if n < min_paired:
-        return Verdict("inconclusive", numbers={"paired": n, "verdict_changes": verdict_changes})
+        return Verdict("inconclusive",
+                       numbers={"paired": n, "lost_by_pinned": lost, "verdict_changes": verdict_changes})
     both = [(eu, ep) for _, eu, ep in rows if ep is not None]
     drop = float(np.mean([eu for eu, _ in both]) - np.mean([ep for _, ep in both])) if both else float("nan")
     closer = sum(1 for eu, ep in both if eu - ep >= 0.5)
@@ -202,7 +207,7 @@ def pin_rule(videos: list[tuple[list[dict], dict, dict]], min_paired: int = 15) 
             "two thirds closer": (closer + further) > 0 and 3 * closer >= 2 * (closer + further),
             "no serve verdict change": not verdict_changes}
     nums = {"paired": n, "both_measured": len(both), "mean_abs_drop_points": drop, "closer": closer,
-            "further_or_lost": further, "verdict_changes": verdict_changes}
+            "further_or_lost": further, "lost_by_pinned": lost, "verdict_changes": verdict_changes}
     return Verdict("accepted" if all(crit.values()) else "rejected", crit, nums)
 
 
@@ -242,17 +247,19 @@ def _found(feet: tuple[float, float, float] | None, truth, height: int) -> bool:
     return bool(np.hypot(feet[0] - truth[0], feet[1] - truth[1]) <= tol)
 
 
-def disagreement_sample(name: str, fa: dict, fb: dict, valid: list[bool], k: int = DISAGREE_FRAMES) -> list[int]:
+def disagreement_sample(name: str, fa: dict, fb: dict, valid: list[bool], height: int,
+                        k: int = DISAGREE_FRAMES) -> list[int]:
     """Calibrated frames where the two runs pick different players (one tracks and the other does not, or their
-    feet are further apart than the tolerance) for either side; up to ``k``, drawn with a seed from the name.
-    The labeller sees only the frames, never which run picked what."""
+    feet are further apart than the tolerance a player is found within, floor included) for either side; up to
+    ``k``, drawn with a seed from the name. The labeller sees only the frames, never which run picked what."""
     def differ(i: int, side: str) -> bool:
         a, b = _feet(fa, side, i), _feet(fb, side, i)
         if (a is None) != (b is None):
             return True
         if a is None or b is None:
             return False
-        return np.hypot(a[0] - b[0], a[1] - b[1]) > PRESENCE_TOL_FRAC * min(a[2], b[2])
+        tol = max(PRESENCE_MIN_TOL_PX * height / 1080.0, PRESENCE_TOL_FRAC * min(a[2], b[2]))
+        return bool(np.hypot(a[0] - b[0], a[1] - b[1]) > tol)
     cand = [i for i in range(len(valid)) if valid[i] and (differ(i, "near") or differ(i, "far"))]
     if len(cand) <= k:
         return cand

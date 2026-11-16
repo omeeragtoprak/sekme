@@ -153,7 +153,8 @@ def disagreements(labels_dir: Path) -> None:
         if not (same_code(da) and same_code(db)):
             raise SystemExit(f"{n}: runs made with other code than HEAD")
         fa, fb = json.loads((da / "frames.json").read_text()), json.loads((db / "frames.json").read_text())
-        frames = disagreement_sample(n, fa, fb, fa["calib_valid"])
+        height = int(json.loads((da / "report.json").read_text())["video"]["height"])
+        frames = disagreement_sample(n, fa, fb, fa["calib_valid"], height)
         write_once(labels_dir / f"{n}_disagree_frames.json", {"frames": frames})
         print(f"{n}: {len(frames)} disagreement frames to label", flush=True)
 
@@ -256,7 +257,7 @@ def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
             if listed["n_frames"] != n_frames or listed["frames"] != presence_sample(n, n_frames):
                 raise SystemExit(f"{n}: the presence frame list is not the one drawn for its {n_frames} frames")
             fa, fb = fr[n]["default"], fr[n]["players"]
-            drawn = disagreement_sample(n, fa, fb, fa["calib_valid"])
+            drawn = disagreement_sample(n, fa, fb, fa["calib_valid"], int(rep[n]["default"]["video"]["height"]))
             if json.loads((labels_dir / f"{n}_disagree_frames.json").read_text())["frames"] != drawn:
                 raise SystemExit(f"{n}: the disagreement frame list is not the one drawn from the runs")
             _check_frames(pl[n], labels_dir / f"{n}_presence_frames.json", n)
