@@ -70,6 +70,7 @@ documented). `report.json` lists the flags a run used under `candidates`.
 | `--fps-scaled-thresholds` | frame counts set on 30 fps video (court-fixed filter, toss-run gap, toss speed per frame) scaled by round(fps / 30) | `docs/EVAL_SERVE_SPEED.md`, second candidate |
 | `--player-size-from-camera` | the player size gate from the calibrated camera (band 0.5–1.6 of a standing 1.85 m player) instead of one track's median height | `docs/EVAL_SERVE_SPEED.md`, third candidate |
 | `--pin-serve-height` | the flight fit held at the serve contact height measured on the camera ray (±0.05 m) | `docs/EVAL_SERVE_SPEED.md` |
+| `--score-consistency` | player names counted only from score readings consistent over time (no missing current-set column, no fall in the set count) | `docs/EVAL_SERVE_SPEED.md`, fourth candidate |
 | `--toss-bridge` | a toss run may span a missed apex; the serve contact is searched over the whole run | withdrawn from its test (`docs/EVAL_SPOT.md`); reported only |
 
 ## Where the time goes (profiled 2026-11-14)

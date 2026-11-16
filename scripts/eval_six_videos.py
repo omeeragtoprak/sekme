@@ -3,6 +3,7 @@
     .venv/bin/python scripts/eval_six_videos.py sample --videos DIR --labels DIR # frame lists for the presence labels
     .venv/bin/python scripts/eval_six_videos.py run    --videos DIR            # one GPU pass per video, then variants
     .venv/bin/python scripts/eval_six_videos.py disagreements --labels DIR    # frames where the player runs differ
+    .venv/bin/python scripts/eval_six_videos.py names --labels DIR            # flights to label for the names candidate
     .venv/bin/python scripts/eval_six_videos.py score  --labels DIR --out F    # the rules, once
 
 The videos are the six of ``six_videos_fetch.MATCHES``, files DIR/<name>.mp4 (handled three at a time: each
@@ -14,6 +15,8 @@ count; an existing list is kept, and a different one is refused).
 reported only, ``bridge`` (--toss-bridge) and ``bridge_pin`` (+ --pin-serve-height), under data/six/runs/<name>/.
 Runs only from committed analysis code; each run records the commit it was made from.
 ``disagreements``: DIR/<name>_disagree_frames.json, frames where default and ``players`` pick different players.
+``names``: DIR/<name>_names_flights.json, up to 40 flights of the default run to label with the near player's name
+(the ``consistency`` run, --score-consistency, differs from the default in names only).
 ``score``: serve labels DIR/<name>.json (as results/serve_contact_labels_2025final.json), player labels
 DIR/<name>_presence.json and DIR/<name>_disagree.json ([{"frame", "main", "near": [x, y] | null, "far": ...}]).
 Refuses: a set other than the six, missing runs, runs from other code than HEAD or with other flags, video or
@@ -48,10 +51,13 @@ from courtvision.eval.provenance import (  # noqa: E402
 )
 from courtvision.eval.six_videos import (  # noqa: E402
     call_changes,
+    check_name_labels,
     check_player_labels,
     check_serve_labels,
     disagreement_sample,
     fps_rule,
+    names_rule,
+    names_sample,
     pin_rule,
     player_rule,
     presence_sample,
@@ -65,15 +71,22 @@ MANIFEST = ROOT / "data" / "six" / "manifest.json"
 BALL_MODEL = ROOT / "models" / "sekme_ball.pt"  # ball v4, the default the plan names
 VARIANTS = {"scaled": ["--fps-scaled-thresholds"], "scaled_pin": ["--fps-scaled-thresholds", "--pin-serve-height"],
             "players": ["--player-size-from-camera"], "bridge": ["--toss-bridge"],
-            "bridge_pin": ["--toss-bridge", "--pin-serve-height"]}
+            "bridge_pin": ["--toss-bridge", "--pin-serve-height"], "consistency": ["--score-consistency"]}
 KINDS = ("default", *VARIANTS)
 # The report's "candidates" record of each run: the flags it must have been made with, no more, no fewer.
 FLAGS = {"default": set(), "scaled": {"fps_scaled_thresholds"},
          "scaled_pin": {"fps_scaled_thresholds", "pin_serve_height"}, "players": {"player_size_from_camera"},
-         "bridge": {"serve_toss_bridge_s"}, "bridge_pin": {"serve_toss_bridge_s", "pin_serve_height"}}
+         "bridge": {"serve_toss_bridge_s"}, "bridge_pin": {"serve_toss_bridge_s", "pin_serve_height"},
+         "consistency": {"score_consistency"}}
 CACHES = ("perception.pkl", "broadcast.pkl", "pose.pkl")
 SCORER_CODE = ["src", "scripts/eval_six_videos.py", "scripts/six_videos_fetch.py"]
-PLAYER_FILES = ("_presence", "_presence_frames", "_disagree", "_disagree_frames")
+PLAYER_FILES = ("_presence", "_presence_frames", "_disagree", "_disagree_frames", "_names", "_names_flights")
+
+
+def players_of(n: str) -> tuple[str, str]:
+    """The two players' surnames as the name labels give them (from the video's title words)."""
+    a, b = MATCHES[n][1]
+    return a.upper(), b.upper()
 
 
 def videos_in(videos: Path) -> list[Path]:
@@ -157,6 +170,21 @@ def disagreements(labels_dir: Path) -> None:
         frames = disagreement_sample(n, fa, fb, fa["calib_valid"], height)
         write_once(labels_dir / f"{n}_disagree_frames.json", {"frames": frames})
         print(f"{n}: {len(frames)} disagreement frames to label", flush=True)
+
+
+def names_flights(labels_dir: Path) -> None:
+    """After ``run``: the flights to label for the player-names candidate, drawn from the default run's flights."""
+    for n in NAMES:
+        d = RUNS / n / "default"
+        if not (d / "report.json").exists():
+            print(f"{n}: runs not made yet", flush=True)
+            continue
+        if not same_code(d):
+            raise SystemExit(f"{n}: runs made with other code than HEAD")
+        ids = [f["id"] for f in json.loads((d / "report.json").read_text())["flights"]]
+        flights = names_sample(n, ids)
+        write_once(labels_dir / f"{n}_names_flights.json", {"n_flights": len(ids), "flights": flights})
+        print(f"{n}: {len(flights)} of {len(ids)} flights to label", flush=True)
 
 
 def label_names(labels_dir: Path) -> list[str]:
@@ -265,6 +293,26 @@ def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
             outside_main[n] = sum(not lb["main"] for lb in pl[n])
         plv = player_rule([(pl[n], dl[n], fr[n]["default"], fr[n]["players"], int(rep[n]["default"]["video"]["height"]))
                            for n in NAMES])
+    name_files = {n: (labels_dir / f"{n}_names.json", labels_dir / f"{n}_names_flights.json") for n in NAMES}
+    have_names = [lf.exists() for lf, _ in name_files.values()]
+    if any(have_names) and not all(have_names):  # partial name labels would quietly change the test
+        raise SystemExit("name labels missing for some videos")
+    nv = None
+    if all(have_names):
+        nl = {}
+        for n, (lf, listed) in name_files.items():
+            nl[n] = json.loads(lf.read_text())
+            try:
+                check_name_labels(nl[n], players_of(n))
+            except ValueError as e:
+                raise SystemExit(f"{n}: {e}") from None
+            drawn = json.loads(listed.read_text())
+            ids = [f["id"] for f in rep[n]["default"]["flights"]]
+            if drawn["n_flights"] != len(ids) or drawn["flights"] != names_sample(n, ids):
+                raise SystemExit(f"{n}: the name flight list is not the one drawn from the default run")
+            if sorted(lb["flight"] for lb in nl[n]) != sorted(drawn["flights"]):
+                raise SystemExit(f"{n}: labelled flights differ from {listed.name}")
+        nv = names_rule([(nl[n], rep[n]["default"], rep[n]["consistency"]) for n in NAMES])
     per_video = {n: {k: recall_stats(lab[n], rep[n][k]) for k in KINDS} | {
         "fps": rep[n]["default"]["video"]["fps"]} for n in NAMES}
     reported = {  # not used by any rule (docs/EVAL_SERVE_SPEED.md, "Reported, not used")
@@ -287,12 +335,15 @@ def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
               "labels_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in sorted(labels_dir.glob("*.json"))},
               "fps_scaled_thresholds": asdict(fv), "pin_serve_height": asdict(pv),
-              "player_size_from_camera": asdict(plv) if plv else "no presence labels", "per_video": per_video,
+              "player_size_from_camera": asdict(plv) if plv else "no presence labels",
+              "score_consistency": asdict(nv) if nv else "no name labels", "per_video": per_video,
               "reported_not_used": reported}
     if plv is None:
         print("--player-size-from-camera: no player labels yet, not scored")
+    if nv is None:
+        print("--score-consistency: no name labels yet, not scored")
     for name, v in (("--fps-scaled-thresholds", fv), ("--pin-serve-height", pv),
-                    ("--player-size-from-camera", plv)):
+                    ("--player-size-from-camera", plv), ("--score-consistency", nv)):
         if v is None:
             continue
         print(f"{name}: {v.decision.upper()}")
@@ -306,7 +357,7 @@ def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=("sample", "run", "disagreements", "score"))
+    ap.add_argument("cmd", choices=("sample", "run", "disagreements", "names", "score"))
     ap.add_argument("--videos", type=Path)
     ap.add_argument("--labels", type=Path)
     ap.add_argument("--out", type=Path)
@@ -317,6 +368,8 @@ def main() -> None:
         run(a.videos)
     elif a.cmd == "disagreements":
         disagreements(a.labels)
+    elif a.cmd == "names":
+        names_flights(a.labels)
     else:
         if a.out is None:
             ap.error("score needs --out (the result file, written once)")

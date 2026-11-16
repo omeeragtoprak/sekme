@@ -50,6 +50,25 @@ def _flights(n: int, err: float, lost: tuple[int, ...] = ()) -> list[dict]:
     return [_flight(k, BOARD_KMH * (1 + err / 100), "low contact" if k in lost else None) for k in range(n)]
 
 
+N_RALLY = 30  # rally flights per video, for the player-names candidate (serve rules look at serves only)
+
+
+def _rallies(e, n: str, fixed: bool) -> list[dict]:
+    """Flights 1..N_RALLY: the near player is the video's first player on even ids. The default run names every
+    third one wrongly; the candidate shows no name there instead (``fixed``)."""
+    a, b = e.players_of(n)
+    out = []
+    for k in range(1, N_RALLY + 1):
+        near = a if k % 2 == 0 else b
+        shown = None if (fixed and k % 3 == 0) else (b if near == a else a) if k % 3 == 0 else near
+        hitter = "near" if k % 2 == 0 else "far"
+        out.append({"id": k, "kind": "rally", "hitter": hitter, "start_frame": 5000 + 40 * k,
+                    "end_frame": 5030 + 40 * k, "call": {"verdict": "IN"}, "bounce": {"frame": 5020 + 40 * k},
+                    "hitter_name": shown if hitter == "near" else None,
+                    "receiver_name": shown if hitter == "far" else None})
+    return out
+
+
 def _report(kind: str, e, ball_sha: str, vsha: str, flights: list[dict], detected: int) -> dict:
     return {"video": {"fps": FPS, "n_frames": N_FRAMES, "height": HEIGHT, "sha256": vsha},
             "models": {"ball": {"sha256": ball_sha}, "court": {"sha256": "court-sha"}},
@@ -74,12 +93,15 @@ def _build(tmp_path: Path, e, monkeypatch, with_players: bool) -> tuple[Path, Pa
                      "radar": {"value": BOARD_MPH, "unit": "mph"}} for k in range(N_SERVES)]
     flights = {"default": _flights(1, 12.0), "scaled": _flights(N_SERVES, 12.0, ()),
                "scaled_pin": _flights(N_SERVES, 3.0, (3,)), "players": _flights(1, 12.0),
-               "bridge": _flights(N_SERVES, 12.0), "bridge_pin": _flights(N_SERVES, 3.0)}
+               "bridge": _flights(N_SERVES, 12.0), "bridge_pin": _flights(N_SERVES, 3.0),
+               "consistency": _flights(1, 12.0)}
     for vi, n in enumerate(e.NAMES):
         for kind in e.KINDS:
             d = runs / n / kind
             d.mkdir(parents=True)
             fl = flights[kind] if not (kind == "scaled_pin" and vi != 0) else _flights(N_SERVES, 3.0)
+            if kind in ("default", "consistency"):  # the same flights, the names may differ
+                fl = fl + _rallies(e, n, fixed=kind == "consistency")
             (d / "report.json").write_text(json.dumps(
                 _report(kind, e, ball_sha, f"video-{n}", fl, 1000 if kind == "default" else 1040)))
         fa, fb = _frames(N_FRAMES // 2), _frames(N_FRAMES)
@@ -88,6 +110,12 @@ def _build(tmp_path: Path, e, monkeypatch, with_players: bool) -> tuple[Path, Pa
         (labels_dir / f"{n}.json").write_text(json.dumps({"serves": serve_labels}))
         if not with_players:
             continue
+        ids = [0, *range(1, N_RALLY + 1)]
+        drawn = e.names_sample(n, ids)
+        a, b = e.players_of(n)
+        (labels_dir / f"{n}_names_flights.json").write_text(json.dumps({"n_flights": len(ids), "flights": drawn}))
+        (labels_dir / f"{n}_names.json").write_text(json.dumps(
+            [{"flight": i, "near": None if i == 0 else a if i % 2 == 0 else b} for i in drawn]))  # 0: unclear
         pres = presence_sample(n, N_FRAMES)  # the drawn lists, not made-up ones
         dis = disagreement_sample(n, fa, fb, fa["calib_valid"], HEIGHT)
         assert len(pres) == 80 and len(dis) == 60
@@ -115,7 +143,7 @@ def test_score_happy_path_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert {"fps_scaled_thresholds", "pin_serve_height", "player_size_from_camera", "per_video",
             "reported_not_used", "code_sha", "labels_sha256"} <= res.keys()
     assert res["code_sha"] == "deadbeef" and len(res["per_video"]) == 6 and set(res["per_video"]) == set(e.NAMES)
-    assert len(res["labels_sha256"]) == 6 * 5 and all(len(h) == 64 for h in res["labels_sha256"].values())
+    assert len(res["labels_sha256"]) == 6 * 7 and all(len(h) == 64 for h in res["labels_sha256"].values())
 
     fps = res["fps_scaled_thresholds"]  # default vs scaled
     assert fps["decision"] == "accepted" and all(fps["criteria"].values())
@@ -130,6 +158,12 @@ def test_score_happy_path_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert abs(pin["numbers"]["mean_abs_drop_points"] - 9.0) < 1e-6
     assert pin["numbers"]["lost_by_pinned"] == [{"video": 0, "start_frame": 3099, "pinned": "low contact"}]
     assert pin["numbers"]["verdict_changes"] == []
+
+    nm = res["score_consistency"]  # default vs consistency, on the 31 drawn flights of each video (0 is unclear)
+    assert nm["decision"] == "accepted" and all(nm["criteria"].values()) and len(nm["criteria"]) == 3
+    assert nm["numbers"]["default"] == {"right": 120, "wrong": 60, "none": 0}  # every third rally named wrongly
+    assert nm["numbers"]["candidate"] == {"right": 120, "wrong": 0, "none": 60}  # shown without a name instead
+    assert nm["numbers"]["videos_with_other_changes"] == []
 
     pl = res["player_size_from_camera"]  # default vs players
     assert pl["decision"] == "accepted" and len(pl["criteria"]) == 4 and all(pl["criteria"].values())

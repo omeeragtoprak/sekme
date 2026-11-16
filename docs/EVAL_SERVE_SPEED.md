@@ -284,3 +284,46 @@ Everything matched except these two points, now corrected; no rule changed:
 Reading of criterion 2 of the second candidate, recorded now (the code already does this): if the default
 run matches no serve, its share within 2 frames does not exist and cannot fall; the criterion then holds when
 the scaled run matches any serve, and fails when neither does.
+
+## Fourth candidate on the same videos: player names from consistent score readings (rule written 2026-11-16, before any download)
+
+**Change** (`sekme analyze --score-consistency`; off by default): the player names on shots (start ends from the
+marked servers' serves, then the end changes counted from the score graphic) are computed only from readings
+that are consistent over time. A reading is dropped when its last set is finished while a point is under way
+(the column of the set being played was not read), and, in time order, when it shows fewer sets than a reading
+before it (a match's set count never falls). The report's score, serve sides and speeds still come from every
+reading; only the names change (`eval/broadcast_check.py` `consistent_scores`).
+
+**Why** (development data only, the US Open 2025 final, which is spent as a test set for names): the raw OCR boxes
+show the score graphic's current-set cell is often not read at all, for instance "2 6 1 / 6 3 6" with "AD" or
+"15-30" being played, the fourth set's column missing for about 80 s. The end-change count from such a reading
+is off by that set's games, so the names come out on the wrong ends. On the per-flight reference of the
+identity test (279 flights): default 205 right, 72 wrong, 2 unnamed; with the change 181 right, 27 wrong, 71
+unnamed (`devir/scratch/names_dev.py`; the other variants tried on the same data: the set-count check alone 197 /
+43 / 39, the missing-column check alone 184 / 41 / 54, the rejected single-reading check 207 / 62 / 10). The
+change was chosen after looking at those errors and among four variants on the same clip, so these numbers are
+optimistic; only the six videos decide. A name left out is shown as "—", which misleads less than a wrong one.
+
+**Labels, blind** (by a separate labeller, after the runs): `scripts/eval_six_videos.py names` lists up to 40
+flights per video, drawn from the video's name and the default run's flight ids alone (`names_sample`; the lists are
+committed before labelling). For each listed flight the labeller sees the video frames from the flight's start
+(the score graphic included) and gives the near player's surname as written in `six_videos_fetch.MATCHES`, or null
+when it cannot be told. The players are told apart by appearance across the video, and appearance is tied to a
+name at serves where the graphic marks the server; the labeller never sees the system's names. Committed before
+any scoring (`DIR/<name>_names.json`: `[{"flight", "near"}]`).
+
+**Rule** (default analysis against `--score-consistency`, both from the same perception cache). On the labelled
+flights (null left out), the near player's name in each run is right, wrong or missing.
+
+- **Inconclusive** if the default run names fewer than 10 of them wrongly: the candidate stays off, its code
+  stays, and these videos count as used for it.
+- Otherwise the candidate becomes the default only if all hold: (1) its wrong names are **at most half** of the
+  default's; (2) its right names are **at least 85 %** of the default's; (3) **nothing but names changes**: every
+  flight's id, frames, hitter, kind, call and bounce are the same in both runs (anything else is a fault).
+
+  If any fails, it is rejected: its code is removed and the result stays here. Reported, not used: missing names,
+  each video's counts, and stroke wing changes (the hitting hand is voted per name).
+
+Scoring code: `names_sample`, `check_name_labels` and `names_rule` in `src/courtvision/eval/six_videos.py`; the run
+`consistency` and the `names` command in `scripts/eval_six_videos.py`; pinned by `tests/test_score_consistency.py`
+and the dry run (`tests/test_six_videos_dry_run.py`).

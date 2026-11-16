@@ -429,3 +429,69 @@ def speed_report(pairs: list[tuple[list[dict], dict]]) -> dict:
             "board_below_100mph": stats([e for _, mph, e in rows if mph < 100]),
             "board_115mph_up": stats([e for _, mph, e in rows if mph >= 115]),
             "automatic_pairs": stats(auto)}
+
+
+# --- Fourth candidate: player names from consistent score readings (--score-consistency) ---------------------------
+# Blind labels on a fixed flight sample: for each sampled flight, the near player's name, or null when unclear.
+
+NAMES_FLIGHTS = 40
+
+
+def names_sample(name: str, flight_ids: list[int], k: int = NAMES_FLIGHTS) -> list[int]:
+    """The flights to label for one video, drawn from its name and the default run's flight ids alone."""
+    ids = sorted(int(i) for i in flight_ids)
+    if len(ids) <= k:
+        return ids
+    return sorted(int(i) for i in _rng(name + ":names").choice(ids, size=k, replace=False))
+
+
+def check_name_labels(labels: list[dict], players: tuple[str, str]) -> None:
+    """Every name label names a listed flight once and its near player as one of the two players, or null."""
+    seen = set()
+    for k, lb in enumerate(labels):
+        if not isinstance(lb, dict) or not {"flight", "near"} <= lb.keys() or not _is_int(lb["flight"]):
+            raise ValueError(f"name label {k}: needs flight (an id) and near (a name or null)")
+        if lb["flight"] in seen:
+            raise ValueError(f"name label {k}: flight {lb['flight']} labelled twice")
+        seen.add(lb["flight"])
+        if lb["near"] is not None and lb["near"] not in players:
+            raise ValueError(f"name label {k}: near must be one of {list(players)} or null")
+
+
+def _near_name(f: dict) -> str | None:
+    return f.get("hitter_name") if f.get("hitter") == "near" else f.get("receiver_name")
+
+
+def _same_player(label: str, shown: str | None) -> bool | None:
+    """None: no name shown. The graphic may show a surname inside a longer string (or the other way round)."""
+    if not shown:
+        return None
+    a, b = label.upper(), shown.upper()
+    return a in b or b in a
+
+
+def names_rule(videos: list[tuple[list[dict], dict, dict]], min_wrong: int = 10) -> Verdict:
+    """``videos``: (name labels, default report, consistency report). The near player's name on the labelled flights:
+    right, wrong or none, in both runs; the candidate must change nothing but names."""
+    count = {"default": {"right": 0, "wrong": 0, "none": 0}, "candidate": {"right": 0, "wrong": 0, "none": 0}}
+    other_changes = []
+    for vi, (labels, rep_d, rep_c) in enumerate(videos):
+        keep = ("id", "start_frame", "end_frame", "hitter", "kind", "call", "bounce")
+        if [{k: f.get(k) for k in keep} for f in rep_d["flights"]] != [{k: f.get(k) for k in keep}
+                                                                       for f in rep_c["flights"]]:
+            other_changes.append(vi)  # the candidate touches names only: any other change is a fault
+        fd, fc = {f["id"]: f for f in rep_d["flights"]}, {f["id"]: f for f in rep_c["flights"]}
+        for lb in labels:
+            if lb["near"] is None or lb["flight"] not in fd or lb["flight"] not in fc:
+                continue
+            for arm, f in (("default", fd[lb["flight"]]), ("candidate", fc[lb["flight"]])):
+                same = _same_player(lb["near"], _near_name(f))
+                count[arm]["none" if same is None else "right" if same else "wrong"] += 1
+    d, c = count["default"], count["candidate"]
+    nums = {"default": d, "candidate": c, "videos_with_other_changes": other_changes}
+    if d["wrong"] < min_wrong:
+        return Verdict("inconclusive", numbers=nums)
+    crit = {"wrong names at most half": 2 * c["wrong"] <= d["wrong"],
+            "right names at least 85 %": 100 * c["right"] >= 85 * d["right"],
+            "nothing but names changes": not other_changes}
+    return Verdict("accepted" if all(crit.values()) else "rejected", crit, nums)

@@ -14,7 +14,7 @@ import pickle
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
@@ -29,7 +29,7 @@ from courtvision.analytics.kinematics import player_kinematics
 from courtvision.broadcast import ocr
 from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
 from courtvision.errors import MissingModelError, UnreadableVideoError
-from courtvision.eval.broadcast_check import Serve, check, serve_anchored_names, side_names
+from courtvision.eval.broadcast_check import Serve, check, consistent_scores, serve_anchored_names, side_names
 from courtvision.events.flights import Flight, build_flights, measurable_segments
 from courtvision.events.hits import detect_hits_in_segments
 from courtvision.events.serves import detect_serves, merge_serves
@@ -258,6 +258,7 @@ class PipelineConfig:
     pin_serve_height: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md)
     fps_scaled_thresholds: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): 60 fps frame counts
     player_size_from_camera: bool = False  # candidate, off by default (docs/EVAL_SERVE_SPEED.md): camera size gate
+    score_consistency: bool = False  # candidate, off by default (docs/ARCHITECTURE.md): names from consistent readings
     constant_rate_copy: bool = True  # variable-rate video analysed from a constant-rate copy (docs/ARCHITECTURE.md)
     drop_repeated_ball: bool = True  # no ball on the frames the copy repeats (docs/ARCHITECTURE.md, adopted 2026-11-15)
     same_angle_edits: bool = True  # edits from one camera position count as cuts (docs/ARCHITECTURE.md, adopted)
@@ -585,6 +586,11 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
     measurable_t = [(a / info.fps, b / info.fps) for a, b in segments]
     broadcast: dict[str, Any] = check(scan, serves, measurable=measurable_t) if scan is not None else {
         "ocr": None, "reason": "disabled" if not cfg.broadcast else "Apple Vision OCR is not available"}
+    names_scan, names_broadcast = scan, broadcast
+    if scan is not None and cfg.score_consistency:  # names only: the report's score, sides and speeds stay as read
+        names_scan = replace(scan, scores=consistent_scores(scan.scores))
+        names_broadcast = check(names_scan, serves, measurable=measurable_t)
+        broadcast["score_consistency"] = {"readings": len(scan.scores), "used_for_names": len(names_scan.scores)}
     if scan is not None:
         timings["broadcast_s"] = time.time() - t3
 
@@ -602,7 +608,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         "candidates": {k: v for k, v in (("serve_toss_bridge_s", cfg.serve_toss_bridge_s),
                                          ("pin_serve_height", cfg.pin_serve_height),
                                          ("fps_scaled_thresholds", cfg.fps_scaled_thresholds),
-                                         ("player_size_from_camera", cfg.player_size_from_camera)) if v},
+                                         ("player_size_from_camera", cfg.player_size_from_camera),
+                                         ("score_consistency", cfg.score_consistency)) if v},
         "calibration": {
             "valid_frames": len(valid), "total_frames": n, "shot_cuts": cuts, "same_angle_edits": edits,
             "same_angle_edits_measured": edits_measured,
@@ -632,7 +639,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         # this video's own limitations first
         "limitations": video_notes(info.fps, irregular, copy_info, field_ord, (len(valid), n)) + LIMITATIONS,
     }
-    _annotate_from_broadcast(report["flights"], broadcast, scan, info.fps, report["calibration"]["shot_cuts"])
+    _annotate_from_broadcast(report["flights"], names_broadcast, names_scan, info.fps,
+                             report["calibration"]["shot_cuts"])
     t4 = time.time()
     report["strokes"] = _annotate_strokes(video, report["flights"], flights, ball, players, kin, out, video_sha, cfg,
                                           device)

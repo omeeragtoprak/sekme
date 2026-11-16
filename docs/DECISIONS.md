@@ -7,7 +7,7 @@ documented: a rejected pipeline change is removed from the code, and a rejected 
 defaults. Numbers are as measured, failures included. Each
 row links to the section that holds the rule, the result and what was learned.
 
-32 decisions: 12 adopted, 9 rejected, 6 not adopted, 3 open, 1 adopted as a correctness fix, 1 withdrawn.
+33 decisions: 12 adopted, 9 rejected, 6 not adopted, 4 open, 1 adopted as a correctness fix, 1 withdrawn.
 
 | Date | Change | Outcome | Evidence | Where |
 |---|---|---|---|---|
@@ -32,6 +32,7 @@ row links to the section that holds the rule, the result and what was learned.
 | 2026-11-14 | Pin fit to serve contact height | open | No result yet (not run on the six videos); dry run on development clip: 17 paired serves, mean \|error\| −5.3 points, 13 closer, 1 further | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Rule (decided once, on the six videos) |
 | 2026-11-14 | Camera-based player size gate, 0.5 band | open | No result yet; development only: TrackNet games 1–7 221 / 329 first bounces at 89.4 % precision | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Third candidate on the same videos: the player size gate from the camera (rule written 2026-11-14, before any download) |
 | 2026-11-14 | Frame counts scaled at 60 fps | open | No result yet; development only: with the change, 20 of 23 at 60 fps (19 within 2 frames) | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Second candidate on the same videos: frame counts scaled at 60 fps (rule written 2026-11-14, before any download) |
+| 2026-11-16 | Player names from consistent score readings | open | No result yet; development only (2025 final, spent for names): wrong near-player names 72 → 27, right 205 → 181, unnamed 2 → 71 on 279 reference flights | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Fourth candidate on the same videos: player names from consistent score readings (rule written 2026-11-16, before any download) |
 | 2026-11-14 | Gap contact change for hidden serves | adopted | paired mean error v3 1.49 → 0.53, v4 2.08 → 0.18; good serves 4 → 6 for both | [EVAL_SERVE_CONTACT.md](EVAL_SERVE_CONTACT.md), Rules |
 | 2026-11-14 | Serve net choice, v3 vs v4 | not adopted | With the accepted code v3 and v4 both have 6 good serves: no measurable difference on serves | [EVAL_SERVE_CONTACT.md](EVAL_SERVE_CONTACT.md), Rules |
 | 2026-11-14 | Player size gate from camera, 0.6 band | not adopted | worst fall (2023 final 90–179 s, far player) 99.0 % → 97.9 % (−1.15 points), fails (limit 1 point) | [EVAL_PLAYERS.md](EVAL_PLAYERS.md), Rule |
