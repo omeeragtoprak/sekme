@@ -17,7 +17,8 @@ Runs only from committed analysis code; each run records the commit it was made 
 ``disagreements``: DIR/<name>_disagree_frames.json, frames where default and ``players`` pick different players.
 ``names``: DIR/<name>_names_flights.json, up to 40 flights of the default run to label with the near player's name
 (the ``consistency`` run, --score-consistency, differs from the default in names only).
-``score``: serve labels DIR/<name>.json (as results/serve_contact_labels_2025final.json), player labels
+``score`` (refuses missing player or name labels unless --skip players / --skip names gives those tests up): serve
+labels DIR/<name>.json (as results/serve_contact_labels_2025final.json), player labels
 DIR/<name>_presence.json and DIR/<name>_disagree.json ([{"frame", "main", "near": [x, y] | null, "far": ...}]).
 Refuses: a set other than the six, missing runs, runs from other code than HEAD or with other flags, video or
 models than expected, frame lists that are not the drawn ones, labels on other frames than listed, malformed
@@ -225,7 +226,7 @@ def committed(labels_dir: Path) -> bool:
     return tracked_and_clean(sorted(labels_dir.glob("*.json")))
 
 
-def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
+def score(labels_dir: Path, out: Path, require_committed: bool = True, skip: frozenset[str] = frozenset()) -> None:
     names = label_names(labels_dir)
     if names != NAMES:  # a partial or different set would quietly change the test
         raise SystemExit(f"score needs the serve labels of exactly the six videos; missing "
@@ -268,6 +269,8 @@ def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
     have = [p.exists() for p in [*pres.values(), *dis.values()]]
     if any(have) and not all(have):  # partial player labels would quietly change the test
         raise SystemExit("presence or disagreement labels missing for some videos")
+    if not all(have) and "players" not in skip:  # scoring is once: without them this test would be lost for good
+        raise SystemExit("no player labels: label them first, or pass --skip players to give up that test")
     plv, outside_main = None, {}
     if all(have):
         fr = {n: {k: json.loads((RUNS / n / k / "frames.json").read_text()) for k in ("default", "players")}
@@ -297,13 +300,14 @@ def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
     have_names = [lf.exists() for lf, _ in name_files.values()]
     if any(have_names) and not all(have_names):  # partial name labels would quietly change the test
         raise SystemExit("name labels missing for some videos")
+    if not all(have_names) and "names" not in skip:
+        raise SystemExit("no name labels: label them first, or pass --skip names to give up that test")
     nv = None
     if all(have_names):
         nl = {}
         for n, (lf, listed) in name_files.items():
-            nl[n] = json.loads(lf.read_text())
             try:
-                check_name_labels(nl[n], players_of(n))
+                nl[n] = check_name_labels(json.loads(lf.read_text()), players_of(n))
             except ValueError as e:
                 raise SystemExit(f"{n}: {e}") from None
             drawn = json.loads(listed.read_text())
@@ -331,7 +335,7 @@ def score(labels_dir: Path, out: Path, require_committed: bool = True) -> None:
             "calls": call_changes([(rep[n]["default"], rep[n]["players"]) for n in NAMES]),
             "speeds": speed_report([(lab[n], rep[n]["players"]) for n in NAMES]),
             "labelled_frames_outside_main_camera": outside_main or "no presence labels"}}
-    result = {"code_sha": head_sha(),
+    result = {"code_sha": head_sha(), "skipped": sorted(skip),
               "labels_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in sorted(labels_dir.glob("*.json"))},
               "fps_scaled_thresholds": asdict(fv), "pin_serve_height": asdict(pv),
@@ -361,6 +365,8 @@ def main() -> None:
     ap.add_argument("--videos", type=Path)
     ap.add_argument("--labels", type=Path)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--skip", nargs="*", choices=("players", "names"), default=[],
+                    help="score: give up these candidates' tests (their labels are missing; they count as used)")
     a = ap.parse_args()
     if a.cmd == "sample":
         sample(a.videos, a.labels)
@@ -373,7 +379,7 @@ def main() -> None:
     else:
         if a.out is None:
             ap.error("score needs --out (the result file, written once)")
-        score(a.labels, a.out)
+        score(a.labels, a.out, skip=frozenset(a.skip))
 
 
 if __name__ == "__main__":

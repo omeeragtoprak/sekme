@@ -327,3 +327,31 @@ flights (null left out), the near player's name in each run is right, wrong or m
 Scoring code: `names_sample`, `check_name_labels` and `names_rule` in `src/courtvision/eval/six_videos.py`; the run
 `consistency` and the `names` command in `scripts/eval_six_videos.py`; pinned by `tests/test_score_consistency.py`
 and the dry run (`tests/test_six_videos_dry_run.py`).
+
+### Amendments to the fourth candidate before any download (2026-11-16, after an independent review)
+
+An adversarial review of the rule and its scoring code, made before anything was downloaded or labelled, found
+six points; all are changed, the thresholds are not:
+
+- **Names in any case.** The labels give the surnames of `six_videos_fetch.MATCHES` in any case ("sinner",
+  "Sinner"); they are compared in upper case. As first written, a lower-case label would have stopped the scoring
+  after the labels were committed.
+- **The tie between appearance and names is recorded and checked.** Each video's label file is
+  `{"ties": [{"frame", "server"}], "flights": [{"flight", "near"}]}`: the labeller lists at least 3 serves where the
+  graphic marks the server and the server is seen serving, all agreeing with the appearance the labeller uses; with
+  fewer, or with any disagreeing, every flight of that video is null. One wrong tie would flip every label of a video
+  in both arms.
+- **Where a name came from is reported.** The tie uses the graphic's serving marker, the same signal the system's
+  serve-anchored names use, so flights named from a marked serve agree with the labels almost by construction in
+  both arms; the independent part is the flights named from the graphic's end changes. Each flight now records
+  `names_from` ("serve", "graphic" or none), and the result gives the counts split by the default run's source.
+  The criteria stay pooled over all labelled flights, as written.
+- **What is reported is produced.** The result gives each video's counts and, over all flights, how many differ
+  between the two runs in `server_name`, `hand`, `hand_source`, `stroke` and `stroke_wing` (the hand is voted per
+  name, and a serve's server name is recomputed from the readings kept, so these may change; they are reported, not
+  judged). Criterion (3) is unchanged: flights' ids, frames, hitter, kind, call and bounce.
+- **Scoring is not spent without the labels.** `score` refuses when the player or name labels are missing, unless
+  `--skip players` / `--skip names` gives that test up explicitly (the result records it, and the skipped candidate's
+  videos count as used); before, it wrote the result without them, and the scored-once rule then barred them for good.
+- **The text "sides stay as read"** refers to the report's `broadcast` section (score changes, serve sides, speeds),
+  which is unchanged; a flight's `server_name` is among the names.

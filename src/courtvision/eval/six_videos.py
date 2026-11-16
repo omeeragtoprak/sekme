@@ -432,9 +432,13 @@ def speed_report(pairs: list[tuple[list[dict], dict]]) -> dict:
 
 
 # --- Fourth candidate: player names from consistent score readings (--score-consistency) ---------------------------
-# Blind labels on a fixed flight sample: for each sampled flight, the near player's name, or null when unclear.
+# Blind labels on a fixed flight sample: for each sampled flight, the near player's name, or null when unclear; the
+# appearance of each player is tied to a name at serves where the graphic marks the server (``ties``, at least 3).
 
 NAMES_FLIGHTS = 40
+MIN_TIES = 3
+# Fields that may differ between the default and the candidate run besides the names: reported, not judged.
+NAME_SIDE_FIELDS = ("server_name", "hand", "hand_source", "stroke", "stroke_wing")
 
 
 def names_sample(name: str, flight_ids: list[int], k: int = NAMES_FLIGHTS) -> list[int]:
@@ -445,17 +449,32 @@ def names_sample(name: str, flight_ids: list[int], k: int = NAMES_FLIGHTS) -> li
     return sorted(int(i) for i in _rng(name + ":names").choice(ids, size=k, replace=False))
 
 
-def check_name_labels(labels: list[dict], players: tuple[str, str]) -> None:
-    """Every name label names a listed flight once and its near player as one of the two players, or null."""
-    seen = set()
-    for k, lb in enumerate(labels):
+def check_name_labels(doc: dict, players: tuple[str, str]) -> list[dict]:
+    """A video's name labels: ``{"ties": [{"frame", "server"}], "flights": [{"flight", "near"}]}``. Names are
+    compared in any case. Every flight once, its near player one of the two or null; when any flight is named, at
+    least MIN_TIES marked-server serves tie appearance to the names. Returns the flights with names in upper case."""
+    want = {p.upper() for p in players}
+    if not isinstance(doc, dict) or not isinstance(doc.get("flights"), list) or not isinstance(doc.get("ties"), list):
+        raise ValueError('name labels: needs {"ties": [...], "flights": [...]}')
+    out, seen = [], set()
+    for k, lb in enumerate(doc["flights"]):
         if not isinstance(lb, dict) or not {"flight", "near"} <= lb.keys() or not _is_int(lb["flight"]):
             raise ValueError(f"name label {k}: needs flight (an id) and near (a name or null)")
         if lb["flight"] in seen:
             raise ValueError(f"name label {k}: flight {lb['flight']} labelled twice")
         seen.add(lb["flight"])
-        if lb["near"] is not None and lb["near"] not in players:
-            raise ValueError(f"name label {k}: near must be one of {list(players)} or null")
+        near = lb["near"].upper() if isinstance(lb["near"], str) else lb["near"]
+        if near is not None and near not in want:
+            raise ValueError(f"name label {k}: near must be one of {sorted(want)} or null")
+        out.append({"flight": int(lb["flight"]), "near": near})
+    ties = doc["ties"]
+    for k, t in enumerate(ties):
+        if (not isinstance(t, dict) or not _is_int(t.get("frame")) or not isinstance(t.get("server"), str)
+                or t["server"].upper() not in want):
+            raise ValueError(f"tie {k}: needs frame (an int) and server (one of {sorted(want)})")
+    if any(lb["near"] is not None for lb in out) and len({t["frame"] for t in ties}) < MIN_TIES:
+        raise ValueError(f"names given with fewer than {MIN_TIES} marked-server serves tying appearance to names")
+    return out
 
 
 def _near_name(f: dict) -> str | None:
@@ -471,9 +490,17 @@ def _same_player(label: str, shown: str | None) -> bool | None:
 
 
 def names_rule(videos: list[tuple[list[dict], dict, dict]], min_wrong: int = 10) -> Verdict:
-    """``videos``: (name labels, default report, consistency report). The near player's name on the labelled flights:
-    right, wrong or none, in both runs; the candidate must change nothing but names."""
-    count = {"default": {"right": 0, "wrong": 0, "none": 0}, "candidate": {"right": 0, "wrong": 0, "none": 0}}
+    """``videos``: (name labels as ``check_name_labels`` returns them, default report, consistency report). The near
+    player's name on the labelled flights: right, wrong or none, in both runs; the candidate must change nothing but
+    names. Reported too: each video's counts, the counts by where the default run's names came from (a marked serve or
+    the graphic's end changes), and how many flights differ in the other name-dependent fields."""
+    def zero() -> dict:
+        return {"right": 0, "wrong": 0, "none": 0}
+
+    count = {"default": zero(), "candidate": zero()}
+    by_video: list[dict] = []
+    by_source: dict = {}
+    side_changes = dict.fromkeys(NAME_SIDE_FIELDS, 0)
     other_changes = []
     for vi, (labels, rep_d, rep_c) in enumerate(videos):
         keep = ("id", "start_frame", "end_frame", "hitter", "kind", "call", "bounce")
@@ -481,14 +508,24 @@ def names_rule(videos: list[tuple[list[dict], dict, dict]], min_wrong: int = 10)
                                                                        for f in rep_c["flights"]]:
             other_changes.append(vi)  # the candidate touches names only: any other change is a fault
         fd, fc = {f["id"]: f for f in rep_d["flights"]}, {f["id"]: f for f in rep_c["flights"]}
+        for i in fd.keys() & fc.keys():
+            for k in NAME_SIDE_FIELDS:
+                side_changes[k] += fd[i].get(k) != fc[i].get(k)
+        vc = {"default": zero(), "candidate": zero()}
         for lb in labels:
             if lb["near"] is None or lb["flight"] not in fd or lb["flight"] not in fc:
                 continue
+            source = str(fd[lb["flight"]].get("names_from"))
+            by_source.setdefault(source, {"default": zero(), "candidate": zero()})
             for arm, f in (("default", fd[lb["flight"]]), ("candidate", fc[lb["flight"]])):
                 same = _same_player(lb["near"], _near_name(f))
-                count[arm]["none" if same is None else "right" if same else "wrong"] += 1
+                key = "none" if same is None else "right" if same else "wrong"
+                for tally in (count, vc, by_source[source]):
+                    tally[arm][key] += 1
+        by_video.append(vc)
     d, c = count["default"], count["candidate"]
-    nums = {"default": d, "candidate": c, "videos_with_other_changes": other_changes}
+    nums = {"default": d, "candidate": c, "per_video": by_video, "by_default_names_source": by_source,
+            "flights_with_other_name_fields_changed": side_changes, "videos_with_other_changes": other_changes}
     if d["wrong"] < min_wrong:
         return Verdict("inconclusive", numbers=nums)
     crit = {"wrong names at most half": 2 * c["wrong"] <= d["wrong"],

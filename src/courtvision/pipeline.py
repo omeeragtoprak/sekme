@@ -377,6 +377,7 @@ def _annotate_from_broadcast(flights: list[dict], broadcast: dict, scan: Broadca
         f["board_speed_kmh"] = pairs[f["id"]]["board_kmh"] if f["id"] in pairs else None
         f["server_name"] = servers.get(f["id"])
         names = anchored.get(f["id"]) or side_names(scan, start_end, f["start_frame"] / fps)
+        f["names_from"] = "serve" if anchored.get(f["id"]) else "graphic" if names else None  # which signal named it
         f["hitter_name"] = names.get(f["hitter"]) if names else None
         f["receiver_name"] = names.get(f["receiver"]) if names else None
 

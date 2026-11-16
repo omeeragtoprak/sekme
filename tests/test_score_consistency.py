@@ -96,13 +96,51 @@ def test_names_rule_skips_unclear_labels_and_matches_a_surname_inside_the_shown_
     assert v.numbers["default"]["wrong"] == 11 and v.numbers["candidate"]["right"] == 11
 
 
-def test_name_labels_and_the_flight_sample() -> None:
-    check_name_labels([{"flight": 1, "near": "SINNER"}, {"flight": 2, "near": None}], ("SINNER", "DRAPER"))
-    for bad in ([{"flight": 1}], [{"flight": "1", "near": None}], [{"flight": 1, "near": "ALCARAZ"}],
-                [{"flight": 1, "near": None}, {"flight": 1, "near": None}]):
+def test_name_labels_need_ties_take_any_case_and_come_back_in_upper_case() -> None:
+    ties = [{"frame": 10, "server": "Sinner"}, {"frame": 20, "server": "DRAPER"}, {"frame": 30, "server": "sinner"}]
+    got = check_name_labels({"ties": ties, "flights": [{"flight": 1, "near": "sinner"}, {"flight": 2, "near": None}]},
+                            ("SINNER", "DRAPER"))
+    assert got == [{"flight": 1, "near": "SINNER"}, {"flight": 2, "near": None}]  # a lower-case label is fine
+    bad_docs = [
+        [{"flight": 1, "near": "SINNER"}],  # the old bare list
+        {"ties": ties, "flights": [{"flight": 1}]},
+        {"ties": ties, "flights": [{"flight": "1", "near": None}]},
+        {"ties": ties, "flights": [{"flight": 1, "near": "ALCARAZ"}]},
+        {"ties": ties, "flights": [{"flight": 1, "near": None}, {"flight": 1, "near": None}]},
+        {"ties": ties[:2], "flights": [{"flight": 1, "near": "SINNER"}]},  # fewer than 3 serves tie the names
+        {"ties": [*ties[:2], {"frame": 20, "server": "SINNER"}], "flights": [{"flight": 1, "near": "SINNER"}]},
+        {"ties": [{"frame": 1, "server": "NADAL"}, *ties], "flights": [{"flight": 1, "near": "SINNER"}]},
+    ]
+    for doc in bad_docs:
         with pytest.raises(ValueError):
-            check_name_labels(bad, ("SINNER", "DRAPER"))
-    assert names_sample("v", [3, 1, 2]) == [1, 2, 3]  # fewer than 40: all of them
+            check_name_labels(doc, ("SINNER", "DRAPER"))  # type: ignore[arg-type]
+    # A video with every flight unclear needs no ties.
+    assert check_name_labels({"ties": [], "flights": [{"flight": 1, "near": None}]}, ("SINNER", "DRAPER")) == [
+        {"flight": 1, "near": None}]
+
+
+def test_the_flight_sample_is_all_flights_up_to_forty_and_drawn_by_the_name_beyond() -> None:
+    assert names_sample("v", [3, 1, 2]) == [1, 2, 3]
     s = names_sample("v", list(range(200)))
     assert len(s) == 40 and s == sorted(s) and s == names_sample("v", list(range(200)))
     assert s != names_sample("w", list(range(200)))
+
+
+def test_names_rule_reports_each_video_the_names_source_and_other_name_fields() -> None:
+    labels, d, c = _video(["SINNER"] * 12, ["ALCARAZ"] * 12, [None] * 12)
+    for k, f in enumerate(d["flights"]):
+        f["names_from"] = "serve" if k < 4 else "graphic"
+    c["flights"][5]["stroke_wing"] = "backhand"  # the hand vote can follow the names
+    c["flights"][6]["server_name"] = "SINNER"
+    labels2, d2, c2 = _video(["SINNER"] * 3, ["SINNER"] * 3, ["SINNER"] * 3)
+    v = names_rule([(labels, d, c), (labels2, d2, c2)])
+    assert v.numbers["per_video"] == [{"default": {"right": 0, "wrong": 12, "none": 0},
+                                       "candidate": {"right": 0, "wrong": 0, "none": 12}},
+                                      {"default": {"right": 3, "wrong": 0, "none": 0},
+                                       "candidate": {"right": 3, "wrong": 0, "none": 0}}]
+    assert v.numbers["by_default_names_source"]["serve"]["default"] == {"right": 0, "wrong": 4, "none": 0}
+    assert v.numbers["by_default_names_source"]["graphic"]["candidate"] == {"right": 0, "wrong": 0, "none": 8}
+    assert v.numbers["by_default_names_source"]["None"]["default"]["right"] == 3  # no names_from in that report
+    assert v.numbers["flights_with_other_name_fields_changed"] == {
+        "server_name": 1, "hand": 0, "hand_source": 0, "stroke": 0, "stroke_wing": 1}
+    assert v.decision == "accepted"  # wrong 12 -> 0, right 3 -> 3; the other name fields are reported, not judged

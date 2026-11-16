@@ -114,8 +114,9 @@ def _build(tmp_path: Path, e, monkeypatch, with_players: bool) -> tuple[Path, Pa
         drawn = e.names_sample(n, ids)
         a, b = e.players_of(n)
         (labels_dir / f"{n}_names_flights.json").write_text(json.dumps({"n_flights": len(ids), "flights": drawn}))
-        (labels_dir / f"{n}_names.json").write_text(json.dumps(
-            [{"flight": i, "near": None if i == 0 else a if i % 2 == 0 else b} for i in drawn]))  # 0: unclear
+        ties = [{"frame": 1000 * k + 100, "server": (a if k % 2 == 0 else b).lower()} for k in range(N_SERVES)]
+        (labels_dir / f"{n}_names.json").write_text(json.dumps({"ties": ties, "flights": [
+            {"flight": i, "near": None if i == 0 else a if i % 2 == 0 else b.title()} for i in drawn]}))  # 0: unclear
         pres = presence_sample(n, N_FRAMES)  # the drawn lists, not made-up ones
         dis = disagreement_sample(n, fa, fb, fa["calib_valid"], HEIGHT)
         assert len(pres) == 80 and len(dis) == 60
@@ -185,11 +186,18 @@ def test_score_happy_path_dry_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         e.score(labels_dir, out)
 
 
-def test_score_without_presence_labels_scores_the_other_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_score_without_player_or_name_labels_refuses_unless_those_tests_are_given_up(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     e = _script()
     labels_dir, out = _build(tmp_path, e, monkeypatch, with_players=False)
-    e.score(labels_dir, out)
+    with pytest.raises(SystemExit, match="--skip players"):  # scoring is once: it must not lose those tests silently
+        e.score(labels_dir, out)
+    with pytest.raises(SystemExit, match="--skip names"):
+        e.score(labels_dir, out, skip=frozenset({"players"}))
+    assert not out.exists()
+    e.score(labels_dir, out, skip=frozenset({"players", "names"}))
     res = json.loads(out.read_text())
+    assert res["skipped"] == ["names", "players"] and res["score_consistency"] == "no name labels"
     assert res["player_size_from_camera"] == "no presence labels"
     assert res["reported_not_used"]["player_size_from_camera"]["labelled_frames_outside_main_camera"] == (
         "no presence labels")
