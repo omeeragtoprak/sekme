@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -21,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 YTDLP = str(ROOT / ".venv" / "bin" / "yt-dlp")
 OUT = ROOT / "data" / "six"
 CHANNEL = "US Open Tennis Championships"
+MIN_FREE_BYTES = 1.5e9  # one 1080p highlight video (about 0.6 GB) plus its runs and caches
 MATCHES = {  # name -> (search query, words the title must contain)
     "w2024_final_sabalenka_pegula": ("US Open 2024 women's final Sabalenka Pegula highlights", ["sabalenka", "pegula"]),
     "m2024_sf_sinner_draper": ("US Open 2024 semifinal Sinner Draper highlights", ["sinner", "draper"]),
@@ -49,6 +51,14 @@ def size_1080(info: dict) -> int | None:
     if not s and video.get("tbr") and info.get("duration"):
         s = video["tbr"] * 1000 / 8 * info["duration"]  # estimate from the stream's bitrate (kbit/s)
     return int(s) if s else None
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def pick(name: str) -> dict | None:
@@ -84,9 +94,12 @@ def main() -> None:
         if name not in MATCHES:
             sys.exit(f"unknown name {name}")
         dst = OUT / "videos" / f"{name}.mp4"
+        free = shutil.disk_usage(OUT).free
+        if not dst.exists() and free < MIN_FREE_BYTES:  # a download cut by a full disk wastes the time it took
+            sys.exit(f"{name}: only {free / 1e9:.1f} GB free; free some space first (see devir notes)")
         subprocess.run([YTDLP, "-f", "bv*[height<=1080][ext=mp4]", "-o", str(dst), "--no-warnings",
                         f"https://www.youtube.com/watch?v={vid}"], check=True)
-        manifest[name] = {"video_id": vid, "sha256": hashlib.sha256(dst.read_bytes()).hexdigest()}
+        manifest[name] = {"video_id": vid, "sha256": sha256_file(dst)}
         (OUT / "manifest.json").write_text(json.dumps(manifest, indent=1))
         print(f"{name}: {dst} sha256 {manifest[name]['sha256'][:16]}")
 
