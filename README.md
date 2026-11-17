@@ -35,6 +35,11 @@ It then checks itself against what the broadcast shows: the score graphic and th
   bounces after a stroke found, 93 % precision, median 10 cm from the labelled contact, 108 / 108
   decisive calls consistent — few of them close to a line, so this rules out gross errors, it does not
   measure centimetre accuracy ([details](docs/EVAL_TRACKNET.md)).
+- **Second independent benchmark: event spotting.** On four broadcast matches untouched before this test (E2E-Spot
+  labels; Wimbledon 2018–2019, US Open 2019; 303 clips at 25–30 fps), the default system finds 79 % of
+  strokes and 67 % of first bounces within 0.1 s, 84 % of the bounces it reports match a labelled one, and it finds
+  77 % of serves at 95 % precision. These matches decided one change (far strokes from a 2D velocity
+  break, adopted) and allow one more ([details](docs/EVAL_SPOT.md)).
 - **Checks itself.** On-device OCR of the score graphic and the stadium radar board; fitted serve
   speeds are compared with the radar on every serve whose board change is timed to ≤ 4 s.
 - **Review Room.** Local web app (FastAPI + React/three.js, Turkish UI): frame-accurate player, mini
