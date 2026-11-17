@@ -31,7 +31,7 @@ from courtvision.broadcast.scoreboard import BroadcastScan, scan_video
 from courtvision.errors import MissingModelError, UnreadableVideoError
 from courtvision.eval.broadcast_check import Serve, check, serve_anchored_names, side_names
 from courtvision.events.flights import Flight, build_flights, measurable_segments
-from courtvision.events.hits import add_far_breaks, detect_hits_in_segments, far_breaks
+from courtvision.events.hits import add_far_breaks, detect_hits_in_segments, far_breaks, move_far_contacts
 from courtvision.events.serves import detect_serves, merge_serves
 from courtvision.events.strokes import classify, serve_hand, vote_hand
 from courtvision.geometry.court import CourtModel
@@ -256,6 +256,7 @@ class PipelineConfig:
     ball_stride: int = 0  # frames between the ball network's three inputs; 0: match its 30 fps training video
     serve_toss_bridge_s: float = 0.0  # candidate, off by default (docs/EVAL_SPOT.md): 0.3 bridges a missed toss apex
     far_stroke_breaks: bool = True  # far strokes also from 2D breaks (docs/EVAL_SPOT.md, adopted 2026-11-17)
+    far_contact_fit: bool = True  # far contact from a line and a curve (docs/EVAL_SPOT.md, adopted 2026-11-17)
     constant_rate_copy: bool = True  # variable-rate video analysed from a constant-rate copy (docs/ARCHITECTURE.md)
     drop_repeated_ball: bool = True  # no ball on the frames the copy repeats (docs/ARCHITECTURE.md, adopted 2026-11-15)
     same_angle_edits: bool = True  # edits from one camera position count as cuts (docs/ARCHITECTURE.md, adopted)
@@ -574,6 +575,8 @@ def analyze(video: str | Path, out_dir: str | Path, cfg: PipelineConfig | None =
         hits = add_far_breaks(hits, far_breaks(ball, players, info.fps, segments), info.fps)
     hits = merge_serves(hits, detect_serves(ball, players, info.fps, segments, bridge_s=cfg.serve_toss_bridge_s,
                                             frame_scale=fscale), info.fps)
+    if cfg.far_contact_fit:  # a far rally hit moves back to where the incoming and outgoing ball meet (adopted)
+        hits = move_far_contacts(hits, ball, players, info.fps, segments)
     flights = build_flights(ball, hits, calib, info.fps, players, segments, frame_w=info.width)
     timings["analysis_s"] = time.time() - t1
 

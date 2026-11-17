@@ -7,6 +7,13 @@
     "far-stroke-breaks"
    ],
    "rule": "docs/EVAL_SPOT.md, Candidate 2 (test slot 1): far strokes from a 2D velocity break"
+  },
+  {
+   "slot": 2,
+   "flags": [
+    "far-contact-fit"
+   ],
+   "rule": "docs/EVAL_SPOT.md, Candidate 3 (test slot 2, the last): far contact from a line and a curve"
   }
  ]
 }

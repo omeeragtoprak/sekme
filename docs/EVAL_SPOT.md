@@ -1,8 +1,8 @@
 # Event detection on independent broadcast matches (E2E-Spot tennis labels)
 
 Plan written on 2026-11-13, **before any video was downloaded or any system output on these matches was
-seen.** Nothing below had been run then. Since run: the dev matches (2026-11-16) and test slot 1 (2026-11-17,
-adopted; see its section).
+seen.** Nothing below had been run then. Since run: the dev matches (2026-11-16), test slot 1 (2026-11-17,
+adopted) and test slot 2, the last (2026-11-17, adopted); see their sections. The test matches are now used.
 
 ## Why
 
@@ -344,3 +344,118 @@ through segmentation (a stroke found splits a flight at the right place); bounce
 thresholds came from TrackNet games 1–7 and one change was made on the dev matches before the test (above); the
 test result is the first and only look at these matches for it. Slot 1 is used; slot 2 is the last one these
 matches allow.
+
+## Candidate 3 (test slot 2, the last): far contact from a line and a curve (rule written 2026-11-17, before any test run)
+
+**Change** (`sekme analyze --far-contact-fit`, off by default; `events/hits.py` `far_contact`, `move_far_contacts`):
+the hit detector puts a far rally stroke at the reversal of the ball's image-y direction, but after the far player's
+contact the ball keeps rising in the image, so the reversal is the outgoing ball's image apex, after the contact.
+On the dev matches, of the far strokes the default misses, 126 have a far hit 4–9 frames late (at 30 fps) and 51 one
+early. The candidate moves each far rally hit (not a serve) back to the contact: in the 0.4 s before the hit and
+0.1 s past it (inside its camera segment), the detected ball is split, before the hit, into a line through the
+incoming ball (x and y against time; at least 2 detections) and a curve through the outgoing one (x linear, y
+quadratic, as it passes its apex; at least 3 detections), where their total squared error is least. The contact is
+where they come closest, between the last detection on the line and the first on the curve; it counts only if they
+turn there by at least 35°, both move at least 1 px per frame, they explain the ball at least 4 times better than
+one curve, and the point is next to the far player's box at least 0.3 box heights above its bottom
+(`BREAK_MIN_HEIGHT`: lower is a bounce at the feet). The hit moves only earlier and only after the previous hit;
+serves keep their toss contact. **It acts only on video up to 30 fps (nominal)**: all the evidence below is 25–30
+fps, so faster video is left as it is (`CONTACT_MAX_FPS`; the estimate itself is written for any rate, with the
+detection counts and the speed floor scaled by time, but that is not used or claimed).
+
+**Why** (development data only). The dev matches' detection caches, events rebuilt with the pipeline's own steps
+(`devir/scratch/spot_dev_rebuild.py`; its default reproduces the dev reports' hits in 379 of 379 clips and scores
+what the official dev run of slot 1 scored), scored with this scorer. How it was developed, all on these dev
+matches: a first version with two lines (the outgoing ball a line inside the window that ends at the hit) had its
+window, angle, detections and error ratio chosen from a grid of 24 and gave stroke recall +2.45 points, but +5.5 on
+Gauff–Williams and only +0.3 and +0.8 on the two US Open matches. Looking at why (the ball is seldom detected between
+the contact and the late hit there: about one detection per late hit, four at Wimbledon), the outgoing line was
+replaced by a curve fitted up to 0.1 s past the hit, whose settings were chosen from a grid of 8 (0.1 or 0.2 s past,
+3 or 4 outgoing detections, error ratio 2 or 4; all 8 gave stroke recall 0.812–0.823). Both the form and the
+settings were chosen on these matches after seeing their results, so the dev numbers below are optimistic. With the
+code as committed here:
+
+| dev3 (379 clips) | stroke recall | stroke precision | first-bounce recall | bounce precision | serve recall |
+|---|---|---|---|---|---|
+| Default | 0.7763 | 0.4253 | 0.7015 | 0.8089 | 0.7717 |
+| `--far-contact-fit` | 0.8226 | 0.4507 | 0.7015 | 0.8089 | 0.7717 |
+| Change, points | +4.63 (+6.04, +2.81, +4.39) | +2.54 | 0.00 | 0.00 | 0.00 |
+
+(Per match: Gauff–Williams, Williams–Sharapova, Raducanu–Sakkari.) Far strokes 0.660 → 0.752. Of the 167 hits it
+moves, 76 go from missed to matched and 4 the other way; 65 stay matched, 7 stay missed and 15 have no labelled
+stroke within 0.5 s. Bounce counts do not change (961 of 1370 labelled first bounces matched, 1188 system bounces in
+both): the moved hits shift the flights' ends, and the bounce frames a little. The code gives the same contact frame
+as the measured development version (`devir/scratch/far_contact_lib.py` `contact2`) for all 1301 far rally hits of the
+dev matches and the same moves in all 379 clips (also checked independently).
+
+TrackNet games 1–7 (from their caches; `devir/scratch/far_contact_tracknet_dev.py`; a different camera and
+labeller): labelled strokes with a hit within 3 frames 284 → 297 of 374 (far 176 → 189), first bounces 226 → 227 of
+323, false alarms 30 → 31, decisive calls 235 → 236, all consistent with the labels; hits 454 in both (43 moved). No
+threshold was chosen there, but it was used to compare variants: it dropped a bounce variant that turned one decisive
+call wrong, and it was run on both the two-line and the curve version. Not every game gains: game 1 has one first
+bounce and one decisive call fewer (34 → 33, 36 → 35), while its strokes hit rise 56 → 58.
+
+The six v4 broadcast runs (US Open 2023–2025, from their caches; `devir/scratch/far_contact_broadcast_dev.py`; no
+stroke labels, so side effects only): on the two at 29.97 fps, 11 of 116 hits move, flights 120 and calls 81 in both
+runs, every call on the same bounce, none turned from IN to OUT or back. The four at 59.94 fps are left as they are by
+the 30 fps limit (before it was added: 54 of 457 hits moved, calls 287 → 289, 282 on the same bounce, no IN/OUT
+flip; 60 fps has no stroke labels anywhere in this project).
+
+**Rule** (a stroke change, as for slot 1, with the same limits): on the four test matches, the default against
+`--far-contact-fit`, it becomes the default only if all hold, decided once on the unrounded `change_points` of the
+result file ("points" are absolute percentage points):
+
+1. pooled **stroke recall** (0.1 s) rises by **at least 2 points**, rises in **at least 3** of the 4 test matches
+   and falls in **none**;
+2. pooled **stroke precision** falls by **no more than 2 points**;
+3. pooled **first-bounce recall** falls by **no more than 1 point**, and pooled **bounce precision** by no more
+   than 1 point;
+4. pooled **serve recall** (flight serves) falls by **no more than 1 point**.
+
+Otherwise it is rejected: its code is removed and the result stays here. It uses test slot 2, the last one
+(`results/spot_test_candidates.json`); after it these matches count as used, like TrackNet games 8–10. Reported,
+not used: far and near strokes separately (`devir/scratch/far_breaks_test_side_split.py`, to be pointed at the slot-2
+runs), the matched strokes' side agreement and timing, and the dev numbers above.
+
+**How the run is made.** Slot 2 runs, both arms, and is scored with the analysis code (`src/`) of the commit that
+records this text; if `src/` on the main line has changed by then, the run is made from a checkout of this commit.
+The four test match videos were deleted after slot 1, so the run first needs them downloaded again (the user's
+explicit yes, as for every download); the runner records each file's SHA-256 and accepts a file only with the
+first download's size, frame rate and frame count (a re-encoded copy of the same upload numbers its frames the same
+way), cuts the clips again, and runs the default arm afresh (`runs_spot_base_slot2`) and the candidate from its
+cached detections (`runs_spot_cand_slot2`).
+
+**Result on the four test matches (2026-11-17): adopted.** One run of slot 2
+(`eval_spot.py run --name test4 --slot 2`, 303 clips in each arm, no failed analysis; the default arm afresh, the
+candidate from its cached detections), made from a checkout of commit `d15a843` (the analysis code this rule names;
+the main line had changed `src/` by then), scored once and committed before being read
+(`results/spot/results_test4_slot2.json`, commit `d3bf315`). The four videos were downloaded again with the user's
+yes; each has the SHA-256 of the first download, so the files are byte for byte the ones slot 1 used, and the
+default arm reproduces slot 1's candidate exactly (every pooled count and rate). Unrounded `change_points`:
+
+| test4 (303 clips) | stroke recall | stroke precision | first-bounce recall | bounce precision | serve recall |
+|---|---|---|---|---|---|
+| Baseline (default) | 0.7865 | 0.4908 | 0.6743 | 0.8373 | 0.7674 |
+| Candidate | 0.8197 | 0.5115 | 0.6776 | 0.8413 | 0.7708 |
+| Change, points (limit) | **+3.32** (at least +2) | **+2.07** (at least −2) | **+0.33** (at least −1) | **+0.41** (at least −1) | **+0.35** (at least −1) |
+
+Stroke recall per match, points: Andreescu–Williams 2019 +4.19, Osaka–Gauff 2019 +2.37, Williams–Giorgi 2018 +3.01,
+Halep–Williams 2019 +3.57: it rises in all four and falls in none. All four criteria hold, so the candidate is the
+default from now on and its flag is gone (`PipelineConfig.far_contact_fit` stays, on; video faster than 30 fps is
+left as it is, as written). Strokes matched 1256 → 1309 of 1597 labelled with the same 2559 system strokes (the
+candidate moves hits, it adds none); bounces matched 1029 → 1034 of 1525, system bounces 1229 in both; serves
+221 → 222 of 288, system serves 233 → 234. No measure of the comparison falls in any match: stroke precision rises
+1.41–2.50 points, bounce precision 0.36–0.43; first-bounce recall rises in three and is unchanged in Andreescu–Williams;
+serve recall rises by one serve in Williams–Giorgi and is unchanged in the other three.
+
+Reported, not used (`devir/scratch/far_breaks_test_side_split.py 2`; the scorer's 0.1 s tolerance; recall by the
+labelled side, precision by the system's side): far strokes recall 593 → 646 of 820 (0.723 → 0.788), precision
+0.431 → 0.469; near strokes 663 of 777 (0.853) and precision 0.562 in both arms, unchanged as expected (the candidate
+moves only far rally hits). Side agreement of matched strokes 0.998 in both arms; median timing −1.0 frame in both.
+
+What this shows and what it does not. Found far strokes now sit closer to the contact, so more of them land within
+0.1 s of the label; the rise is in timing, not in strokes found (the system's count is unchanged). It is measured on
+the same four women's matches at 25–30 fps as slot 1; it says nothing about 60 fps video, where the candidate does
+not act. Its form and settings were chosen on the dev matches and TrackNet games 1–7 (above); the test result is the
+first and only look at these matches for it. **Both slots are used: the E2E-Spot test matches count as used from
+now on**, like TrackNet games 8–10; a further event change needs held-out data the project has not touched.

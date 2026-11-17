@@ -11,3 +11,10 @@
 {"clips": 30, "ref_bounces": 154, "first_bounces": 142, "first_found": 109, "first_recall": 0.7676, "ref_on_calibrated_frames": 154, "found": 112, "recall": 0.7273, "false_alarms": 8, "precision": 0.9333, "error_cm_median": 10.04, "error_cm_p90": 29.585, "timing_frames_median_abs": 0.1526, "decisive": 107, "decisive_agree": 107}
 ## SEKME ball v4 + SEKME court (current defaults since v4): games 8-10 (data/tracknet/test_ball_v4.json)
 {"clips": 30, "ref_bounces": 154, "first_bounces": 142, "first_found": 110, "first_recall": 0.7746, "ref_on_calibrated_frames": 154, "found": 113, "recall": 0.7338, "false_alarms": 9, "precision": 0.9262, "error_cm_median": 10.2553, "error_cm_p90": 32.3641, "timing_frames_median_abs": 0.1545, "decisive": 108, "decisive_agree": 108}
+## the v4 runs above re-scored with today's scorer (2026-11-17; the scorer changes made since move three reference
+## contacts by 1-2 frames, one stops counting as a first bounce): games 8-10 (data/tracknet/test_ball_v4_rescored_1117.json)
+{"clips": 30, "ref_bounces": 154, "first_bounces": 141, "first_found": 110, "first_recall": 0.7801, "ref_on_calibrated_frames": 154, "found": 113, "recall": 0.7338, "false_alarms": 9, "precision": 0.9262, "error_cm_median": 10.2553, "error_cm_p90": 32.3641, "timing_frames_median_abs": 0.1545, "decisive": 108, "decisive_agree": 108}
+## SEKME ball v4 + SEKME court with the event defaults of 2026-11-17 (far strokes from 2D breaks, far contact from a line
+## and a curve, serve fit pinned at the contact height), events re-run from the v4 runs' caches; report only, nothing decided
+## on it: games 8-10 (data/tracknet/test_defaults_1117.json, runs_defaults_1117)
+{"clips": 30, "ref_bounces": 154, "first_bounces": 141, "first_found": 112, "first_recall": 0.7943, "ref_on_calibrated_frames": 154, "found": 115, "recall": 0.7468, "false_alarms": 9, "precision": 0.9274, "error_cm_median": 12.0036, "error_cm_p90": 33.1118, "timing_frames_median_abs": 0.1624, "decisive": 109, "decisive_agree": 109}

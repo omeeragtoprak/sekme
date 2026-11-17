@@ -40,6 +40,17 @@ games 8–10: first bounce after a stroke 110 / 142, 113 bounces found with 9 fa
 Every variant is in `results/tracknet_benchmark.txt`; the networks and the rules that chose them are in
 [MODELS.md](MODELS.md).
 
+**With the event defaults of 2026-11-17** (far strokes from 2D breaks and far contact from a line and a curve,
+both adopted on the E2E-Spot test matches; the serve fit pinned at the contact height, adopted on the six US Open
+videos), events and fits re-run from the v4 runs' caches (`data/tracknet/test_defaults_1117.json`); report only,
+nothing is decided on games 8–10. Against the same v4 runs re-scored with today's scorer
+(`test_ball_v4_rescored_1117.json`; the scorer changes made since move three reference contacts by 1–2 frames and
+leave 141 first bounces): first bounce after a stroke 110 → 112 / 141, bounces found 113 → 115 with 9 false alarms
+in both (precision 93 %), decisive calls 108 / 108 → 109 / 109, distance median / p90 10.3 / 32.4 → 12.0 / 33.1 cm.
+The median moves mostly by mixing: of the 113 bounces found by both, 18 moved by more than 0.5 cm (10 of the 14
+serve bounces, where the pin changes the fit, 3 closer and 7 further; 8 of the 99 others, 3 closer and 5 further),
+the medians of serve and other bounces are unchanged (13.6 and 10.2 cm), and the two new bounces are 49 cm off.
+
 For the WASB set in the first table: the error is almost entirely along the court length (depth, the camera's weak axis): lateral
 median |error| 3.6 cm, depth 18 cm before the radius correction; after it the depth bias is −3 to −4 cm
 on both halves. With 1 px of label noise propagated into the reference, system error over the combined

@@ -75,6 +75,7 @@ NAMES = sorted(MATCHES)
 RUNS = ROOT / "data" / "six" / "runs"
 MANIFEST = ROOT / "data" / "six" / "manifest.json"
 BALL_MODEL = ROOT / "models" / "sekme_ball.pt"  # ball v4, the default the plan names
+# The flags below are gone since the test was decided (2026-11-17); kept as the record of what was run.
 VARIANTS = {"scaled": ["--fps-scaled-thresholds"], "scaled_pin": ["--fps-scaled-thresholds", "--pin-serve-height"],
             "players": ["--player-size-from-camera"], "bridge": ["--toss-bridge"],
             "bridge_pin": ["--toss-bridge", "--pin-serve-height"], "consistency": ["--score-consistency"]}

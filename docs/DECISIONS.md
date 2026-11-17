@@ -7,7 +7,7 @@ documented: a rejected pipeline change is removed from the code, and a rejected 
 defaults. Numbers are as measured, failures included. Each
 row links to the section that holds the rule, the result and what was learned.
 
-34 decisions: 15 adopted, 11 rejected, 6 not adopted, 1 adopted as a correctness fix, 1 withdrawn.
+35 decisions: 16 adopted, 11 rejected, 6 not adopted, 1 adopted as a correctness fix, 1 withdrawn.
 
 | Date | Change | Outcome | Evidence | Where |
 |---|---|---|---|---|
@@ -34,6 +34,7 @@ row links to the section that holds the rule, the result and what was learned.
 | 2026-11-14 | Frame counts scaled at 60 fps | adopted | Six US Open videos (60 fps), 173 labelled serves: recall 32.9 % → 63.0 % (rule +10 points), within 2 frames 50.9 % → 75.2 %, no decisive flip, false serves 3 → 4 | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Result (scored once, 2026-11-17) |
 | 2026-11-16 | Player names from consistent score readings | rejected | Six US Open videos, 227 labelled flights: wrong near-player names 28 → 23 (rule: at most half, 14), right 138 → 123 | [EVAL_SERVE_SPEED.md](EVAL_SERVE_SPEED.md), Result (scored once, 2026-11-17) |
 | 2026-11-17 | Far strokes from a 2D velocity break | adopted | E2E-Spot test slot 1 (4 matches, 303 clips): stroke recall +3.32 points (rises in all 4 matches), stroke precision +0.28, first-bounce recall +0.86, bounce precision +0.31, serve recall 0.00 | [EVAL_SPOT.md](EVAL_SPOT.md), Candidate 2 (test slot 1): far strokes from a 2D velocity break |
+| 2026-11-17 | Far stroke contact from a line and a curve | adopted | E2E-Spot test slot 2, the last (4 matches, 303 clips): stroke recall +3.32 points (rises in all 4 matches), stroke precision +2.07, first-bounce recall +0.33, bounce precision +0.41, serve recall +0.35 | [EVAL_SPOT.md](EVAL_SPOT.md), Candidate 3 (test slot 2, the last): far contact from a line and a curve |
 | 2026-11-14 | Gap contact change for hidden serves | adopted | paired mean error v3 1.49 → 0.53, v4 2.08 → 0.18; good serves 4 → 6 for both | [EVAL_SERVE_CONTACT.md](EVAL_SERVE_CONTACT.md), Rules |
 | 2026-11-14 | Serve net choice, v3 vs v4 | not adopted | With the accepted code v3 and v4 both have 6 good serves: no measurable difference on serves | [EVAL_SERVE_CONTACT.md](EVAL_SERVE_CONTACT.md), Rules |
 | 2026-11-14 | Player size gate from camera, 0.6 band | not adopted | worst fall (2023 final 90–179 s, far player) 99.0 % → 97.9 % (−1.15 points), fails (limit 1 point) | [EVAL_PLAYERS.md](EVAL_PLAYERS.md), Rule |

@@ -36,7 +36,7 @@ flowchart LR
 | Ball | `perception/ball.py`, `models/ball_unet.py` (our network, default) or `models/wasb_hrnet.py` | per-frame candidates → one cleaned track (outliers, court marks, short gaps); 60 fps video feeds every second frame |
 | Players and pose | `perception/players.py`, `perception/pose.py`, `models/person_unet.py`, `models/pose_unet.py` (our distilled networks) or YOLO26 | near/far player tracks on the court plane (tracks reset at cuts); keypoints at contacts |
 | Image-track geometry | `events/image_track.py` | two-piece changepoints, line-meeting kinks (bounces, serve contact) |
-| Strokes | `events/hits.py` | persistent reversals of the ball's travel direction; far strokes also from a sharp break of the ball's image velocity next to the far player (adopted 2026-11-17, `docs/EVAL_SPOT.md`) |
+| Strokes | `events/hits.py` | persistent reversals of the ball's travel direction; far strokes also from a sharp break of the ball's image velocity next to the far player (adopted 2026-11-17, `docs/EVAL_SPOT.md`); a far rally stroke's contact moved back to where a line through the incoming ball and a curve through the outgoing one meet, on video up to 30 fps (`move_far_contacts`, adopted 2026-11-17, `docs/EVAL_SPOT.md`) |
 | Serves | `events/serves.py` | toss above a baseline player after a dead ball, contact at the toss/struck-flight meeting point |
 | Flights | `events/flights.py`, `physics/flight.py` | one bounce per flight, 3D fit, plausibility gates, gated 2D fallback |
 | Calls | `officiating/line_call.py` | P(in), margin and 1σ across the governing line; IN/OUT only at ≥ 95 % |
@@ -298,7 +298,11 @@ Also from the pipeline review (2026-11-14), checked and left:
   labels both ways), false alarms 29 → 30, hits 434 → 463. Thresholds chosen on games 1–7. Before its test a break
   at the far player's feet (a bounce) was dropped (`BREAK_MIN_HEIGHT`, from the dev matches): games 1–7 then give
   strokes 269 → 284, first bounces 220 → 226, decisive calls 228 → 235 (all consistent), false alarms 29 → 30, hits
-  434 → 454. Still open: on the test matches far strokes are found less often than near ones (0.72 against 0.85).
+  434 → 454. The far strokes found were then often late (the reversal at the outgoing ball's apex); the far
+  contact from a line and a curve (`move_far_contacts`, E2E-Spot test slot 2) moves them back and was **adopted
+  2026-11-17** (stroke recall +3.32 points, rising in all four test matches, far strokes 0.723 → 0.788 within 0.1 s;
+  stroke precision +2.07, bounces and serves not worse; `docs/EVAL_SPOT.md`). Still open: far strokes are found less
+  often than near ones on those matches (0.79 against 0.85), and the E2E-Spot test matches are now used up.
 - `calib/line_refine.py`: a ridge cut by the end of its search window is still returned (biased towards the
   window, e.g. −8.75 px for a ridge centred at −9) instead of being refused; and the colour histogram behind the
   shot-cut test (`perception/court.py`) is sharp enough that a flat, untextured frame made 15 grey levels

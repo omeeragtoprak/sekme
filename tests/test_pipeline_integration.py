@@ -25,6 +25,9 @@ def test_pipeline_end_to_end_on_real_clip(tmp_path: Path, monkeypatch) -> None:
     calls: list[int] = []  # far strokes from 2D breaks run by default (adopted 2026-11-17, docs/EVAL_SPOT.md)
     real_far_breaks = pipeline.far_breaks
     monkeypatch.setattr(pipeline, "far_breaks", lambda *a, **k: calls.append(1) or real_far_breaks(*a, **k))
+    moved: list[int] = []  # and the far contact from a line and a curve (adopted 2026-11-17, test slot 2)
+    real_move = pipeline.move_far_contacts
+    monkeypatch.setattr(pipeline, "move_far_contacts", lambda *a, **k: moved.append(1) or real_move(*a, **k))
 
     clip = tmp_path / "clip.mp4"
     # First 2.4 s: one full flight (near-player hit at frame ~9, far bounce at ~47, far hit at ~56).
@@ -33,7 +36,7 @@ def test_pipeline_end_to_end_on_real_clip(tmp_path: Path, monkeypatch) -> None:
     report = analyze(clip, tmp_path / "run", PipelineConfig(render=False))
 
     assert report["schema"] == "courtvision.report/1"
-    assert calls == [1] and report["candidates"] == {}  # adopted, not a candidate: no flag recorded
+    assert calls == [1] and moved == [1] and report["candidates"] == {}  # adopted, not candidates: no flag recorded
     cal = report["calibration"]
     assert cal["valid_frames"] == cal["total_frames"]
     assert cal["line_rmse_px_median"] < 1.5

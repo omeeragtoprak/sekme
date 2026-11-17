@@ -31,15 +31,15 @@ It then checks itself against what the broadcast shows: the score graphic and th
   ball ~2 px low in the image, which on court pulls bounces ~15 cm towards the camera. Ball networks v3
   and v4 are trained on corrected targets: within 0.3 px of the ball's centre, and its bounces moved as predicted ([analysis](docs/EVAL_TRACKNET.md#systematic-offsets-2026-11-13-evidence-in-resultsposition_biastxt)).
 - **Independent benchmark.** On human-labelled broadcast bounces from matches never used to fit or
-  tune anything (TrackNet games 8–10; used only for accept/reject decisions, each logged): 77 % of first
-  bounces after a stroke found, 93 % precision, median 10 cm from the labelled contact, 108 / 108
+  tune anything (TrackNet games 8–10; used only for accept/reject decisions, each logged): 79 % of first
+  bounces after a stroke found, 93 % precision, median 12 cm from the labelled contact, 109 / 109
   decisive calls consistent — few of them close to a line, so this rules out gross errors, it does not
   measure centimetre accuracy ([details](docs/EVAL_TRACKNET.md)).
 - **Second independent benchmark: event spotting.** On four broadcast matches untouched before this test (E2E-Spot
-  labels; Wimbledon 2018–2019, US Open 2019; 303 clips at 25–30 fps), the default system finds 79 % of
-  strokes and 67 % of first bounces within 0.1 s, 84 % of the bounces it reports match a labelled one, and it finds
-  77 % of serves at 95 % precision. These matches decided one change (far strokes from a 2D velocity
-  break, adopted) and allow one more ([details](docs/EVAL_SPOT.md)).
+  labels; Wimbledon 2018–2019, US Open 2019; 303 clips at 25–30 fps), the default system finds 82 % of
+  strokes and 68 % of first bounces within 0.1 s, 84 % of the bounces it reports match a labelled one, and it finds
+  77 % of serves at 95 % precision. These matches decided two changes, both adopted (far strokes from a 2D
+  velocity break; far stroke contact from a line and a curve), and are now used up ([details](docs/EVAL_SPOT.md)).
 - **Checks itself.** On-device OCR of the score graphic and the stadium radar board; fitted serve
   speeds are compared with the radar on every serve whose board change is timed to ≤ 4 s.
 - **Review Room.** Local web app (FastAPI + React/three.js, Turkish UI): frame-accurate player, mini
@@ -64,7 +64,7 @@ flowchart LR
 | Court | keypoint heatmaps on keyframes and cuts → homography → sub-pixel refit on the painted line ridges → pinhole camera (focal length and pose) per frame; frames the lines do not back are not measured |
 | Ball | three-frame heatmap network, sliding window; track with gating across short misses, removal of detections that stay on one spot of the court (line marks), short-gap fill |
 | Players | person detector + ByteTrack, near/far selection on the court plane, speed and size gates; pose at contacts for stroke type |
-| Events | strokes = persistent reversals of travel direction, and for the far player a sharp break in the ball's image velocity next to them; serves = toss above a baseline player after a dead ball, contact where toss and struck flight meet; one bounce per flight by a changepoint on the receiving half |
+| Events | strokes = persistent reversals of travel direction, and for the far player a sharp break in the ball's image velocity next to them, its contact moved back to where a line through the incoming ball and a curve through the outgoing one meet (25–30 fps); serves = toss above a baseline player after a dead ball, contact where toss and struck flight meet; one bounce per flight by a changepoint on the receiving half |
 | 3D flight | contact times free, players' court positions as anchors, serve contact height measured on the camera ray; plausibility gates (speed, height, residual, σ); rejected fits fall back to a gated image-kink bounce |
 | Call | Monte Carlo P(in) over the bounce covariance (fit + calibration term) against the zone's outer line edges; play continuing after an OUT downgrades it |
 | Self-check | Apple Vision OCR every 0.5 s: names, score, server marker, radar board; within a point the marked server names the serve's end, elsewhere each player's start end (majority of their serves) and ITF Rule 10 end changes do; a board value that flips back within 4 s is dropped; never an input to a call |
@@ -115,6 +115,11 @@ for tuning):
 | decisive calls consistent with the label | 108 / 108 | 107 / 107 | 107 / 107 | 108 / 108 |
 | truth inside the reported 95 % ellipse (1 px label noise) | 91 % | 92 % | 89 % | 91 % |
 
+The table compares the networks under the event code of 2026-11-13. With the event defaults of 2026-11-17 (far
+strokes and their contact, serve pin; re-run from the same caches, report only) v4 finds 112 / 141 first bounces
+(110 / 141 before, with today's scorer), 93 % precision, 12 / 33 cm (10 / 32 before), 109 / 109 decisive calls
+consistent; the median moves by 1.7 cm mostly through which bounces sit near it ([details](docs/EVAL_TRACKNET.md)).
+
 v4 was chosen over v3 on the held-out clips of games 1–7 by a rule written before training; on games
 8–10 (report only) its frame F1 is about a point lower and its bounces are on par with v3's (median
 difference +0.2 cm, 95 % interval −0.6 to +1.6 cm by clip bootstrap) and with WASB's (−1.2 cm, −2.5 to
@@ -125,14 +130,17 @@ frames calibrated (the rest are close-ups, correctly excluded), line-fit residua
 recovered 33 m back and 10 m up; 53 calls on 66 shots (51 IN, 1 OUT checked by eye, 1 low-confidence);
 2 / 3 visible serves found (our ball network still misses most of the motion-blurred frames right after
 one serve's contact; WASB finds all 3). US Open 2025 final (1080p, 60 fps): 71.5 % of frames
-calibrated, 22 calls on 43 shots (ball v3: 26 on 42).
+calibrated, 23 calls on 50 shots with the current defaults (43 shots before the 60 fps frame counts were
+scaled; ball v3: 26 calls on 42).
 
 **Radar** ([results/radar.txt](results/radar.txt); 5 official US Open clips, pairs kept only when the board
-change is timed to ≤ 4 s). With the current defaults (ball v4): 5 serves, +5.2, +8.1, −2.2, −3.0,
-+11.7 % → mean +4.0 % (SE 2.9), mean |error| 6.0 % (ball v3: 6.7 %). The largest error is a fast 60 fps
-serve whose contact v4 used to put ten frames early (−16.5 %); with the contact now found inside the
-detection gap it is timed correctly and measured 11.7 % fast. Five serves are too few for a bias claim
-either way. On development data most of the remaining serve-speed error follows the fit drifting away
+change is timed to ≤ 4 s). With the current defaults (2026-11-17; re-run from the same caches): 6 serves, +5.5,
++2.5, +3.1, −1.8, +0.5, +6.7 % → mean +2.8 % (SE 1.3), mean |error| 3.4 %; before the serve pin and the 60 fps
+frame counts the same clips gave 5 serves at +5.2, +8.1, −2.2, −3.0, +11.7 % (mean |error| 6.0 %). On the
+554 s of the 2025 final kept for the serve contact test, the automatic pairing now finds 8 serves instead of 1:
+seven within −0.9 to +5.7 %, one at −23.5 % whose board change came 5.4–8.4 s after it (usually 2.5–3.5 s).
+Six or eight serves are too few for a bias
+claim either way. On development data most of the remaining serve-speed error followed the fit drifting away
 from the measured contact height; pinning the fit there was adopted on 2026-11-17 by a rule written before its
 six unused US Open videos were downloaded: on 89 serves with a board reading the mean |error| fell from 10.6 % to
 5.7 % (near-side serves 11.1 % → 3.0 %, far-side 10.0 % → 9.1 %) and no call changed
