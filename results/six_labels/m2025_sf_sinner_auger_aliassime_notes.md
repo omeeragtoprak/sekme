@@ -16,3 +16,11 @@ Presence: 80 frames; main = true in 36, false in 44 (close-ups, low-angle/net-le
 - 17981 and 31063: near player's feet partly/fully behind the score bug; 17981 uses the visible shoe, 31063 is an estimate.
 - 34844: far player (Sinner) is not on court in the frame, only a ball person: far null.
 - Blurred, wide-stance or lunging poses (e.g. 1533 far, 15156 near, 34570 near) have a larger error (about 10 px).
+
+## Second round
+Start 07:58, end about 08:22 (2026-11-17). Method: one sequential OpenCV decode (CPU) saving the 60 listed frames at full resolution and 5 sampled frames per flight at half size; far feet read on 4x crops with a 10 px grid, near feet on 2.2x crops (shoe centres, midpoint of the two feet; for a raised foot the midpoint of both).
+Telling the players apart: Sinner = navy polo and navy shorts, cap, tall, burgundy/white shoes; Auger = white shirt, black shorts, yellow shoes, neon racket.
+Ties (server marker on the score graphic, server seen tossing on the main camera): 9206 Auger (far, white), 16502 Sinner (far, navy), 31383 Auger (far, white), 33072 Sinner (far, navy). All agree with the clothing rule.
+Disagreement frames: main = elevated behind-baseline view with net and near baseline in view; marked not main: 22068 and 27256 (close-up, near baseline out of frame), 30527, 34958, 34964 (dissolves), 31925 (different low camera, near half cut off). Zoomed variants of the main camera (6804, 6983, 7031, 13101, 13243, 27092, 27222) counted as main.
+Near feet null although main: feet below the frame or hidden (6804, 7031, 28184, 33241, 33346, 33436, 34981, 34997), near player only partly in frame (8625, 25256). Near feet estimated although occluded by the score graphic or camera platform: 8034, 8143, 8494, 8526, 16822, 31072, 31383, 33020, 33046, 33072 (left foot or both feet behind overlay; error maybe 20-40 px).
+Flights: names from the mid frame, camera/cut checked on 5 frames. Null: 220 and 222 (camera on far half, only a white-shirted person outside the court at the bottom corner, unsure), 251 (near court empty). 289 and 199 end partly off-frame / in a dissolve but the name is clear.

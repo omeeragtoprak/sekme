@@ -6,6 +6,10 @@
     .venv/bin/python scripts/eval_six_videos.py names --labels DIR            # flights to label for the names candidate
     .venv/bin/python scripts/eval_six_videos.py score  --labels DIR --out F    # the rules, once
 
+The test is spent (results/six_videos_test.json, 2026-11-17): the flags it decided were adopted or removed from
+the CLI, so ``sample``, ``run``, ``disagreements`` and ``names`` refuse once that result file exists; ``score`` and
+this file stay as the record of how the result was computed.
+
 The videos are the six of ``six_videos_fetch.MATCHES``, files DIR/<name>.mp4 (handled three at a time: each
 command acts on the videos present and keeps what earlier calls made).
 ``sample``: DIR/<name>_presence_frames.json, the frames to label for player presence (fixed by the name and frame
@@ -37,6 +41,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SPENT = ROOT / "results" / "six_videos_test.json"  # the committed result: the test was run once, and is spent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -368,6 +373,9 @@ def main() -> None:
     ap.add_argument("--skip", nargs="*", choices=("players", "names"), default=[],
                     help="score: give up these candidates' tests (their labels are missing; they count as used)")
     a = ap.parse_args()
+    if a.cmd != "score" and SPENT.exists():
+        raise SystemExit(f"the six-video test is spent ({SPENT.relative_to(ROOT)} exists): its flags were adopted or "
+                         f"removed (2026-11-17, docs/EVAL_SERVE_SPEED.md), so {a.cmd} would run flags that are gone")
     if a.cmd == "sample":
         sample(a.videos, a.labels)
     elif a.cmd == "run":

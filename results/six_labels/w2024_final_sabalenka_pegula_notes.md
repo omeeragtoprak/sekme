@@ -31,3 +31,14 @@ scripts (copied and adapted in a scratch folder outside the repository) and `w20
 - Presence frames 12605, 12729, 14431, 24928, 36747: near player is at or close to the net, feet labelled where they are.
 - Presence frame 40566: motion blur; feet positions approximate (about +-10 px).
 - No commit made.
+
+## Second round
+
+Start about 09:23, end about 09:36 (2026-11-17, local time). One sequential OpenCV decode per script (CPU only); the video decodes 44101 frames per the container, decoding stopped at the last needed frame (40279).
+
+Telling the players apart: Sabalenka = hot pink/magenta dress, dark hair in a bun/ponytail, no visor. Pegula = periwinkle blue-violet dress with a black side panel, white visor, long dark ponytail. They swap ends during the match, so near/far was read per frame. The score graphic agrees with this in every tie: the serving marker sits next to SABALENKA when the pink player serves and next to PEGULA when the blue-violet player serves.
+
+Task A (60 frames): 50 main camera, 10 not main (close or tight cameras: 8720, 8730, 8846, 8855, 8877, 33158, 34540, 34806, 37557, 37573). Feet were placed on crops at 2.2-5x with a pixel grid; precision is about 5-8 px for the far player and 5-10 px for the near player. Estimated rather than seen (near player feet hidden by the score graphic or below the frame edge): frame 5407 (feet just below the bottom edge, y set to 1079), 24690, 24698, 24700, 24707, 26105, 26311, 26325, 27692, 27930, 40274, 40275, 40278 (estimated from the hips/dress hem, +-15 px). Where one foot was lifted or blurred the midpoint of the two feet was used (17786, 18549, 18552, 18648, 17761).
+
+Task B ties (6): 5430 Sabalenka (far server, contact about 5430), 16360 Sabalenka (near, in toss), 18440 Sabalenka (near, contact about 18445), 23080 Pegula (near, in toss, contact about 23085), 24460 Pegula (near, toss starts about 24451), 25800 Sabalenka (far, in serve motion). Frames are inside the serve motion, not exact contact frames.
+Flights (40): Sabalenka near 26, Pegula near 12, null 2 (flights 296 and 297: close camera, near player not tellable as main view). Each flight was judged from 4 frames (start, 2 middle, end) at reduced size; colour of the near player's dress was unambiguous in all main-camera flights.

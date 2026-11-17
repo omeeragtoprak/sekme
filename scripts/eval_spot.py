@@ -80,8 +80,7 @@ VIDEO_HEIGHT = 720
 MAX_FAILED_IN_ROW = 3
 MAX_FAILED_SHARE = 0.10
 # CLI flag -> the report's "candidates" record of a run made with it.
-FLAG_KEYS = {"toss-bridge": "serve_toss_bridge_s", "pin-serve-height": "pin_serve_height",
-             "fps-scaled-thresholds": "fps_scaled_thresholds", "player-size-from-camera": "player_size_from_camera"}
+FLAG_KEYS = {"toss-bridge": "serve_toss_bridge_s"}
 SCORER_CODE = ["src", "scripts/eval_spot.py"]
 _CODE: list[str] = []  # the analysis code, fixed when a run starts
 

@@ -67,11 +67,12 @@ documented). `report.json` lists the flags a run used under `candidates`.
 
 | Flag | What it changes | Decided by |
 |---|---|---|
-| `--fps-scaled-thresholds` | frame counts set on 30 fps video (court-fixed filter, toss-run gap, toss speed per frame) scaled by round(fps / 30) | `docs/EVAL_SERVE_SPEED.md`, second candidate |
-| `--player-size-from-camera` | the player size gate from the calibrated camera (band 0.5–1.6 of a standing 1.85 m player) instead of one track's median height | `docs/EVAL_SERVE_SPEED.md`, third candidate |
-| `--pin-serve-height` | the flight fit held at the serve contact height measured on the camera ray (±0.05 m) | `docs/EVAL_SERVE_SPEED.md` |
-| `--score-consistency` | player names counted only from score readings consistent over time (no missing current-set column, no fall in the set count) | `docs/EVAL_SERVE_SPEED.md`, fourth candidate |
 | `--toss-bridge` | a toss run may span a missed apex; the serve contact is searched over the whole run | withdrawn from its test (`docs/EVAL_SPOT.md`); reported only |
+
+Decided on the six US Open videos on 2026-11-17 (`docs/EVAL_SERVE_SPEED.md`, Result): the frame counts scaled
+by round(fps / 30) and the serve fit pinned at the measured contact height (±0.05 m) were adopted and are the
+default (their flags are gone); the camera-based player size gate and the names from consistent score readings
+were rejected and removed.
 
 ## Where the time goes (profiled 2026-11-14)
 
@@ -161,7 +162,7 @@ The networks and most thresholds were developed on 30 fps video (TrackNet). The 
 its input stride (frames 0, 2, 4 at 60 fps). Thresholds in seconds (`0.12 * fps`, `0.4 * fps`, the dead-ball
 second) mean the same at any rate; those counted in frames cover half the time at 60 fps:
 
-| Count (frames) | Where | At 30 fps | At 60 fps | `--fps-scaled-thresholds` |
+| Count (frames) | Where | At 30 fps | At 60 fps | Scaled by round(fps / 30) (adopted 2026-11-17) |
 |---|---|---|---|---|
 | court-fixed window ±15, 10 hits | `perception/ball.py` `drop_court_fixed` | ±0.5 s, 0.33 s | ±0.25 s, 0.17 s: removes the toss apex | scaled |
 | toss-run gap 2, toss speed per frame | `events/serves.py` | 0.07 s | 0.03 s | scaled |
@@ -253,8 +254,9 @@ Also from the pipeline review (2026-11-14), checked and left:
   sometimes. Re-reading a crop of the graphic at 1, 2 and 3 times the size brings back some "1"s, never the "0"s,
   and glues "2 6" into "26", so a re-read cannot restore the column. A "1 0" column lost this way turns the
   end-change count odd and puts the names on the wrong ends. The cell's pixels do tell: a "0" is a ring, a "1" a
-  narrow bar (`broadcast/scoreboard.py` `cell_digit`); `--score-consistency` (fourth candidate in
-  `docs/EVAL_SERVE_SPEED.md`) restores the column from them and drops the reading where they do not read.
+  narrow bar; a candidate that restored the column from them and dropped the reading where they did not read
+  (`--score-consistency`) was rejected on the six US Open videos (wrong names 28 → 23 of 227 labelled flights,
+  at most half needed; `docs/EVAL_SERVE_SPEED.md`, Result) and removed, so this issue stays open.
 - `broadcast/scoreboard.py`: a player name with a dotted initial ("ALCARAZ G.", "J.-W. TSONGA") is not read
   as a name, and the fuzzy match for the speed board's label also accepts look-alike words ("SERVICE",
   "SPEEDY"). Neither occurs in the six broadcast clips: their names are read as surnames or full names (no
@@ -314,7 +316,7 @@ Also from the pipeline review (2026-11-14), checked and left:
 Fixed in the same review: the perception cache key now includes the calibrator's keyframe interval, the
 shot-cut threshold and the person detector's input size (older caches are read as made with the defaults,
 which have not changed since they were added); the pose cache key includes each hit's side and player box, so
-another player selection at the same frames (`--player-size-from-camera`) does not reuse the poses; a labelled
+another player selection at the same frames (then the `--player-size-from-camera` candidate, since rejected) does not reuse the poses; a labelled
 bounce on the other half of the court is scored as outside its zone, not inside it (zones are open at the net).
 
 ## Radar board pairing: wide update windows without a cut (rule written 2026-11-14, before measuring)

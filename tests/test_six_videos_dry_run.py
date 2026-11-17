@@ -204,3 +204,23 @@ def test_score_without_player_or_name_labels_refuses_unless_those_tests_are_give
     assert res["fps_scaled_thresholds"]["decision"] == "accepted"
     assert res["pin_serve_height"]["decision"] == "accepted"
     assert len(res["labels_sha256"]) == 6
+
+
+@pytest.mark.parametrize("cmd", ["sample", "run", "disagreements", "names"])
+def test_once_the_result_exists_every_command_but_score_refuses(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cmd: str) -> None:
+    e = _script()
+    spent = tmp_path / "six_videos_test.json"
+    spent.write_text("{}")
+    monkeypatch.setattr(e, "SPENT", spent)
+    monkeypatch.setattr(e, "ROOT", tmp_path)
+    called: list[str] = []
+    for name in ("sample", "run", "disagreements", "names_flights", "score"):
+        monkeypatch.setattr(e, name, lambda *a, _n=name, **k: called.append(_n))
+    monkeypatch.setattr(sys, "argv", ["eval_six_videos.py", cmd, "--videos", "v", "--labels", "l", "--out", "o"])
+    with pytest.raises(SystemExit, match="spent"):
+        e.main()
+    assert called == []
+    monkeypatch.setattr(sys, "argv", ["eval_six_videos.py", "score", "--labels", "l", "--out", "o"])
+    e.main()  # score is left to its own refusal (an existing result file)
+    assert called == ["score"]

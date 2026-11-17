@@ -11,7 +11,6 @@ from courtvision.perception.players import (
     IouTracker,
     PersonDet,
     _plausible,
-    expected_height_px,
     select_players,
 )
 
@@ -23,9 +22,15 @@ def _calib(cam, n, invalid=()):
             for i in range(n)]
 
 
+def _standing_px(cam, x, y):
+    """Image height of a 1.85 m player standing at court point (x, y)."""
+    p = cam.project(np.array([[x, y, 0.0], [x, y, 1.85]]))
+    return float(abs(p[0, 1] - p[1, 1]))
+
+
 def _det(cam, tid, x, y, frac=1.0, conf=0.9):
     foot = cam.project(np.array([[x, y, 0.0]]))[0]
-    h = frac * expected_height_px(cam, np.array([x, y]))
+    h = frac * _standing_px(cam, x, y)
     return PersonDet(tid, np.array([foot[0] - 20, foot[1] - h, foot[0] + 20, foot[1]]), conf)
 
 
@@ -140,24 +145,7 @@ def test_size_gate_boundaries_with_clip_height_and_with_camera_height():
     w = np.array([0.0, -12.0])
     assert _plausible(w, d(60), None, 0, 30.0, 100.0) and not _plausible(w, d(59), None, 0, 30.0, 100.0)
     assert _plausible(w, d(160), None, 0, 30.0, 100.0) and not _plausible(w, d(161), None, 0, 30.0, 100.0)
-    assert _plausible(w, d(50), None, 0, 30.0, 999.0, 100.0) and not _plausible(w, d(49), None, 0, 30.0, 999.0, 100.0)
-    assert _plausible(w, d(160), None, 0, 30.0, 999.0, 100.0) and not _plausible(w, d(161), None, 0, 30.0, 999.0, 100.0)
     assert _plausible(w, d(1), None, 0, 30.0, None)  # no reference at all: any size passes
-
-
-def test_expected_height_needs_camera_and_point_and_shrinks_with_distance(broadcast_camera):
-    assert expected_height_px(None, np.array([0.0, -12.0])) is None
-    assert expected_height_px(broadcast_camera, None) is None
-    near = expected_height_px(broadcast_camera, np.array([0.0, -12.0]))
-    far = expected_height_px(broadcast_camera, np.array([0.0, 12.0]))
-    assert near > far > 0
-
-
-def test_size_from_camera_without_calibration_falls_back_to_no_size_gate(broadcast_camera):
-    cam = broadcast_camera
-    dets = [[_det(cam, 1, 1.0, -12.0)] for _ in range(3)]
-    r = select_players(dets, _calib(cam, 3, invalid={1}), size_from_camera=True)
-    assert np.isfinite(r["near"].world[[0, 2]]).all() and np.isnan(r["near"].world[1]).all()
 
 
 def test_iou_tracker_drops_a_track_after_max_age_and_respects_min_iou():

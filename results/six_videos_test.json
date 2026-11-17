@@ -1,0 +1,1050 @@
+{
+ "code_sha": "b18a4598d68b972ace0c5e2a43e1483a3b96b367",
+ "skipped": [],
+ "labels_sha256": {
+  "m2024_sf_fritz_tiafoe.json": "91cbb5cc61a359c5d98df5ba811ea237b300299961b121276957fbb2f13530fc",
+  "m2024_sf_fritz_tiafoe_disagree.json": "6288e525c0d687ac78a774bb19657dbf6ae067cae97d33b89896cc8a4b2a96d1",
+  "m2024_sf_fritz_tiafoe_disagree_frames.json": "c7a84e5c364f833c67c94d4a5b734bb86dd19602fe3dea4540fb8e6de66f57fb",
+  "m2024_sf_fritz_tiafoe_names.json": "7198ed313073c534c9fc60d56263d6f58ee4d371b5a828bb341d6adca20d382e",
+  "m2024_sf_fritz_tiafoe_names_flights.json": "37741408013191a0d308647fb2d3e7defdf686e112a7dc5509bad388c7cce106",
+  "m2024_sf_fritz_tiafoe_presence.json": "0de39ccca32969b3492a1d9702b85d10090fb315498a602e7cdbeb300803f8d1",
+  "m2024_sf_fritz_tiafoe_presence_frames.json": "67f489e87f74cf49fb2aaba389268ebd52ac3068bb0d893429e2a015ef3aea8b",
+  "m2024_sf_sinner_draper.json": "7b541354151e04df6b62313521c740ffb63814fb5a07032341497dac43b86923",
+  "m2024_sf_sinner_draper_disagree.json": "b1009ffb807849df5451c683f8ba5603ead110089090f7ef7810a3c0bcaf5990",
+  "m2024_sf_sinner_draper_disagree_frames.json": "87a4831d71be2541b71f553ddd2c55eec2f9ba411dfd03dd34949ae7bd376979",
+  "m2024_sf_sinner_draper_names.json": "664f0e2002c31ebe064f7bee066f000d6bde646734c15827c24f2faa0235e11d",
+  "m2024_sf_sinner_draper_names_flights.json": "4999a2bb89910c85c731e7ca15acf999a68e1a41b54c8a8d9ed2671288a4f64a",
+  "m2024_sf_sinner_draper_presence.json": "d678309ab02950647c8b59a824423b648353f34ced6a0a28afa7bce71f9e940e",
+  "m2024_sf_sinner_draper_presence_frames.json": "1d5f3d824ba4175bfc3455d82f615c492ea7c7b928e2b509d165e895c1140349",
+  "m2025_sf_alcaraz_djokovic.json": "72b3d1ea2ab993b9dd371c54e16d47da948c979ddcc6cb639d947c71bffd0f95",
+  "m2025_sf_alcaraz_djokovic_disagree.json": "7966485a3b85b60aa111d215664511b0590f26186710de8ec721c8fc8054c8e0",
+  "m2025_sf_alcaraz_djokovic_disagree_frames.json": "d63174110cd6a4db93851adae507c4bf11ce29e37cff35cabc0b4c46451ad403",
+  "m2025_sf_alcaraz_djokovic_names.json": "ad7566cd820c4349afd3e00bf8855aa0f704b5c77d49165040a61199873eaa80",
+  "m2025_sf_alcaraz_djokovic_names_flights.json": "d6278deacec2c27a20fdff7a3baed1463f05386859b25a6b1aa86e89cecf7af2",
+  "m2025_sf_alcaraz_djokovic_presence.json": "dd3a8145fe2b1e25cd3b33b37e200a6f3f8e29c07bd40bcbfedd6c0d19f2ffa8",
+  "m2025_sf_alcaraz_djokovic_presence_frames.json": "c31ca927971c9782a1fa17f9a289ec02a4f6d3557860b01cbb75a40bdfd68916",
+  "m2025_sf_sinner_auger_aliassime.json": "8c948e1ed6ded8f68a06562b2fa3046f7de683fcf8435d91152387ad6e7484a4",
+  "m2025_sf_sinner_auger_aliassime_disagree.json": "82a5537b1475658cba5f9df3ee9fb9a022a1768a6db46da1bf933e1fee08588d",
+  "m2025_sf_sinner_auger_aliassime_disagree_frames.json": "1ebfa61c5e65ff435ca7c52b88813c61f4d6b257c6ef2a34948c0040c64169aa",
+  "m2025_sf_sinner_auger_aliassime_names.json": "e220b9a34e9c31f8182212c5635e5da4c16f2f297aa9639b17ec0c5030364bf7",
+  "m2025_sf_sinner_auger_aliassime_names_flights.json": "d172f598ff0c450ae73d3d7a714269e2267455f8be6e5b1ec1ae621875271840",
+  "m2025_sf_sinner_auger_aliassime_presence.json": "d88da7da64df89d80636a4b3efccceba85e7693ffdc6107c5f7bedbe5fb0bcc2",
+  "m2025_sf_sinner_auger_aliassime_presence_frames.json": "19cec4a4c1c0c61244612c680645537b9cec54b1083bd858bbb5d92587425005",
+  "w2024_final_sabalenka_pegula.json": "27736b54fc266da12f1eef79bbb8a4f0bd77bcd6cc78de3c7f412fd8c91ca439",
+  "w2024_final_sabalenka_pegula_disagree.json": "2d07cb437ba786d5c39e5f8eda379b4b3067a2fa7699f0991cfe036d3b185485",
+  "w2024_final_sabalenka_pegula_disagree_frames.json": "a4739dd3fbedfdb910e04a4c678f4b7d88f3582e5b85c6cbce07cf32324377a1",
+  "w2024_final_sabalenka_pegula_names.json": "8736fa2e3902b0bbbb8dd769392d2224bc7bddf723cfbeb86872089a16b7051e",
+  "w2024_final_sabalenka_pegula_names_flights.json": "351265d58d53654f0c3ae6d4da2e2214ad182767a2274a4d47f6a40f5a002378",
+  "w2024_final_sabalenka_pegula_presence.json": "33c8d70d090a5222a710e52ad3f06ab1e0c7953d6fa8eb0339236ef518732e5c",
+  "w2024_final_sabalenka_pegula_presence_frames.json": "7e887f7980b64315bb154150ae3c9335b5c11d1332531ca0db4e2371d7c0a76c",
+  "w2025_final_sabalenka_anisimova.json": "361d8c9febeed441894506c30723d8680f47f6fc55ddc9d5eab51beafe5a4c0e",
+  "w2025_final_sabalenka_anisimova_disagree.json": "2995ca226256d77cd42ce0180d9b70c5dfea7a43b67943e73a3d26cd68049c2b",
+  "w2025_final_sabalenka_anisimova_disagree_frames.json": "441726b851e5ea13298ee6268e5e51175dedd0a12d188a4eac56e552e1b57d7b",
+  "w2025_final_sabalenka_anisimova_names.json": "89f18cfcdc290b6587a82dfa26ce18e077b2ebd0ac4b31971f58f7b93575dc3a",
+  "w2025_final_sabalenka_anisimova_names_flights.json": "faeb8c618fc375aa3a7ce8d74aa3d32fe7fe13e14db17a84a1eb747fdd337a07",
+  "w2025_final_sabalenka_anisimova_presence.json": "afc906ee8bb0365c3bdc4b5b83ad7e050621f6003f0c56a2f6063fca162ecc14",
+  "w2025_final_sabalenka_anisimova_presence_frames.json": "9924c150b89aba2f1a1b47688070efa2653e94ba180bb1f06d5b09de418f5656"
+ },
+ "fps_scaled_thresholds": {
+  "decision": "accepted",
+  "criteria": {
+   "recall +10 points": true,
+   "within-2 share falls <= 5 points": true,
+   "no decisive flip": true,
+   "false serves +<= 2": true
+  },
+  "numbers": {
+   "videos_50fps": 6,
+   "labelled": 173,
+   "recall_default": 32.947976878612714,
+   "recall_scaled": 63.005780346820806,
+   "within2_share_default": 50.87719298245614,
+   "within2_share_scaled": 75.22935779816514,
+   "flips": [],
+   "false_serves_default": 3,
+   "false_serves_scaled": 4
+  }
+ },
+ "pin_serve_height": {
+  "decision": "accepted",
+  "criteria": {
+   "mean |error| falls >= 1.5 points": true,
+   "two thirds closer": true,
+   "no serve verdict change": true
+  },
+  "numbers": {
+   "paired": 89,
+   "both_measured": 89,
+   "mean_abs_drop_points": 4.845887321382496,
+   "closer": 65,
+   "further_or_lost": 13,
+   "lost_by_pinned": [],
+   "verdict_changes": []
+  }
+ },
+ "player_size_from_camera": {
+  "decision": "rejected",
+  "criteria": {
+   "near coverage +5 points": true,
+   "far coverage falls <= 1 point": true,
+   "wrong selections rise <= 1 point": false,
+   "disagreements (near): candidate right in >= 2/3": true,
+   "disagreements (far): candidate right in >= 2/3": true
+  },
+  "numbers": {
+   "near_present": 282,
+   "far_present": 283,
+   "near_coverage": [
+    58.156028368794324,
+    90.42553191489361
+   ],
+   "far_coverage": [
+    93.99293286219081,
+    93.99293286219081
+   ],
+   "wrong_share": [
+    2.4475524475524475,
+    4.195804195804196
+   ],
+   "disagreements": {
+    "near": {
+     "one_right": 286,
+     "b_right": 258
+    },
+    "far": {
+     "one_right": 11,
+     "b_right": 10
+    }
+   },
+   "totals": {
+    "default": {
+     "main_frames": 286,
+     "near": {
+      "present": 282,
+      "found": 164,
+      "wrong": 7
+     },
+     "far": {
+      "present": 283,
+      "found": 266,
+      "wrong": 7
+     }
+    },
+    "candidate": {
+     "main_frames": 286,
+     "near": {
+      "present": 282,
+      "found": 255,
+      "wrong": 17
+     },
+     "far": {
+      "present": 283,
+      "found": 266,
+      "wrong": 7
+     }
+    }
+   }
+  }
+ },
+ "score_consistency": {
+  "decision": "rejected",
+  "criteria": {
+   "wrong names at most half": false,
+   "right names at least 85 %": true,
+   "nothing but names changes": true
+  },
+  "numbers": {
+   "default": {
+    "right": 138,
+    "wrong": 28,
+    "none": 61
+   },
+   "candidate": {
+    "right": 123,
+    "wrong": 23,
+    "none": 81
+   },
+   "per_video": [
+    {
+     "default": {
+      "right": 29,
+      "wrong": 10,
+      "none": 1
+     },
+     "candidate": {
+      "right": 26,
+      "wrong": 5,
+      "none": 9
+     }
+    },
+    {
+     "default": {
+      "right": 1,
+      "wrong": 1,
+      "none": 38
+     },
+     "candidate": {
+      "right": 1,
+      "wrong": 1,
+      "none": 38
+     }
+    },
+    {
+     "default": {
+      "right": 23,
+      "wrong": 2,
+      "none": 8
+     },
+     "candidate": {
+      "right": 23,
+      "wrong": 2,
+      "none": 8
+     }
+    },
+    {
+     "default": {
+      "right": 24,
+      "wrong": 6,
+      "none": 7
+     },
+     "candidate": {
+      "right": 19,
+      "wrong": 7,
+      "none": 11
+     }
+    },
+    {
+     "default": {
+      "right": 33,
+      "wrong": 4,
+      "none": 1
+     },
+     "candidate": {
+      "right": 32,
+      "wrong": 5,
+      "none": 1
+     }
+    },
+    {
+     "default": {
+      "right": 28,
+      "wrong": 5,
+      "none": 6
+     },
+     "candidate": {
+      "right": 22,
+      "wrong": 3,
+      "none": 14
+     }
+    }
+   ],
+   "by_default_names_source": {
+    "graphic": {
+     "default": {
+      "right": 101,
+      "wrong": 27,
+      "none": 0
+     },
+     "candidate": {
+      "right": 88,
+      "wrong": 21,
+      "none": 19
+     }
+    },
+    "serve": {
+     "default": {
+      "right": 37,
+      "wrong": 1,
+      "none": 0
+     },
+     "candidate": {
+      "right": 35,
+      "wrong": 2,
+      "none": 1
+     }
+    },
+    "None": {
+     "default": {
+      "right": 0,
+      "wrong": 0,
+      "none": 61
+     },
+     "candidate": {
+      "right": 0,
+      "wrong": 0,
+      "none": 61
+     }
+    }
+   },
+   "flights_with_other_name_fields_changed": {
+    "server_name": 8,
+    "hand": 0,
+    "hand_source": 95,
+    "stroke": 0,
+    "stroke_wing": 0
+   },
+   "videos_with_other_changes": []
+  }
+ },
+ "per_video": {
+  "m2024_sf_fritz_tiafoe": {
+   "default": {
+    "labelled": 32,
+    "matched": 10,
+    "within2": 5,
+    "false_serves": 0
+   },
+   "scaled": {
+    "labelled": 32,
+    "matched": 20,
+    "within2": 16,
+    "false_serves": 0
+   },
+   "scaled_pin": {
+    "labelled": 32,
+    "matched": 20,
+    "within2": 16,
+    "false_serves": 0
+   },
+   "players": {
+    "labelled": 32,
+    "matched": 10,
+    "within2": 5,
+    "false_serves": 0
+   },
+   "bridge": {
+    "labelled": 32,
+    "matched": 22,
+    "within2": 18,
+    "false_serves": 0
+   },
+   "bridge_pin": {
+    "labelled": 32,
+    "matched": 22,
+    "within2": 18,
+    "false_serves": 0
+   },
+   "consistency": {
+    "labelled": 32,
+    "matched": 10,
+    "within2": 5,
+    "false_serves": 0
+   },
+   "fps": 59.94005994005994
+  },
+  "m2024_sf_sinner_draper": {
+   "default": {
+    "labelled": 25,
+    "matched": 7,
+    "within2": 4,
+    "false_serves": 0
+   },
+   "scaled": {
+    "labelled": 25,
+    "matched": 12,
+    "within2": 8,
+    "false_serves": 1
+   },
+   "scaled_pin": {
+    "labelled": 25,
+    "matched": 12,
+    "within2": 10,
+    "false_serves": 1
+   },
+   "players": {
+    "labelled": 25,
+    "matched": 7,
+    "within2": 4,
+    "false_serves": 1
+   },
+   "bridge": {
+    "labelled": 25,
+    "matched": 16,
+    "within2": 9,
+    "false_serves": 2
+   },
+   "bridge_pin": {
+    "labelled": 25,
+    "matched": 16,
+    "within2": 11,
+    "false_serves": 2
+   },
+   "consistency": {
+    "labelled": 25,
+    "matched": 7,
+    "within2": 4,
+    "false_serves": 0
+   },
+   "fps": 59.94005994005994
+  },
+  "m2025_sf_alcaraz_djokovic": {
+   "default": {
+    "labelled": 22,
+    "matched": 14,
+    "within2": 7,
+    "false_serves": 2
+   },
+   "scaled": {
+    "labelled": 22,
+    "matched": 21,
+    "within2": 14,
+    "false_serves": 2
+   },
+   "scaled_pin": {
+    "labelled": 22,
+    "matched": 21,
+    "within2": 15,
+    "false_serves": 2
+   },
+   "players": {
+    "labelled": 22,
+    "matched": 10,
+    "within2": 8,
+    "false_serves": 2
+   },
+   "bridge": {
+    "labelled": 22,
+    "matched": 17,
+    "within2": 12,
+    "false_serves": 2
+   },
+   "bridge_pin": {
+    "labelled": 22,
+    "matched": 17,
+    "within2": 13,
+    "false_serves": 2
+   },
+   "consistency": {
+    "labelled": 22,
+    "matched": 14,
+    "within2": 7,
+    "false_serves": 2
+   },
+   "fps": 59.94005994005994
+  },
+  "m2025_sf_sinner_auger_aliassime": {
+   "default": {
+    "labelled": 24,
+    "matched": 5,
+    "within2": 3,
+    "false_serves": 1
+   },
+   "scaled": {
+    "labelled": 24,
+    "matched": 19,
+    "within2": 16,
+    "false_serves": 1
+   },
+   "scaled_pin": {
+    "labelled": 24,
+    "matched": 19,
+    "within2": 15,
+    "false_serves": 1
+   },
+   "players": {
+    "labelled": 24,
+    "matched": 5,
+    "within2": 3,
+    "false_serves": 1
+   },
+   "bridge": {
+    "labelled": 24,
+    "matched": 20,
+    "within2": 17,
+    "false_serves": 1
+   },
+   "bridge_pin": {
+    "labelled": 24,
+    "matched": 20,
+    "within2": 16,
+    "false_serves": 1
+   },
+   "consistency": {
+    "labelled": 24,
+    "matched": 5,
+    "within2": 3,
+    "false_serves": 1
+   },
+   "fps": 59.94005994005994
+  },
+  "w2024_final_sabalenka_pegula": {
+   "default": {
+    "labelled": 32,
+    "matched": 9,
+    "within2": 4,
+    "false_serves": 0
+   },
+   "scaled": {
+    "labelled": 32,
+    "matched": 25,
+    "within2": 19,
+    "false_serves": 0
+   },
+   "scaled_pin": {
+    "labelled": 32,
+    "matched": 25,
+    "within2": 19,
+    "false_serves": 0
+   },
+   "players": {
+    "labelled": 32,
+    "matched": 9,
+    "within2": 4,
+    "false_serves": 0
+   },
+   "bridge": {
+    "labelled": 32,
+    "matched": 22,
+    "within2": 16,
+    "false_serves": 0
+   },
+   "bridge_pin": {
+    "labelled": 32,
+    "matched": 22,
+    "within2": 16,
+    "false_serves": 0
+   },
+   "consistency": {
+    "labelled": 32,
+    "matched": 9,
+    "within2": 4,
+    "false_serves": 0
+   },
+   "fps": 59.94005994005994
+  },
+  "w2025_final_sabalenka_anisimova": {
+   "default": {
+    "labelled": 38,
+    "matched": 12,
+    "within2": 6,
+    "false_serves": 0
+   },
+   "scaled": {
+    "labelled": 38,
+    "matched": 12,
+    "within2": 9,
+    "false_serves": 0
+   },
+   "scaled_pin": {
+    "labelled": 38,
+    "matched": 12,
+    "within2": 9,
+    "false_serves": 0
+   },
+   "players": {
+    "labelled": 38,
+    "matched": 14,
+    "within2": 8,
+    "false_serves": 0
+   },
+   "bridge": {
+    "labelled": 38,
+    "matched": 11,
+    "within2": 9,
+    "false_serves": 0
+   },
+   "bridge_pin": {
+    "labelled": 38,
+    "matched": 11,
+    "within2": 9,
+    "false_serves": 0
+   },
+   "consistency": {
+    "labelled": 38,
+    "matched": 12,
+    "within2": 6,
+    "false_serves": 0
+   },
+   "fps": 59.94005994005994
+  }
+ },
+ "reported_not_used": {
+  "fps_scaled_thresholds": {
+   "ball_detected_frames": {
+    "default": 122244,
+    "scaled": 126896
+   },
+   "calls": {
+    "calls_a": 1105,
+    "calls_b": 1143,
+    "only_a": 72,
+    "only_b": 110,
+    "verdict_changes": {
+     "serve": [],
+     "other": [
+      [
+       33173.69,
+       "REVIEW",
+       "IN"
+      ],
+      [
+       1065.84,
+       "REVIEW",
+       "OUT"
+      ]
+     ]
+    },
+    "review_changes": 2,
+    "paired": {
+     "serve": {
+      "shift_cm": {
+       "n": 55,
+       "median": 0.0,
+       "p90": 2.158248138806354,
+       "max": 10.321609813991243
+      },
+      "sigma_change_cm": {
+       "n": 55,
+       "median": 0.0,
+       "p90": 0.0010607564366442125,
+       "max": 4.650825178963792
+      },
+      "p_in_change": {
+       "n": 55,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 0.0
+      }
+     },
+     "other": {
+      "shift_cm": {
+       "n": 978,
+       "median": 0.0,
+       "p90": 0.9058200679105983,
+       "max": 816.9064364057823
+      },
+      "sigma_change_cm": {
+       "n": 978,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 8.583494435457936
+      },
+      "p_in_change": {
+       "n": 978,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 0.0927
+      }
+     }
+    }
+   },
+   "speeds": {
+    "default": {
+     "labelled_board": {
+      "n": 45,
+      "mean_signed": 2.3298342259121316,
+      "mean_abs": 12.738516798805906,
+      "within_5pct": 0.24444444444444444
+     },
+     "near": {
+      "n": 4,
+      "mean_signed": -2.008167763598033,
+      "mean_abs": 18.926039277201056,
+      "within_5pct": 0.0
+     },
+     "far": {
+      "n": 41,
+      "mean_signed": 2.7530539322058067,
+      "mean_abs": 12.134856069206375,
+      "within_5pct": 0.2682926829268293
+     },
+     "board_below_100mph": {
+      "n": 22,
+      "mean_signed": 4.027622146681647,
+      "mean_abs": 16.07138938464344,
+      "within_5pct": 0.13636363636363635
+     },
+     "board_115mph_up": {
+      "n": 11,
+      "mean_signed": -0.19731015173416855,
+      "mean_abs": 11.106066558032861,
+      "within_5pct": 0.36363636363636365
+     },
+     "automatic_pairs": {
+      "n": 19,
+      "mean_signed": 2.6772587227661284,
+      "mean_abs": 15.85505649982537,
+      "within_5pct": 0.15789473684210525
+     }
+    },
+    "scaled": {
+     "labelled_board": {
+      "n": 89,
+      "mean_signed": -0.5022416660544482,
+      "mean_abs": 10.583289134519548,
+      "within_5pct": 0.20224719101123595
+     },
+     "near": {
+      "n": 49,
+      "mean_signed": -0.6099367589834492,
+      "mean_abs": 11.071865792853208,
+      "within_5pct": 0.12244897959183673
+     },
+     "far": {
+      "n": 40,
+      "mean_signed": -0.370315177216422,
+      "mean_abs": 9.984782728060816,
+      "within_5pct": 0.3
+     },
+     "board_below_100mph": {
+      "n": 45,
+      "mean_signed": -0.7064563388276115,
+      "mean_abs": 13.580677170429578,
+      "within_5pct": 0.044444444444444446
+     },
+     "board_115mph_up": {
+      "n": 21,
+      "mean_signed": 1.8474527310716706,
+      "mean_abs": 7.017943099219193,
+      "within_5pct": 0.38095238095238093
+     },
+     "automatic_pairs": {
+      "n": 45,
+      "mean_signed": -0.4935150491811127,
+      "mean_abs": 11.692064814143514,
+      "within_5pct": 0.15555555555555556
+     }
+    }
+   }
+  },
+  "pin_serve_height": {
+   "calls": {
+    "calls_a": 1143,
+    "calls_b": 1143,
+    "only_a": 0,
+    "only_b": 0,
+    "verdict_changes": {
+     "serve": [],
+     "other": []
+    },
+    "review_changes": 0,
+    "paired": {
+     "serve": {
+      "shift_cm": {
+       "n": 111,
+       "median": 1.4251403338201296,
+       "p90": 7.661327167427453,
+       "max": 15.006679416923227
+      },
+      "sigma_change_cm": {
+       "n": 111,
+       "median": 0.00014773187605558735,
+       "p90": 0.5657480464576731,
+       "max": 8.77294932186104
+      },
+      "p_in_change": {
+       "n": 111,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 0.09460000000000002
+      }
+     },
+     "other": {
+      "shift_cm": {
+       "n": 1032,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 0.0
+      },
+      "sigma_change_cm": {
+       "n": 1032,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 0.0
+      },
+      "p_in_change": {
+       "n": 1032,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 0.0
+      }
+     }
+    }
+   },
+   "speeds": {
+    "scaled": {
+     "labelled_board": {
+      "n": 89,
+      "mean_signed": -0.5022416660544482,
+      "mean_abs": 10.583289134519548,
+      "within_5pct": 0.20224719101123595
+     },
+     "near": {
+      "n": 49,
+      "mean_signed": -0.6099367589834492,
+      "mean_abs": 11.071865792853208,
+      "within_5pct": 0.12244897959183673
+     },
+     "far": {
+      "n": 40,
+      "mean_signed": -0.370315177216422,
+      "mean_abs": 9.984782728060816,
+      "within_5pct": 0.3
+     },
+     "board_below_100mph": {
+      "n": 45,
+      "mean_signed": -0.7064563388276115,
+      "mean_abs": 13.580677170429578,
+      "within_5pct": 0.044444444444444446
+     },
+     "board_115mph_up": {
+      "n": 21,
+      "mean_signed": 1.8474527310716706,
+      "mean_abs": 7.017943099219193,
+      "within_5pct": 0.38095238095238093
+     },
+     "automatic_pairs": {
+      "n": 45,
+      "mean_signed": -0.4935150491811127,
+      "mean_abs": 11.692064814143514,
+      "within_5pct": 0.15555555555555556
+     }
+    },
+    "scaled_pin": {
+     "labelled_board": {
+      "n": 89,
+      "mean_signed": 1.135761969929959,
+      "mean_abs": 5.737401813137052,
+      "within_5pct": 0.5280898876404494
+     },
+     "near": {
+      "n": 49,
+      "mean_signed": 0.3363379812244971,
+      "mean_abs": 2.971024483866879,
+      "within_5pct": 0.7551020408163265
+     },
+     "far": {
+      "n": 40,
+      "mean_signed": 2.1150563560941498,
+      "mean_abs": 9.126214041493016,
+      "within_5pct": 0.25
+     },
+     "board_below_100mph": {
+      "n": 45,
+      "mean_signed": 0.3722103828345784,
+      "mean_abs": 6.477695310810326,
+      "within_5pct": 0.4222222222222222
+     },
+     "board_115mph_up": {
+      "n": 21,
+      "mean_signed": 3.0339705111184276,
+      "mean_abs": 4.9203326388340605,
+      "within_5pct": 0.6190476190476191
+     },
+     "automatic_pairs": {
+      "n": 45,
+      "mean_signed": 0.5317347855006699,
+      "mean_abs": 5.768019179794195,
+      "within_5pct": 0.5111111111111111
+     }
+    },
+    "bridge": {
+     "labelled_board": {
+      "n": 94,
+      "mean_signed": -2.375303093951561,
+      "mean_abs": 11.15625228550628,
+      "within_5pct": 0.19148936170212766
+     },
+     "near": {
+      "n": 49,
+      "mean_signed": -2.548748567561614,
+      "mean_abs": 10.779494093851287,
+      "within_5pct": 0.14285714285714285
+     },
+     "far": {
+      "n": 45,
+      "mean_signed": -2.1864402449095057,
+      "mean_abs": 11.566500094197272,
+      "within_5pct": 0.24444444444444444
+     },
+     "board_below_100mph": {
+      "n": 44,
+      "mean_signed": -2.5978890685601246,
+      "mean_abs": 13.407226260487539,
+      "within_5pct": 0.06818181818181818
+     },
+     "board_115mph_up": {
+      "n": 25,
+      "mean_signed": -0.8385637755780856,
+      "mean_abs": 8.121746838859506,
+      "within_5pct": 0.36
+     },
+     "automatic_pairs": {
+      "n": 47,
+      "mean_signed": -1.9921903234347609,
+      "mean_abs": 12.341209241482943,
+      "within_5pct": 0.14893617021276595
+     }
+    },
+    "bridge_pin": {
+     "labelled_board": {
+      "n": 93,
+      "mean_signed": 0.12185041090882136,
+      "mean_abs": 6.76861655696053,
+      "within_5pct": 0.4946236559139785
+     },
+     "near": {
+      "n": 49,
+      "mean_signed": -0.39169064525994207,
+      "mean_abs": 3.6445641823453836,
+      "within_5pct": 0.7142857142857143
+     },
+     "far": {
+      "n": 44,
+      "mean_signed": 0.6937484052785803,
+      "mean_abs": 10.247674883236483,
+      "within_5pct": 0.25
+     },
+     "board_below_100mph": {
+      "n": 43,
+      "mean_signed": 0.31594919559861273,
+      "mean_abs": 6.346119794745935,
+      "within_5pct": 0.46511627906976744
+     },
+     "board_115mph_up": {
+      "n": 25,
+      "mean_signed": 0.7470661150360556,
+      "mean_abs": 6.825586351827295,
+      "within_5pct": 0.52
+     },
+     "automatic_pairs": {
+      "n": 47,
+      "mean_signed": -0.3197243881041053,
+      "mean_abs": 6.900321464465608,
+      "within_5pct": 0.46808510638297873
+     }
+    }
+   },
+   "with_toss_bridge": {
+    "decision": "accepted",
+    "criteria": {
+     "mean |error| falls >= 1.5 points": true,
+     "two thirds closer": true,
+     "no serve verdict change": true
+    },
+    "numbers": {
+     "paired": 94,
+     "both_measured": 93,
+     "mean_abs_drop_points": 4.274345355505142,
+     "closer": 64,
+     "further_or_lost": 14,
+     "lost_by_pinned": [
+      {
+       "video": 4,
+       "start_frame": 5896,
+       "pinned": "yeniden izd\u00fc\u015f\u00fcm hatas\u0131 8,1 px"
+      }
+     ],
+     "verdict_changes": []
+    }
+   }
+  },
+  "player_size_from_camera": {
+   "calls": {
+    "calls_a": 1105,
+    "calls_b": 1135,
+    "only_a": 16,
+    "only_b": 46,
+    "verdict_changes": {
+     "serve": [],
+     "other": [
+      [
+       2438.89,
+       "IN",
+       "REVIEW"
+      ]
+     ]
+    },
+    "review_changes": 1,
+    "paired": {
+     "serve": {
+      "shift_cm": {
+       "n": 55,
+       "median": 0.0,
+       "p90": 0.5474092479916325,
+       "max": 32.71207130310006
+      },
+      "sigma_change_cm": {
+       "n": 55,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 1.116427669010156
+      },
+      "p_in_change": {
+       "n": 55,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 0.010950000000000015
+      }
+     },
+     "other": {
+      "shift_cm": {
+       "n": 1034,
+       "median": 0.0,
+       "p90": 0.3766034366833565,
+       "max": 79.5128855479681
+      },
+      "sigma_change_cm": {
+       "n": 1034,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 3.4033943568553946
+      },
+      "p_in_change": {
+       "n": 1034,
+       "median": 0.0,
+       "p90": 0.0,
+       "max": 0.14032499999999998
+      }
+     }
+    }
+   },
+   "speeds": {
+    "labelled_board": {
+     "n": 48,
+     "mean_signed": 3.7292961261932045,
+     "mean_abs": 11.931093920474886,
+     "within_5pct": 0.25
+    },
+    "near": {
+     "n": 6,
+     "mean_signed": 9.196766663593246,
+     "mean_abs": 10.756892641285582,
+     "within_5pct": 0.16666666666666666
+    },
+    "far": {
+     "n": 42,
+     "mean_signed": 2.9482289065646277,
+     "mean_abs": 12.098836960359074,
+     "within_5pct": 0.2619047619047619
+    },
+    "board_below_100mph": {
+     "n": 25,
+     "mean_signed": 4.463207390492398,
+     "mean_abs": 15.398182991910888,
+     "within_5pct": 0.16
+    },
+    "board_115mph_up": {
+     "n": 11,
+     "mean_signed": 4.450678919674373,
+     "mean_abs": 8.198061769895787,
+     "within_5pct": 0.36363636363636365
+    },
+    "automatic_pairs": {
+     "n": 20,
+     "mean_signed": 3.0263882852723456,
+     "mean_abs": 15.545296173478624,
+     "within_5pct": 0.15
+    }
+   },
+   "labelled_frames_outside_main_camera": {
+    "m2024_sf_fritz_tiafoe": 28,
+    "m2024_sf_sinner_draper": 36,
+    "m2025_sf_alcaraz_djokovic": 33,
+    "m2025_sf_sinner_auger_aliassime": 44,
+    "w2024_final_sabalenka_pegula": 22,
+    "w2025_final_sabalenka_anisimova": 31
+   }
+  }
+ }
+}

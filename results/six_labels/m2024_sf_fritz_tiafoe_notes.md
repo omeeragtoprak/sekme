@@ -44,3 +44,11 @@ Hand-placed or doubtful feet: 10872 and 32274 (near player's feet hidden by the 
 legs cut by the bottom edge, y=1079), 3699 and 3763 (Fritz sitting on court; point under the body/feet), 14565, 22247,
 24310, 29082, 34049 (far player with one foot in the air: ground foot or mid-point), 38737 (Fritz sliding, feet apart),
 27229 (far player Tiafoe far left, near the chair), 24915 (near foot partly behind the graphic).
+
+## Second round
+Start 2026-11-17 07:05 (+03), end 07:20. Opened only the allowed files; no src/, runs/ or system output seen.
+- Decode: OpenCV in order, CPU only, one process at a time (the video decodes to 39354 frames). Frames saved as crops/sheets in a scratch folder.
+- Task A (60 frames): 57 main, 3 not main (7619, 7620: camera zoomed tight on the near player, far baseline not in the picture; 7752: dissolve between two shots). The high wide view from behind the near baseline (frames 3788, 7880, 7901, 9605-9679, 14036, 21644, 22567/22568, 25231, 28500) counted as main, as in round 1. Feet: first from a gridded half-size view, then refined on crops (6x far, 3x near) with a coordinate grid; point between the feet on the ground (planted foot when one is clearly in the air). Uncertain: near feet hidden behind the score graphic in 6584, 6661, 7901, 9605-9679, 21644 (estimated from the visible shoe or shoe soles below the graphic, +-15 px), blurred running feet in 7386, 7552, 20454, 20509.
+- Task B, telling them apart: Fritz = black shirt, white/grey shorts, white headband, pink racket; Tiafoe = lavender tank top with magenta shorts, white headband. Ends swap at changeovers, so the name is read from clothing in every flight.
+- Ties (serving marker next to the name, server seen serving on the main camera): 6298 Fritz (near), 20270 Tiafoe (near), 21786 Fritz (far), 28626 Tiafoe (near). Serves under the "forehand winners" / "net points won" panels were skipped (marker hidden).
+- Flights: 26 Fritz, 14 Tiafoe, 0 null. Flight 169 (17728-17749): near player is a black-shirt player standing wide of the court, taken as Fritz.

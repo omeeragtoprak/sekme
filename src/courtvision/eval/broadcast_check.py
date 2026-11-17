@@ -11,10 +11,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from typing import Any, cast
+from dataclasses import dataclass
+from typing import Any
 
-from courtvision.broadcast.scoreboard import BroadcastScan, ScoreReading, score_changes, set_finished, speed_updates
+from courtvision.broadcast.scoreboard import BroadcastScan, ScoreReading, score_changes, speed_updates
 
 MPH_TO_KMH = 1.609344
 
@@ -25,38 +25,6 @@ def to_kmh(value: float, unit: str | None) -> float | None:
     if unit == "km/h":
         return float(value)
     return None
-
-
-def current_set_missing(r: ScoreReading) -> bool:
-    """The last set shown is finished while a point of the next game is under way: the column of the set being
-    played was not read (OCR drops the narrow, highlighted cell), so its games, and with them the end changes, are
-    unknown. A new set at 0-0 changes no ends, so a reading with no point under way is kept."""
-    a, b = r.rows[0].games, r.rows[1].games
-    if not a or not b or len(a) != len(b) or not set_finished(a[-1], b[-1]):
-        return False
-    return any(row.points not in (None, "0") for row in r.rows)
-
-
-def _with_next_set(r: ScoreReading) -> ScoreReading:
-    a, b = cast("tuple[int, int]", r.next_set)
-    return replace(r, rows=(replace(r.rows[0], games=(*r.rows[0].games, a)),
-                            replace(r.rows[1], games=(*r.rows[1].games, b))))
-
-
-def consistent_scores(scores: list[ScoreReading]) -> list[ScoreReading]:
-    """Candidate (``--score-consistency``, docs/ARCHITECTURE.md): the readings the names may be counted from. A reading
-    whose current set's column is missing gets it back from the cell's pixels where they read "0" or "1"
-    (``next_set``), else it is dropped; then, in time order, a reading showing fewer sets than one before it is
-    dropped (a match's set count never falls)."""
-    fixed = [(_with_next_set(r) if r.next_set is not None else None) if current_set_missing(r) else r
-             for r in scores]
-    kept, best = [], 0
-    for r in sorted((r for r in fixed if r is not None), key=lambda r: r.t):
-        n = min(len(r.rows[0].games), len(r.rows[1].games))
-        if n >= best:
-            kept.append(r)
-            best = n
-    return kept
 
 
 def end_changes(r: ScoreReading) -> int:

@@ -429,3 +429,44 @@ Development, same 279 reference flights, the graphic read again with this code: 
 (the first version: 181 / 27 / 71; the default 205 / 72 / 2); 52 of the 68 readings with a lost column got it back
 (39 as 0-0, 12 as 1-0, one 1-1). Still development numbers on a clip used to design the change. The labels, the
 rule and its thresholds are as above, unchanged.
+
+## Result (scored once, 2026-11-17)
+
+All six videos were labelled blind before any analysis of them (serves, board speeds, the random player
+frames), and the second-round labels (disagreement frames, near-player names) were drawn from the committed runs
+and labelled blind before scoring, one fresh labeller per video (`results/six_labels/`). `score` ran once on
+code `b18a459` (`results/six_videos_test.json`, commit 735028c). Two candidates accepted, two rejected:
+
+| Candidate | Outcome | Deciding numbers |
+|---|---|---|
+| `--fps-scaled-thresholds` | **accepted**, on by default, flag gone | serve recall 57 / 173 = 32.9 % → 109 / 173 = 63.0 % (rule ≥ +10 points); within 2 frames 50.9 % → 75.2 %; no decisive flip; false serves 3 → 4 (rule ≤ +2) |
+| `--pin-serve-height` | **accepted**, on by default, flag gone | 89 paired serves (scaled runs, unpinned vs pinned): mean \|error\| 10.58 % → 5.74 % (−4.85 points, rule ≥ 1.5); 65 closer, 13 further, none lost (two thirds: 52); no call verdict changed on any of 1 143 flights |
+| `--player-size-from-camera` | **rejected**, code removed | near coverage 164 / 282 = 58.2 % → 255 / 282 = 90.4 % (holds); far 94.0 % → 94.0 % (holds); wrong selections 14 / 572 = 2.45 % → 24 / 572 = 4.20 % of player-frames (**fails**, +1.75 > +1 point); disagreement frames: candidate right in 258 / 286 near, 10 / 11 far (holds) |
+| `--score-consistency` | **rejected**, code removed | 227 labelled flights: wrong names 28 → 23 (**fails**, at most 14 needed); right 138 → 123 (89 %, holds); nothing but names changed (holds) |
+
+**Frame counts scaled at 60 fps.** Five of the six videos gain serves (Sabalenka–Pegula 9 → 25, Sinner–Auger-Aliassime
+5 → 19); Sabalenka–Anisimova 2025 does not (12 → 12; within 2 frames 6 → 9). Reported, not used: ball detections
+122 244 → 126 896 frames (+3.8 %); calls 1 105 → 1 143 (72 only in the default run, 110 only in the scaled one); two
+calls off serves went REVIEW → IN and REVIEW → OUT, no decisive call changed; serve bounces found by both runs moved
+median 0 cm, 90th percentile 2.2 cm.
+
+**Serve height pin.** The gain is on the near side: mean |error| 11.07 % → 2.97 % (49 serves; within ±5 %:
+12 % → 76 %); the far side barely moves, 9.98 % → 9.13 % (40 serves), as on the development clip, where the far
+serves changed little. All 89: within ±5 % 20 % → 53 %, mean signed error −0.50 % → +1.14 %. Serve bounces moved
+median 1.4 cm, 90th percentile 7.7 cm, at most 15.0 cm; P(in) changed by at most 0.095 and no verdict changed.
+With the toss bridge (reported only) the same rule would also pass: 94 paired, −4.27 points, 64 closer, 14 further
+or lost (one pinned fit rejected for an 8.1 px reprojection error).
+
+**Player size from the camera.** The near player is found far more often (+32 points; on the disagreement frames
+the candidate is right 258 times in 286), but the near player's wrong selections rose from 7 to 17 of 286
+main-camera frames, and the rule caps the rise at one point of all player-frames. A better gate would need new,
+unused footage to be judged on; these videos are spent for it.
+
+**Names from consistent readings.** The development result (wrong names 72 → 18 on the spent 2025 final) did not
+carry over: on these videos the default makes far fewer wrong names to begin with (28 of 227), 27 of them on
+flights named from the graphic's end changes; the candidate cut those to 21 (and added one on a serve-named
+flight) while leaving 19 of the graphic-named flights unnamed. Sinner–Draper 2024 gets almost no names in either run (38 of 40 labelled flights unnamed).
+
+The TrackNet games (30 fps) and the E2E-Spot test (25–30 fps) are unaffected by the scaled frame counts (s = 1 below
+45 fps). The pin acts on every serve; the E2E-Spot slot-2 run (`docs/EVAL_SPOT.md`, candidate 3) is made with the code
+pinned before this adoption, as its rule says.

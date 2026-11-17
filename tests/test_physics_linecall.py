@@ -60,9 +60,10 @@ def test_line_call_verdicts() -> None:
 
 
 def test_a_pinned_serve_contact_height_holds_where_the_soft_band_lets_the_fit_drift(broadcast_camera) -> None:
-    """Candidate --pin-serve-height: the anchor's height band is enforced, not just preferred.
+    """The serve anchor's height band is enforced, not just preferred (the pin, adopted 2026-11-17,
+    docs/EVAL_SERVE_SPEED.md; the old soft band is kept here only as the comparison).
 
-    The simulated serve is struck at 2.95 m but the anchor says 2.5 m. With the default band (+-0.3 m, 0.1 m
+    The simulated serve is struck at 2.95 m but the anchor says 2.5 m. With the old band (+-0.3 m, 0.1 m
     hinge) the pixels pull the fit past the band's edge; pinned (+-0.05 m, 0.01 m hinge) it stays. The pin is
     only as good as the measured height: here it is wrong on purpose, and the speed suffers (~180 vs 190).
     """

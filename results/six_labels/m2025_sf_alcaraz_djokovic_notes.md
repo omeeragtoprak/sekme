@@ -32,3 +32,13 @@ Near: Djokovic (1276, 7144, 8598, 14405, 20044, 20890, 33995), Alcaraz (2057, 51
 - Low tracking-camera views (e.g. 4087-4384, 26340-26385, 30180-30225) and replays: none labelled.
 - Rallies/returns checked and rejected as serves: ~225, ~1390, ~10050, ~17985, ~18150, ~20580, ~25780, ~33480.
 - Completeness: first 24000 frames were scanned by 15-frame sheets; a missed far serve in a long wide shot is possible.
+
+## Second round
+
+Blind labeller, CPU only, OpenCV sequential decode (video: 37389 frames decoded, ~59.94 fps). Start 07:05, end 07:18 (2026-11-17).
+
+Task A (disagreement frames): all 60 frames read from crops (4x far, 2x near, 20 px grid) of the sequentially decoded frames. 58 main, 2 not main (frame 676: cross-fade between the main view and a sponsor/graphic shot; frame 9819: close-up of a player dissolving over the court). Feet = point between the feet on the ground. Uncertain: 13872 near player (lunging, feet hidden under the score graphic; position estimated from the visible legs), 32486 and 33480 near (feet partly hidden by the score graphic), 2123 / 20947 / 24930 (far player in mid-stride, one foot raised: used the ground foot / midpoint), 12781, 13692, 24987 (far player near or inside the service line). Every placed point was checked on a marker montage.
+
+Task B: telling the players apart: Alcaraz = pink sleeveless shirt, dark maroon shorts, magenta shoes, stockier build; Djokovic = light blue polo, navy shorts, white shoes and socks, leaner. Consistent with the score graphic through the whole match (sides swap at odd-game changeovers).
+Ties (serve marker on the server's row of the score graphic, server seen serving in the main camera): 5539 Alcaraz (near, contact about 5536-5540), 8548 Djokovic (near, toss), 14394 Djokovic (near, toss and contact about 14394-14396). Three ties only; candidates 12474 and 33276 were checked and rejected (the far player there is returning, the marker is on the other player).
+Flights: named by shirt colour of the near player over the start-to-end frames. null for 7 flights not on the main wide camera: 34, 37, 48 (starts on another angle, cuts to main), 72, 98, 99, 257. Named: Alcaraz 15, Djokovic 18.

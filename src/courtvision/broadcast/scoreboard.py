@@ -49,9 +49,6 @@ class ScoreReading:
     frame: int
     t: float
     rows: tuple[ScoreRow, ScoreRow]
-    # The games of the set being played, read from the cell's pixels when OCR left that column out (Vision does not
-    # read the graphic's "0"s): only "0" and "1", in both rows, else None. Used by --score-consistency only.
-    next_set: tuple[int, int] | None = None
 
     def key(self) -> tuple:
         return tuple((r.games, r.points) for r in self.rows)
@@ -148,48 +145,6 @@ def _marker_pixels(img: np.ndarray | None, row: TextBox, gap_x1: float, boxes: l
     return n
 
 
-def set_finished(a: int, b: int) -> bool:
-    hi, lo = max(a, b), min(a, b)
-    return (hi == 6 and lo <= 4) or (hi == 7 and lo in (5, 6))
-
-
-def cell_digit(img: np.ndarray, x0: float, x1: float, y: float, h: float) -> str:
-    """A score cell's glyph from its pixels (normalised x0..x1 by y..y+h): "0" (a ring), "1" (a bar), "empty" (no
-    ink) or "?". The digits are light (white or yellow) on the graphic's dark bar; a light cell (a points box, whose
-    dark text would leave a ring-like hole) is "?"."""
-    H, W = img.shape[:2]
-    a, b = max(0, int(x0 * W)), min(W, int(x1 * W))
-    c, d = max(0, int(y * H)), min(H, int((y + h) * H))
-    cell = img[c:d, a:b]
-    if cell.size == 0:
-        return "?"
-    value = cv2.cvtColor(cell, cv2.COLOR_BGR2HSV)[..., 2]
-    if np.median(value) > 150:
-        return "?"  # a light background is not the dark bar
-    ink = (value > 150).astype(np.uint8)
-    if ink.sum() < 0.04 * ink.size:
-        return "empty"
-    ys, xs = np.nonzero(ink)
-    bw, bh = int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)
-    if bh < 0.6 * cell.shape[0]:
-        return "?"  # not a full-height glyph (a fragment of a neighbour)
-    glyph = ink[ys.min(): ys.max() + 1, xs.min(): xs.max() + 1]
-    if not glyph.any(axis=0).all():
-        return "?"  # an empty column inside the ink: two glyphs, not one cell's digit
-    if bw / bh < 0.45:
-        return "1"
-    if bw / bh > 1.0:
-        return "?"
-    band = max(1, bw // 4)
-    body = slice(bh // 6, bh - bh // 6)  # the sides between the top and bottom curves
-    left = glyph[body, :band].any(axis=1).mean()  # rows with ink in the left quarter
-    right = glyph[body, -band:].any(axis=1).mean()
-    centre = glyph[bh // 4: bh - bh // 4, bw // 3: bw - bw // 3]
-    # A ring: both sides inked down the whole body ("6" is open top right, "2", "3", "5" on the left, "4" at the
-    # top) and an empty middle all the way down.
-    return "0" if left >= 0.85 and right >= 0.85 and centre.size and centre.mean() < 0.15 else "?"
-
-
 def parse_scoreboard(boxes: list[TextBox], img: np.ndarray | None, frame: int, t: float) -> ScoreReading | None:
     """The two score rows in one frame's text boxes, or None when no score graphic is visible."""
     names = [(b, *_name_parts(b.text)) for b in boxes]
@@ -254,26 +209,7 @@ def parse_scoreboard(boxes: list[TextBox], img: np.ndarray | None, frame: int, t
         serving = [marks[0], marks[1]]
     elif max(px) >= 12 and max(px) >= 3 * min(px):
         serving = [px[0] > px[1], px[1] > px[0]]
-    next_set = None
-    set_cols = [c for k, c in enumerate(cols) if k != point_col]
-    if (img is not None and point_col is not None and set_cols and out[0][1]
-            and set_finished(out[0][1][-1], out[1][1][-1]) and any(o[2] not in (None, "0") for o in out)):
-        # The last set read is over while a point is played: the current set's column was left out. Its cell is in
-        # the gap between the last set column and the points box; a gap too narrow for a cell holds no column.
-        width = float(np.median([tk.w for c in set_cols for _, tk in c]))
-        got = []
-        # The two points boxes are aligned; a blank one (the other player at AD) has no text box, so use the other's.
-        pt_x = min(p.x for _, p in cols[point_col])
-        for ri in (0, 1):
-            tk = next((tk for r, tk in set_cols[-1] if r == ri), None)
-            if tk is None or pt_x - tk.x1 < 1.2 * width:
-                got.append("?")
-                continue
-            margin = 0.1 * (pt_x - tk.x1)
-            got.append(cell_digit(img, tk.x1 + margin, pt_x - margin, tk.y - 0.002, tk.h + 0.004))
-        if all(g in ("0", "1") for g in got):
-            next_set = (int(got[0]), int(got[1]))
-    return ScoreReading(frame, t, (ScoreRow(*out[0], serving[0]), ScoreRow(*out[1], serving[1])), next_set)
+    return ScoreReading(frame, t, (ScoreRow(*out[0], serving[0]), ScoreRow(*out[1], serving[1])))
 
 
 _SPEED_LABELS = ("SERVESPEED", "SERVE", "SPEED", "MPH", "KMH")

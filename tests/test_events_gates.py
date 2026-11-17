@@ -321,8 +321,7 @@ def test_a_bridged_toss_that_drifts_sideways_is_still_a_toss_and_its_apex_is_not
     assert len(new) == 1 and new[0].side == "far" and 65 <= new[0].frame <= 68
 
 
-def test_the_pin_candidate_narrows_only_the_serve_anchor_to_the_measured_contact_height(broadcast_camera,
-                                                                                       monkeypatch):
+def test_the_serve_anchor_is_pinned_to_the_measured_contact_height_by_default(broadcast_camera, monkeypatch):
     import courtvision.events.flights as flights_mod
     from courtvision.sim.simulate import simulate_shot
 
@@ -348,16 +347,36 @@ def test_the_pin_candidate_narrows_only_the_serve_anchor_to_the_measured_contact
         raise SeenError(anchors)
 
     monkeypatch.setattr(flights_mod, "fit_flight", capture)
-    got = {}
-    for pin in (False, True):
-        with pytest.raises(SeenError) as exc:
-            build_flights(ball, [serve], calib, fps, players, [(0, n)], pin_serve_height=pin)
-        got[pin] = exc.value.args[0][0]
-    h = 0.5 * (got[False].z_min + got[False].z_max)
+    with pytest.raises(SeenError) as exc:  # adopted 2026-11-17 (docs/EVAL_SERVE_SPEED.md): no option, the default
+        build_flights(ball, [serve], calib, fps, players, [(0, n)])
+    anchor = exc.value.args[0][0]
+    h = 0.5 * (anchor.z_min + anchor.z_max)
     assert abs(h - 2.95) < 0.05  # measured on the camera ray above the server
-    assert (got[False].z_max - got[False].z_min, got[False].z_scale) == pytest.approx((0.6, 0.1))
-    assert (got[True].z_max - got[True].z_min, got[True].z_scale) == pytest.approx((0.1, 0.01))
-    assert 0.5 * (got[True].z_min + got[True].z_max) == pytest.approx(h)
+    assert (anchor.z_max - anchor.z_min, anchor.z_scale) == pytest.approx((0.1, 0.01))  # +-0.05 m, 0.01 m hinge
+
+
+def test_the_four_serve_speed_candidates_have_no_switch_left() -> None:
+    """Adopted 2026-11-17 (docs/EVAL_SERVE_SPEED.md): the 60 fps frame counts (scaled by frame_scale, 1 at 30 fps)
+    and the serve pin are the only behaviour; the camera size gate and the score consistency were rejected and
+    their code is gone."""
+    import dataclasses
+    import inspect
+
+    from courtvision import cli
+    from courtvision.broadcast import scoreboard
+    from courtvision.eval import broadcast_check
+    from courtvision.perception.players import select_players
+    from courtvision.pipeline import PipelineConfig, frame_scale
+
+    assert (frame_scale(30.0), frame_scale(60.0)) == (1, 2)
+    gone = {"pin_serve_height", "fps_scaled_thresholds", "player_size_from_camera", "score_consistency"}
+    assert not gone & {f.name for f in dataclasses.fields(PipelineConfig)}
+    assert "pin_serve_height" not in inspect.signature(build_flights).parameters
+    assert "size_from_camera" not in inspect.signature(select_players).parameters
+    assert not hasattr(broadcast_check, "consistent_scores") and not hasattr(scoreboard, "cell_digit")
+    assert "next_set" not in {f.name for f in dataclasses.fields(scoreboard.ScoreReading)}
+    with pytest.raises(SystemExit):
+        cli.main(["analyze", "v.mp4", "--pin-serve-height"])
 
 
 def test_at_60_fps_the_court_fixed_filter_needs_its_frame_counts_scaled_to_keep_the_toss_apex() -> None:
@@ -392,33 +411,6 @@ def test_at_60_fps_scaled_serve_thresholds_find_a_near_serve_the_30_fps_frame_co
     assert detect_serves(ball, _players(n), 60.0, [(0, n)]) == []
     sv = detect_serves(ball, _players(n), 60.0, [(0, n)], frame_scale=2)
     assert len(sv) == 1 and sv[0].side == "near" and 72 <= sv[0].frame <= 78  # contact at 75
-
-
-def test_player_size_from_camera_candidate_keeps_a_crouching_player_the_clip_wide_height_rejects(
-        broadcast_camera) -> None:
-    from courtvision.perception.players import expected_height_px, select_players
-
-    w = np.array([0.5, -12.0])
-    e = expected_height_px(broadcast_camera, w)
-    foot = broadcast_camera.project(np.array([[0.5, -12.0, 0.0]]))[0]
-
-    def det(tid: int, frac: float) -> PersonDet:
-        return PersonDet(tid, np.array([foot[0] - 20, foot[1] - frac * e, foot[0] + 20, foot[1]]), 0.9)
-
-    tight = 1.8 * e  # the clip-wide reference came from a tighter shot
-    assert not _plausible(w, det(1, 0.95), None, 0, 30.0, tight)  # the default gate rejects him
-    assert _plausible(w, det(1, 0.95), None, 0, 30.0, tight, e)
-    assert _plausible(w, det(1, 0.55), None, 0, 30.0, tight, e)  # crouching
-    assert not _plausible(w, det(2, 0.4), None, 0, 30.0, tight, e)  # a ball kid crouching
-    # Through select_players: frames 0-59 a tighter shot (the near player 1.8x taller: the main track), then
-    # the wide shot with the player at 0.95 of the expected height and crouching for a while.
-    H = broadcast_camera.ground_homography()
-    calib = [FrameCalibration(True, H, np.linalg.inv(H), broadcast_camera, 1.0, 0.3) for _ in range(120)]
-    dets = [[det(7, 1.8)] for _ in range(60)] + [[det(8, 0.95 if i % 10 else 0.55)] for i in range(60)]
-    old = select_players(dets, calib, 30.0)["near"]
-    new = select_players(dets, calib, 30.0, size_from_camera=True)["near"]
-    assert np.isfinite(old.world[60:]).all(axis=1).sum() == 0  # the wide shot is lost by the default gate
-    assert np.isfinite(new.world[60:]).all(axis=1).all()
 
 
 def test_the_outlier_filter_removes_the_wild_point_and_keeps_its_neighbours() -> None:

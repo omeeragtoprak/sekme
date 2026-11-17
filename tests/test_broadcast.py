@@ -209,3 +209,19 @@ def test_a_clock_or_a_score_next_to_the_speed_label_is_not_a_speed():
         assert sp is None and unit == "mph"
     sp, _ = parse_speed([label, mph, TextBox("118", 1.0, 0.316, 0.125, 0.016, 0.019)], 1, 0.0)
     assert sp is not None and sp.value == 118
+
+
+def test_a_broadcast_cache_written_while_readings_carried_next_set_still_loads_and_reads_the_same() -> None:
+    """Caches written 2026-11-16/17 hold ScoreReading instances with a ``next_set`` attribute (the field was removed
+    with the rejected --score-consistency): unpickling restores it as an inert instance attribute."""
+    import dataclasses
+    import pickle
+
+    from courtvision.broadcast.scoreboard import ScoreReading, ScoreRow
+
+    rows = (ScoreRow("A", (6,), "15"), ScoreRow("B", (3,), "0"))
+    old = ScoreReading(1, 0.5, rows)
+    object.__setattr__(old, "next_set", (1, 0))  # what the pickle of the earlier class carried
+    back = pickle.loads(pickle.dumps(old))
+    assert back == ScoreReading(1, 0.5, rows) and back.key() == old.key()
+    assert "next_set" not in {f.name for f in dataclasses.fields(back)}

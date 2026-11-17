@@ -133,8 +133,10 @@ change is timed to ≤ 4 s). With the current defaults (ball v4): 5 serves, +5.2
 serve whose contact v4 used to put ten frames early (−16.5 %); with the contact now found inside the
 detection gap it is timed correctly and measured 11.7 % fast. Five serves are too few for a bias claim
 either way. On development data most of the remaining serve-speed error follows the fit drifting away
-from the measured contact height; a candidate that pins it (`--pin-serve-height`, off by default) waits
-for its test on unused footage ([EVAL_SERVE_SPEED.md](docs/EVAL_SERVE_SPEED.md)). **Serve contact timing** was tested separately, on 554 s of unused footage against 23 serve
+from the measured contact height; pinning the fit there was adopted on 2026-11-17 by a rule written before its
+six unused US Open videos were downloaded: on 89 serves with a board reading the mean |error| fell from 10.6 % to
+5.7 % (near-side serves 11.1 % → 3.0 %, far-side 10.0 % → 9.1 %) and no call changed
+([EVAL_SERVE_SPEED.md](docs/EVAL_SERVE_SPEED.md)). **Serve contact timing** was tested separately, on 554 s of unused footage against 23 serve
 contacts bracketed by eye: every serve the pipeline found has its contact within 2 frames at 60 fps
 ([EVAL_SERVE_CONTACT.md](docs/EVAL_SERVE_CONTACT.md)).
 
@@ -197,10 +199,10 @@ promo/             HyperFrames promo film (footage not included)
   (every second frame) it finds 18. Some frame-based thresholds were set at 30 fps: the filter for
   court-fixed spots removes the ball hanging at the toss apex at 60 fps, and a near-side serve's struck
   ball is slow per frame, so toss and serve stay one flight ([details](docs/EVAL_SERVE_CONTACT.md),
-  [docs/EVAL_SPOT.md](docs/EVAL_SPOT.md)). A candidate that scales those frame counts at 60 fps
-  (`--fps-scaled-thresholds`, off by default) finds 20 of the 23 on that clip, now development data; it
-  becomes the default only if it passes a rule written for six unused videos
-  ([docs/EVAL_SERVE_SPEED.md](docs/EVAL_SERVE_SPEED.md)).
+  [docs/EVAL_SPOT.md](docs/EVAL_SPOT.md)). Those frame counts are now scaled by round(fps / 30), adopted on
+  2026-11-17 by a rule written before six unused 60 fps US Open videos were downloaded: serves found 57 → 109
+  of 173 (33 % → 63 %), within 2 frames of the contact 51 % → 75 %, no decisive call flipped
+  ([docs/EVAL_SERVE_SPEED.md](docs/EVAL_SERVE_SPEED.md)). Recall at 60 fps is still well below 30 fps.
   A change to the dead-ball check
   was tried and rejected earlier ([details](docs/EVAL_TRACKNET.md)). The Review Room's *Servis etiketi*
   section measures serve recall (and, once every serve is marked, precision) on your own footage
@@ -209,8 +211,9 @@ promo/             HyperFrames promo film (footage not included)
   shots that track can come from a tighter shot, and the near player then goes untracked for long spans
   (2025 final, 150–704 s: 37 % of calibrated frames), so those shots' 3D fits lose their contact anchor. A
   camera-based size gate fixed that but failed its rule elsewhere ([EVAL_PLAYERS.md](docs/EVAL_PLAYERS.md));
-  a version with a wider band (`--player-size-from-camera`, off by default) waits for its test on unused
-  footage.
+  a version with a wider band found the near player far more often on six unused videos (58 % → 90 %) but
+  picked the wrong person more often too (2.4 % → 4.2 % of player-frames, rule ≤ +1 point), so it was rejected
+  ([EVAL_SERVE_SPEED.md](docs/EVAL_SERVE_SPEED.md)); the near player still goes untracked on such videos.
 - Built for one broadcast camera showing the whole court from behind and above; tested on US Open hard courts
   only. Other camera positions do not calibrate, and the report then says that nothing could be measured.
 - Ball footprint is a fixed 2 cm half-length; point/score inference from play is not implemented (the
@@ -219,7 +222,8 @@ promo/             HyperFrames promo film (footage not included)
   counted from the games it shows. OCR misreads those games in highlight footage, so whole stretches can carry
   the two names the wrong way round (a quarter of the flights in the 2025 final highlights). Telling the players
   apart by clothing helped where outfits differ but failed where they are alike, and was dropped
-  (docs/ARCHITECTURE.md).
+  (docs/ARCHITECTURE.md). Counting only score readings consistent over time cut the wrong names too little on six
+  unused videos (28 → 23 of 227 labelled flights) and was rejected ([EVAL_SERVE_SPEED.md](docs/EVAL_SERVE_SPEED.md)).
 - Times are taken from frame numbers. A video with irregular frame timestamps (a phone dropping frames) is
   analysed, and played in the Review Room, from a constant-rate copy, with a frame repeated where the source has
   a gap (the ball is ignored on the repeated frames and filled in like a missed detection); phone videos stored
